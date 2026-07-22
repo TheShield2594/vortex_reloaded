@@ -10,8 +10,11 @@
 // limit of 1:
 //
 //   A. naive     — direct port of the Postgres RPC's count-then-insert,
-//                  as two standalone statements. Expected: BROKEN, both
-//                  succeed, cap is exceeded (2 devices, limit 1).
+//                  as two standalone statements, with a two-phase barrier
+//                  forcing both counts to land before either insert.
+//                  Expected: BROKEN, both succeed, cap is exceeded
+//                  (2 devices, limit 1), deterministically rather than
+//                  depending on scheduling luck.
 //   B. trigger   — cap check moved into a BEFORE INSERT trigger, so the
 //                  whole check+insert is one atomic statement.
 //   C. immediate — count-then-insert wrapped in better-sqlite3's sync
@@ -29,7 +32,10 @@ import assert from "node:assert/strict"
 
 const WORKER_PATH = fileURLToPath(new URL("./device-key-worker.mjs", import.meta.url))
 const LIMIT = 1 // sharp pass/fail signal: only 1 device allowed
-const DELAY_MS = 30 // widen the check-then-act window so mode A reliably races
+// Used only by mode C (immediate-tx), to prove the lock stays held across a
+// deliberately widened window. Mode A's race no longer depends on timing —
+// see the barrier in scenario() below.
+const DELAY_MS = 30
 
 function freshDbPath(dir) {
   return path.join(dir, `devices-${process.hrtime.bigint()}.sqlite3`)
@@ -52,6 +58,13 @@ function createSchema(dbPath, { withTrigger }) {
     // Mirrors upsert_user_device_key's `COUNT(*) ... device_id <> p_device_id`
     // guard, but enforced by SQLite itself as part of the INSERT statement
     // rather than by application code running before it.
+    //
+    // The cap (${LIMIT}) is interpolated as a literal at schema-creation
+    // time, not passed as a runtime bind parameter — CREATE TRIGGER is DDL,
+    // and SQLite trigger bodies/WHEN clauses cannot take bind parameters.
+    // This is a deliberate fixed-cap design: same tradeoff as the app's
+    // existing DEVICE_LIMIT constant in apps/web/app/api/dm/keys/device/route.ts
+    // (a migration is required to change it, not a config value).
     db.exec(`
       CREATE TRIGGER user_device_keys_cap_before_insert
       BEFORE INSERT ON user_device_keys
@@ -67,7 +80,7 @@ function createSchema(dbPath, { withTrigger }) {
   db.close()
 }
 
-function runWorker(dbPath, mode, deviceId) {
+function runWorker(dbPath, mode, deviceId, { barrierBuffer, onCountComplete } = {}) {
   return new Promise((resolve, reject) => {
     const worker = new Worker(WORKER_PATH, {
       workerData: {
@@ -78,9 +91,14 @@ function runWorker(dbPath, mode, deviceId) {
         publicKey: `pk-${deviceId}`,
         limit: LIMIT,
         delayMs: DELAY_MS,
+        barrierBuffer: barrierBuffer ?? null,
       },
     })
-    worker.once("message", (msg) => {
+    worker.on("message", (msg) => {
+      if (msg.type === "count-complete") {
+        onCountComplete?.()
+        return
+      }
       resolve(msg)
       worker.terminate()
     })
@@ -94,11 +112,31 @@ async function scenario(name, mode, withTrigger) {
   const dbPath = freshDbPath(dir)
   createSchema(dbPath, { withTrigger })
 
+  // For the naive mode, force the race deterministically: a two-phase
+  // barrier holds both workers right after their count until *both* have
+  // finished it, then releases them together. Neither worker's insert can
+  // run before both counts are taken, so the outcome no longer depends on
+  // thread-scheduling timing.
+  let barrierBuffer
+  let onCountComplete
+  if (mode === "naive") {
+    barrierBuffer = new SharedArrayBuffer(4)
+    let readyCount = 0
+    onCountComplete = () => {
+      readyCount += 1
+      if (readyCount === 2) {
+        const view = new Int32Array(barrierBuffer)
+        Atomics.store(view, 0, 1)
+        Atomics.notify(view, 0)
+      }
+    }
+  }
+
   // Two genuinely concurrent device registrations for the same user,
   // racing against the device_limit=1 cap.
   const results = await Promise.all([
-    runWorker(dbPath, mode, "device-A"),
-    runWorker(dbPath, mode, "device-B"),
+    runWorker(dbPath, mode, "device-A", { barrierBuffer, onCountComplete }),
+    runWorker(dbPath, mode, "device-B", { barrierBuffer, onCountComplete }),
   ])
 
   const db = new Database(dbPath)
@@ -118,8 +156,8 @@ const immediateOutcome = await scenario("C: sync .transaction().immediate() wrap
 // --- Assertions ------------------------------------------------------------
 
 // A must demonstrably be broken — this is the bug the issue describes, not
-// a hypothetical. If this assertion ever fails, the race stopped
-// reproducing (e.g. timing changed) and DELAY_MS needs adjusting.
+// a hypothetical. The barrier in scenario() forces both workers' counts to
+// land before either insert, so this isn't a timing bet.
 assert.equal(
   naiveOutcome.finalCount,
   2,
