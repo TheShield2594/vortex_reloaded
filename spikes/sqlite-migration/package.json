@@ -1,0 +1,10 @@
+{
+  "name": "sqlite-migration-spike",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Standalone spike for issue #4 — not part of any workspace build",
+  "type": "module",
+  "devDependencies": {
+    "better-sqlite3": "^11.3.0"
+  }
+}
