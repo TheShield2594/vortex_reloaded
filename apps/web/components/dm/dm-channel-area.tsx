@@ -15,6 +15,8 @@ import { DaySeparator } from "@/components/chat/day-separator"
 import { cn } from "@/lib/utils/cn"
 import { useCallMediaToggles } from "@/lib/webrtc/use-call-media-toggles"
 import { useDMCall, IncomingCallToast, CallerRingingOverlay } from "@/components/dm/dm-call"
+import { ConversationThemePicker } from "@/components/dm/conversation-theme-picker"
+import type { DmThemePreset } from "@/lib/dm-theme"
 import { useToast } from "@/components/ui/use-toast"
 import { useGatewayTyping } from "@/hooks/use-gateway-typing"
 import { useAppStore } from "@/lib/stores/app-store"
@@ -84,6 +86,7 @@ interface Channel {
   owner_id: string | null
   is_encrypted?: boolean
   encryption_key_version?: number
+  theme_preset?: string | null
   members: User[]
   partner: User | null
 }
@@ -1235,7 +1238,11 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   const partnerInitials = displayName.slice(0, 2).toUpperCase()
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden" style={{ background: "var(--app-bg-primary)" }}>
+    <div
+      className="flex flex-col flex-1 overflow-hidden"
+      style={{ background: "var(--app-bg-primary)" }}
+      data-theme-preset={channel.theme_preset ?? undefined}
+    >
       {/* Header */}
       <div className="flex items-center gap-2 md:gap-3 px-3 md:px-4 py-3 border-b flex-shrink-0" style={{ borderColor: "var(--theme-bg-tertiary)" }}>
         {/* Mobile: back arrow to DM list. Desktop: hidden (sidebar always visible). */}
@@ -1289,32 +1296,33 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         >
           <Pin className="w-4 h-4 md:w-[18px] md:h-[18px]" />
         </button>
+        <ConversationThemePicker
+          channelId={channelId}
+          themePreset={channel.theme_preset}
+          onThemeChange={(next) => setChannel((prev) => (prev ? { ...prev, theme_preset: next } : prev))}
+        />
 
-        {/* Call buttons — voice-only vs video differentiated */}
-        {!channel.is_group && (
-          <>
-            <button
-              onClick={startVoiceCall}
-              className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-md hover:bg-white/10 active:bg-white/15 transition-colors"
-              style={{ color: (activeCall && !activeCall.withVideo) ? "var(--theme-success)" : "var(--theme-text-secondary)" }}
-              title="Start voice call"
-              aria-label="Start voice call"
-              disabled={!!activeCall || !!ringing}
-            >
-              <Phone className="w-4 h-4 md:w-[18px] md:h-[18px]" />
-            </button>
-            <button
-              onClick={startVideoCall}
-              className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-md hover:bg-white/10 active:bg-white/15 transition-colors"
-              style={{ color: (activeCall?.withVideo) ? "var(--theme-success)" : "var(--theme-text-secondary)" }}
-              title="Start video call"
-              aria-label="Start video call"
-              disabled={!!activeCall || !!ringing}
-            >
-              <Video className="w-4 h-4 md:w-[18px] md:h-[18px]" />
-            </button>
-          </>
-        )}
+        {/* Call buttons — available for both 1:1 and group conversations */}
+        <button
+          onClick={startVoiceCall}
+          className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-md hover:bg-white/10 active:bg-white/15 transition-colors"
+          style={{ color: (activeCall && !activeCall.withVideo) ? "var(--theme-success)" : "var(--theme-text-secondary)" }}
+          title="Start voice call"
+          aria-label="Start voice call"
+          disabled={!!activeCall || !!ringing}
+        >
+          <Phone className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+        </button>
+        <button
+          onClick={startVideoCall}
+          className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-md hover:bg-white/10 active:bg-white/15 transition-colors"
+          style={{ color: (activeCall?.withVideo) ? "var(--theme-success)" : "var(--theme-text-secondary)" }}
+          title="Start video call"
+          aria-label="Start video call"
+          disabled={!!activeCall || !!ringing}
+        >
+          <Video className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+        </button>
       </div>
 
       {/* Caller ringing overlay — shown while waiting for callee to accept */}
@@ -1332,7 +1340,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         <DMCallView
           channelId={channelId}
           currentUserId={currentUserId}
-          partner={channel.partner}
+          participants={channel.members.filter((m) => m.id !== currentUserId)}
           displayName={displayName}
           withVideo={activeCall.withVideo}
           onHangup={endCall}
@@ -1904,26 +1912,46 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
 }
 
 // ─── DM Call View ───────────────────────────────────────────────────────────
+//
+// Full-mesh WebRTC: one RTCPeerConnection per other participant, all
+// signaled over a single shared Supabase Realtime broadcast channel
+// (`dm-call:{channelId}`). For a 1:1 DM this is exactly one peer connection
+// (unchanged behavior); for a group DM it's one per other member.
+//
+// Every payload carries `from` (sender's user id) and, for offer/answer/
+// ice-candidate, `to` (the intended recipient's user id) so peers ignore
+// signals addressed to someone else. Initiator-per-pair is decided by
+// comparing user ids (higher id creates the offer) — the same rule the
+// original 1:1 implementation used, just applied per pair instead of once.
 
 interface CallProps {
   channelId: string
   currentUserId: string
-  partner: User | null
+  /** Every other member of this DM/group conversation. */
+  participants: User[]
   displayName: string
   withVideo: boolean
   onHangup: () => void
 }
 
-function DMCallView({ channelId, currentUserId, partner, displayName, withVideo, onHangup }: CallProps) {
+interface CallSignalPayload {
+  type: "offer" | "answer" | "ice-candidate" | "hangup"
+  from: string
+  to?: string
+  offer?: RTCSessionDescriptionInit
+  answer?: RTCSessionDescriptionInit
+  candidate?: RTCIceCandidateInit
+}
+
+function DMCallView({ channelId, currentUserId, participants, displayName, withVideo, onHangup }: CallProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null)
-  const remoteVideoRef = useRef<HTMLVideoElement>(null)
-  const remoteAudioRef = useRef<HTMLAudioElement>(null)
-  const pcRef = useRef<RTCPeerConnection | null>(null)
   const localStreamRef = useRef<MediaStream | null>(null)
+  const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map())
   const sigChannelRef = useRef<ReturnType<ReturnType<typeof createClientSupabaseClient>["channel"]> | null>(null)
-  const clientId = useRef(crypto.randomUUID())
+  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
   const [status, setStatus] = useState<"connecting" | "connected" | "failed">("connecting")
   const [failReason, setFailReason] = useState("")
+  const isGroupCall = participants.length > 1
 
   const statusMeta: Record<typeof status, { label: string; detail: string; tone: string; bg: string }> = {
     connecting: {
@@ -1951,75 +1979,107 @@ function DMCallView({ channelId, currentUserId, partner, displayName, withVideo,
 
   useEffect(() => {
     let mounted = true
-    let pc: RTCPeerConnection | null = null
-    let initReady = false
-    const pendingSignals: Array<Record<string, unknown>> = []
 
     const sigChannel = supabase.channel(`dm-call:${channelId}`)
     sigChannelRef.current = sigChannel
 
-    async function processSignal(payload: Record<string, unknown>): Promise<void> {
+    function removePeer(peerId: string): void {
+      const pc = peersRef.current.get(peerId)
+      pc?.close()
+      peersRef.current.delete(peerId)
+      setRemoteStreams((prev) => {
+        if (!(peerId in prev)) return prev
+        const next = { ...prev }
+        delete next[peerId]
+        return next
+      })
+    }
+
+    function getOrCreatePeer(peerId: string, iceServers: RTCIceServer[]): RTCPeerConnection {
+      const existing = peersRef.current.get(peerId)
+      if (existing) return existing
+
+      const pc = new RTCPeerConnection({ iceServers })
+      peersRef.current.set(peerId, pc)
+
+      pc.ontrack = (e) => {
+        const remoteStream = (e.streams && e.streams.length > 0)
+          ? e.streams[0]
+          : (() => { const s = new MediaStream(); s.addTrack(e.track); return s })()
+        setRemoteStreams((prev) => ({ ...prev, [peerId]: remoteStream }))
+        setStatus("connected")
+      }
+
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) {
+          sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "ice-candidate", candidate, from: currentUserId, to: peerId } satisfies CallSignalPayload })
+        }
+      }
+
+      if (localStreamRef.current) {
+        const stream = localStreamRef.current
+        stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+      }
+
+      // Initiator rule per pair: higher user id creates the offer.
+      if (currentUserId > peerId) {
+        pc.onnegotiationneeded = async () => {
+          try {
+            const offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+            sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "offer", offer, from: currentUserId, to: peerId } satisfies CallSignalPayload })
+          } catch (err) {
+            console.error("[dm-channel-area] negotiation failed:", { peerId }, err)
+          }
+        }
+      }
+
+      return pc
+    }
+
+    async function processSignal(payload: CallSignalPayload): Promise<void> {
+      const pc = peersRef.current.get(payload.from)
       if (!pc) return
       try {
-        if (payload.type === "offer" && (payload.offer ?? payload.payload)) {
-          await pc.setRemoteDescription(new RTCSessionDescription((payload.offer ?? payload.payload) as RTCSessionDescriptionInit))
+        if (payload.type === "offer" && payload.offer) {
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
           const answer = await pc.createAnswer()
           await pc.setLocalDescription(answer)
-          sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "answer", answer, from: clientId.current } })
-        } else if (payload.type === "answer" && (payload.answer ?? payload.payload)) {
-          await pc.setRemoteDescription(new RTCSessionDescription((payload.answer ?? payload.payload) as RTCSessionDescriptionInit))
-        } else if (payload.type === "ice-candidate" && (payload.candidate ?? payload.payload)) {
-          await pc.addIceCandidate(new RTCIceCandidate((payload.candidate ?? payload.payload) as RTCIceCandidateInit))
-        } else if (payload.type === "hangup") {
-          onHangup()
+          sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "answer", answer, from: currentUserId, to: payload.from } satisfies CallSignalPayload })
+        } else if (payload.type === "answer" && payload.answer) {
+          await pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
+        } else if (payload.type === "ice-candidate" && payload.candidate && pc.remoteDescription) {
+          await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
         }
       } catch (err) {
-        console.error("WebRTC signal handling failed:", err)
+        console.error("WebRTC signal handling failed:", { from: payload.from, type: payload.type }, err)
         setStatus("failed")
       }
     }
 
-    sigChannel.on("broadcast", { event: "call-signal" }, async ({ payload }: { payload: Record<string, unknown> }) => {
-      if (payload.from === clientId.current) return
-      // Hangup is always processed immediately, even before init
+    sigChannel.on("broadcast", { event: "call-signal" }, async ({ payload }: { payload: CallSignalPayload }) => {
+      if (payload.from === currentUserId) return
+
       if (payload.type === "hangup") {
-        pendingSignals.length = 0
-        onHangup()
+        removePeer(payload.from)
+        // 1:1 calls end entirely when the only other party leaves. Group
+        // calls keep going for whoever's left — the local user hangs up
+        // explicitly when they're done.
+        if (!isGroupCall && peersRef.current.size === 0) onHangup()
         return
       }
-      if (!initReady) {
-        pendingSignals.push(payload)
-        return
-      }
+
+      // offer/answer/ice-candidate are addressed — ignore ones meant for someone else
+      if (payload.to && payload.to !== currentUserId) return
       await processSignal(payload)
     })
 
-    sigChannel.subscribe(async () => {
+    sigChannel.subscribe(async (subStatus) => {
+      if (subStatus !== "SUBSCRIBED") return
       try {
         const { fetchIceServers } = await import("@/lib/webrtc/ice-servers")
         const iceServers = await fetchIceServers()
         if (!mounted) return
-
-        pc = new RTCPeerConnection({ iceServers })
-        pcRef.current = pc
-
-        pc.ontrack = (e) => {
-          const remoteStream = (e.streams && e.streams.length > 0)
-            ? e.streams[0]
-            : (() => { const s = new MediaStream(); s.addTrack(e.track); return s })()
-          if (e.track.kind === "video" && remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = remoteStream
-          } else if (e.track.kind === "audio" && remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = remoteStream
-          }
-          setStatus("connected")
-        }
-
-        pc.onicecandidate = ({ candidate }) => {
-          if (candidate) {
-            sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "ice-candidate", candidate, from: clientId.current } })
-          }
-        }
 
         // Request audio always; video only for video calls
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -2029,26 +2089,12 @@ function DMCallView({ channelId, currentUserId, partner, displayName, withVideo,
         if (!mounted) { stream.getTracks().forEach((t) => t.stop()); return }
         localStreamRef.current = stream
         if (withVideo && localVideoRef.current) localVideoRef.current.srcObject = stream
-        stream.getTracks().forEach((t) => pc!.addTrack(t, stream))
 
-        // Flush buffered signals now that pc + local tracks are ready
-        initReady = true
-        for (const queued of pendingSignals) {
-          await processSignal(queued)
-        }
-        pendingSignals.length = 0
-
-        sigChannel.send({ type: "broadcast", event: "call-invite", payload: { callerId: currentUserId, withVideo } })
-
-        pc.onnegotiationneeded = async () => {
-          if (!pc) return
-          try {
-            const offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "offer", offer, from: clientId.current } })
-          } catch (err) {
-            console.error("[dm-channel-area] negotiation failed:", err)
-          }
+        // Connect to every other member of the conversation. Members who
+        // aren't actually on the call yet simply won't answer — their tile
+        // stays in "connecting" until they join or the call ends.
+        for (const participant of participants) {
+          getOrCreatePeer(participant.id, iceServers)
         }
       } catch (err: unknown) {
         setStatus("failed")
@@ -2066,12 +2112,14 @@ function DMCallView({ channelId, currentUserId, partner, displayName, withVideo,
     return () => {
       mounted = false
       localStreamRef.current?.getTracks().forEach((t) => t.stop())
-      pc?.close()
+      for (const pc of peersRef.current.values()) pc.close()
+      peersRef.current.clear()
       supabase.removeChannel(sigChannel)
       sigChannelRef.current = null
     }
+  // participants intentionally omitted — the member list is fixed for the lifetime of a call
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelId, currentUserId, withVideo])
+  }, [channelId, currentUserId, withVideo, isGroupCall])
 
   const { toggleMute, toggleVideo } = useCallMediaToggles({
     muted,
@@ -2092,69 +2140,105 @@ function DMCallView({ channelId, currentUserId, partner, displayName, withVideo,
 
   async function hangup() {
     if (sigChannelRef.current) {
-      await sigChannelRef.current.send({ type: "broadcast", event: "call-signal", payload: { type: "hangup", from: clientId.current } })
+      await sigChannelRef.current.send({ type: "broadcast", event: "call-signal", payload: { type: "hangup", from: currentUserId } satisfies CallSignalPayload })
       supabase.removeChannel(sigChannelRef.current)
       sigChannelRef.current = null
     }
-    pcRef.current?.close()
+    for (const pc of peersRef.current.values()) pc.close()
     onHangup()
   }
 
-  return (
-    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center" style={{ background: "var(--theme-bg-tertiary)" }}>
-      <audio ref={remoteAudioRef} autoPlay playsInline />
+  const connectedCount = Object.keys(remoteStreams).length
 
-      {/* Video area (video calls only) */}
-      {withVideo ? (
-        <div className="relative w-full max-w-2xl aspect-video rounded-xl overflow-hidden bg-black">
-          <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="absolute bottom-3 right-3 w-32 rounded-lg border-2 object-cover"
-            style={{ borderColor: "var(--theme-accent)", transform: "scaleX(-1)" }}
-          />
-          {status === "connecting" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3" style={{ background: "rgba(0,0,0,0.6)" }}>
-              <div className="w-6 h-6 rounded-full motion-spinner" aria-label="Connecting…" />
-              <p className="text-white text-sm">{statusMeta.connecting.detail}…</p>
+  return (
+    <div className="absolute inset-0 z-40 flex flex-col items-center justify-center p-4" style={{ background: "var(--theme-bg-tertiary)" }}>
+      {!isGroupCall ? (
+        // ── 1:1 layout — unchanged from the original single-peer UI ──────
+        <>
+          <audio ref={(el) => { if (el) el.srcObject = remoteStreams[participants[0]?.id ?? ""] ?? null }} autoPlay playsInline />
+          {withVideo ? (
+            <div className="relative w-full max-w-2xl aspect-video rounded-xl overflow-hidden bg-black">
+              <video
+                ref={(el) => { if (el) el.srcObject = remoteStreams[participants[0]?.id ?? ""] ?? null }}
+                autoPlay
+                playsInline
+                className="w-full h-full object-cover"
+              />
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="absolute bottom-3 right-3 w-32 rounded-lg border-2 object-cover"
+                style={{ borderColor: "var(--theme-accent)", transform: "scaleX(-1)" }}
+              />
+              {status === "connecting" && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3" style={{ background: "rgba(0,0,0,0.6)" }}>
+                  <div className="w-6 h-6 rounded-full motion-spinner" aria-label="Connecting…" />
+                  <p className="text-white text-sm">{statusMeta.connecting.detail}…</p>
+                </div>
+              )}
+              {status === "failed" && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
+                  <p className="text-white font-medium">{statusMeta.failed.label}</p>
+                  <p className="text-sm text-center" style={{ color: "var(--theme-text-secondary)" }}>{statusMeta.failed.detail}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 pb-8">
+              <div
+                className={cn(
+                  "w-32 h-32 rounded-full flex items-center justify-center overflow-hidden",
+                  status === "connected" ? "ring-4 ring-green-500/80" : "ring-2 ring-[var(--theme-text-faint)]/60"
+                )}
+                style={{ background: "var(--theme-accent)", transition: "box-shadow 240ms ease" }}
+              >
+                {participants[0]?.avatar_url ? (
+                  <img src={participants[0].avatar_url} alt={`${displayName}'s avatar`} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-white font-bold text-4xl">{displayName.slice(0, 2).toUpperCase()}</span>
+                )}
+              </div>
+              <p className="text-white font-semibold text-lg">{displayName}</p>
+              <div className="text-sm px-3 py-1 rounded-full" style={{ color: statusMeta[status].tone, background: statusMeta[status].bg }}>
+                <span className="font-medium">{statusMeta[status].label}</span>
+                <span className="ml-2" style={{ color: "var(--theme-text-secondary)" }}>{statusMeta[status].detail}</span>
+              </div>
+              {status === "connecting" && (
+                <div className="flex items-center gap-2 text-xs" style={{ color: "var(--theme-text-muted)" }}>
+                  <div className="w-3.5 h-3.5 rounded-full motion-spinner-sm" aria-label="Connecting…" />
+                  Establishing secure media link…
+                </div>
+              )}
             </div>
           )}
-          {status === "failed" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4" style={{ background: "rgba(0,0,0,0.7)" }}>
-              <p className="text-white font-medium">{statusMeta.failed.label}</p>
-              <p className="text-sm text-center" style={{ color: "var(--theme-text-secondary)" }}>{statusMeta.failed.detail}</p>
-            </div>
-          )}
-        </div>
+        </>
       ) : (
-        /* Voice-only UI: show avatar */
-        <div className="flex flex-col items-center gap-4 pb-8">
-          <div
-            className={cn(
-              "w-32 h-32 rounded-full flex items-center justify-center overflow-hidden",
-              status === "connected" ? "ring-4 ring-green-500/80" : "ring-2 ring-[var(--theme-text-faint)]/60"
-            )}
-            style={{ background: "var(--theme-accent)", transition: "box-shadow 240ms ease" }}
-          >
-            {partner?.avatar_url ? (
-              <img src={partner.avatar_url} alt={`${displayName}'s avatar`} className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-white font-bold text-4xl">{displayName.slice(0, 2).toUpperCase()}</span>
-            )}
+        // ── Group layout — a tile per participant, full-mesh ──────────────
+        <div className="w-full max-w-3xl flex flex-col items-center gap-3">
+          <div className="text-sm px-3 py-1 rounded-full mb-1" style={{ color: statusMeta[status].tone, background: statusMeta[status].bg }}>
+            <span className="font-medium">{connectedCount}/{participants.length} connected</span>
           </div>
-          <p className="text-white font-semibold text-lg">{displayName}</p>
-          <div className="text-sm px-3 py-1 rounded-full" style={{ color: statusMeta[status].tone, background: statusMeta[status].bg }}>
-            <span className="font-medium">{statusMeta[status].label}</span>
-            <span className="ml-2" style={{ color: "var(--theme-text-secondary)" }}>{statusMeta[status].detail}</span>
+          <div className="w-full grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(participants.length, 3)}, minmax(0, 1fr))` }}>
+            {participants.map((participant) => (
+              <GroupCallTile
+                key={participant.id}
+                participant={participant}
+                stream={remoteStreams[participant.id] ?? null}
+                withVideo={withVideo}
+              />
+            ))}
           </div>
-          {status === "connecting" && (
-            <div className="flex items-center gap-2 text-xs" style={{ color: "var(--theme-text-muted)" }}>
-              <div className="w-3.5 h-3.5 rounded-full motion-spinner-sm" aria-label="Connecting…" />
-              Establishing secure media link…
-            </div>
+          {withVideo && (
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className="w-32 rounded-lg border-2 object-cover self-end"
+              style={{ borderColor: "var(--theme-accent)", transform: "scaleX(-1)" }}
+            />
           )}
         </div>
       )}
@@ -2191,6 +2275,46 @@ function DMCallView({ channelId, currentUserId, partner, displayName, withVideo,
           <PhoneOff className="w-5 h-5 text-white" />
         </button>
       </div>
+    </div>
+  )
+}
+
+/** One participant's tile in a group call grid — video, or an avatar placeholder while audio-only/connecting. */
+function GroupCallTile({ participant, stream, withVideo }: { participant: User; stream: MediaStream | null; withVideo: boolean }) {
+  const name = participant.display_name || participant.username
+  const connected = !!stream
+
+  return (
+    <div
+      className="relative rounded-xl overflow-hidden flex flex-col items-center justify-center aspect-video"
+      style={{ background: "var(--theme-bg-secondary)", border: connected ? "1px solid var(--theme-success)" : "1px solid var(--theme-bg-tertiary)" }}
+    >
+      {withVideo && (
+        <video
+          ref={(el) => { if (el) el.srcObject = stream }}
+          autoPlay
+          playsInline
+          className={cn("absolute inset-0 w-full h-full object-cover", !connected && "hidden")}
+        />
+      )}
+      {!withVideo && (
+        <audio ref={(el) => { if (el) el.srcObject = stream }} autoPlay playsInline />
+      )}
+      {(!withVideo || !connected) && (
+        <div className="flex flex-col items-center gap-2 p-3">
+          <div className="w-14 h-14 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0" style={{ background: "var(--theme-accent)" }}>
+            {participant.avatar_url ? (
+              <img src={participant.avatar_url} alt={`${name}'s avatar`} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-white font-bold text-lg">{name.slice(0, 2).toUpperCase()}</span>
+            )}
+          </div>
+          <span className="text-xs font-medium truncate max-w-full" style={{ color: "var(--theme-text-primary)" }}>{name}</span>
+          {!connected && (
+            <span className="text-[10px]" style={{ color: "var(--theme-text-muted)" }}>Connecting…</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }
