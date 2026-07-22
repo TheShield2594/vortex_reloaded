@@ -76,22 +76,16 @@ async function callEndpoint(path, retries = 2) {
 
 const jobs = [
   {
-    name: "scheduled-tasks",
-    path: "/api/cron/scheduled-tasks",
-    schedule: "0 0 * * *",          // Daily at midnight UTC
-    description: "Event reminders, thread auto-archive, attachment decay",
-  },
-  {
     name: "presence-cleanup",
     path: "/api/cron/presence-cleanup",
     schedule: "*/2 * * * *",         // Every 2 minutes (self-hosted can afford this)
     description: "Mark stale users as offline",
   },
   {
-    name: "thread-auto-archive",
-    path: "/api/cron/thread-auto-archive",
-    schedule: "*/5 * * * *",         // Every 5 minutes
-    description: "Archive inactive threads",
+    name: "attachment-decay",
+    path: "/api/cron/attachment-decay",
+    schedule: "0 0 * * *",          // Daily at midnight UTC
+    description: "Purge expired attachment files (channel + DM)",
   },
 ]
 

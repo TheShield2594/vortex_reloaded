@@ -73,8 +73,6 @@ function safeHost(url: string): string {
 // handling entirely so external callers are never redirected or delayed.
 const PASSTHROUGH_ROUTES = [
   "/api/cron",
-  "/api/channels/cleanup",
-  "/api/webhooks",
   "/api/health",
 ]
 
@@ -84,7 +82,6 @@ const PUBLIC_ROUTES = [
   "/register",
   "/api/auth",
   "/auth/callback",
-  "/invite",
   "/verify-email",
   "/terms",
   "/privacy",
@@ -97,7 +94,7 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 // everything else caps at 1 MB which is generous for JSON payloads.
 const MAX_BODY_BYTES = 1 * 1024 * 1024         // 1 MB — JSON routes
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024       // 10 MB — file upload routes
-const UPLOAD_ROUTES = ["/api/servers/"]  // routes that accept formData
+const UPLOAD_ROUTES = ["/api/users/avatar", "/api/share"]  // routes that accept formData
 
 /**
  * CSRF protection: verify that mutation requests to /api/* originate from our

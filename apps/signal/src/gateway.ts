@@ -548,41 +548,14 @@ async function checkChannelAccess(
   channelId: string,
 ): Promise<boolean> {
   try {
-    // Check if this is a DM channel first
-    const { data: dmChannel } = await supabase
-      .from("dm_channels")
-      .select("id")
-      .eq("id", channelId)
-      .maybeSingle()
-
-    if (dmChannel) {
-      // For DM channels, check if the user is a participant
-      const { data: participant } = await supabase
-        .from("dm_channel_members")
-        .select("user_id")
-        .eq("channel_id", channelId)
-        .eq("user_id", userId)
-        .maybeSingle()
-      return !!participant
-    }
-
-    // Server channel — check server membership
-    const { data: channel } = await supabase
-      .from("channels")
-      .select("server_id")
-      .eq("id", channelId)
-      .maybeSingle()
-
-    if (!channel) return false
-
-    const { data: member } = await supabase
-      .from("server_members")
+    // DM/group channel — check the caller is a participant
+    const { data: participant } = await supabase
+      .from("dm_channel_members")
       .select("user_id")
-      .eq("server_id", channel.server_id)
+      .eq("channel_id", channelId)
       .eq("user_id", userId)
       .maybeSingle()
-
-    return !!member
+    return !!participant
   } catch (err) {
     log.error({ err, userId, channelId }, "checkChannelAccess error — failing closed")
     return false

@@ -29,7 +29,7 @@ export async function GET(
     const [channelResult, memberRowsResult] = await Promise.all([
       supabase
         .from("dm_channels")
-        .select("id, name, icon_url, is_group, owner_id, updated_at, is_encrypted, encryption_key_version, encryption_membership_epoch")
+        .select("id, name, icon_url, is_group, owner_id, updated_at, is_encrypted, encryption_key_version, encryption_membership_epoch, theme_preset")
         .eq("id", channelId)
         .maybeSingle(),
       supabase

@@ -4,22 +4,15 @@ import { redirect } from "next/navigation"
 import {
   ArrowRight,
   ShieldCheck,
-  ClipboardList,
   Lock,
-  Gift,
+  Palette,
   CheckCircle2,
   Github,
   ExternalLink,
   Heart,
-  Bot,
-  PartyPopper,
-  ClipboardCheck,
-  Siren,
-  Bell,
-  Slash,
-  Server,
-  Database,
-  Radio,
+  Users,
+  PhoneCall,
+  SlidersHorizontal,
 } from "lucide-react"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { VortexLogo } from "@/components/ui/vortex-logo"
@@ -29,21 +22,21 @@ import { ChatMockup } from "@/components/ui/chat-mockup"
 // ── SEO / OpenGraph ───────────────────────────────────────────────────────────
 
 export const metadata: Metadata = {
-  title: "VortexChat — The Transparent Community Platform | Open Source Chat",
+  title: "VortexChat — Chat, Hang Out, Belong | Open Source DMs & Voice",
   description:
-    "VortexChat is the chat platform with nothing to hide. Every moderation action logged, every permission testable, every line of code open. Free forever, open-source, and self-hostable.",
+    "VortexChat is a focused home for your closest conversations — encrypted DMs, small group chats, voice calls with a real audio EQ, and a theme for every conversation. Free forever, open-source.",
   openGraph: {
-    title: "VortexChat — The Transparent Community Platform",
+    title: "VortexChat — Chat, Hang Out, Belong",
     description:
-      "The chat platform with nothing to hide. Full audit trails, testable permissions, open-source code. Free forever.",
+      "Encrypted DMs, small group chats, voice calls with a real audio EQ, and a theme for every conversation. Free forever.",
     type: "website",
     siteName: "VortexChat",
   },
   twitter: {
     card: "summary_large_image",
-    title: "VortexChat — The Transparent Community Platform",
+    title: "VortexChat — Chat, Hang Out, Belong",
     description:
-      "The chat platform with nothing to hide. Full audit trails, testable permissions, open-source code. Free forever.",
+      "Encrypted DMs, small group chats, voice calls with a real audio EQ, and a theme for every conversation. Free forever.",
   },
   alternates: {
     canonical: "/",
@@ -65,27 +58,27 @@ function hexToRgba(hex: string, alpha: number): string {
 
 const useCases = [
   {
-    icon: ClipboardList,
-    label: "For moderation teams tired of guessing",
-    description: "50,000 members and no idea which mod did what? Vortex\u2019s Mod Ledger logs every action so nothing happens in the dark.",
-    accent: "#f92aad",
+    icon: Lock,
+    label: "For private, one-on-one conversations",
+    description: "End-to-end encrypted DMs mean the conversation stays between you and the person you're talking to. Period.",
+    accent: "#3ddc97",
   },
   {
-    icon: Gift,
-    label: "For communities that got paywalled",
-    description: "Custom emoji, bigger uploads, and quality screen share shouldn\u2019t cost extra. On Vortex, those are just\u2026 features.",
+    icon: Users,
+    label: "For your close-knit group chat",
+    description: "Small, fixed-membership group chats with the same reactions, replies, and attachments as a 1:1 DM.",
     accent: "#00e5ff",
   },
   {
-    icon: Lock,
-    label: "For privacy-conscious communities",
-    description: "Your members need encrypted DMs and zero tracking. Vortex ships E2EE, GDPR export, and no ad-tech. Period.",
-    accent: "#3ddc97",
+    icon: PhoneCall,
+    label: "For hopping on a call without friction",
+    description: "Voice and video calls \u2014 1:1 or with the whole group \u2014 connect peer-to-peer with a real audio EQ, not a black box.",
+    accent: "#f92aad",
   },
   {
     icon: ShieldCheck,
     label: "For projects that practice what they preach",
-    description: "You build in the open. Your community platform should too. Fully open-source and self-hostable from day one.",
+    description: "You build in the open. Your chat app should too. Fully open-source and self-hostable from day one.",
     accent: "#ffb84d",
   },
 ]
@@ -105,43 +98,10 @@ const themes = [
 ]
 
 const steps = [
-  { num: "01", title: "See everything that happens", body: "Every ban, kick, role change, and message deletion is logged in a timeline you can audit. No shadow moderation." },
-  { num: "02", title: "Test before you break", body: "The Permission Sandbox lets you preview exactly what any role can see and do\u200a—\u200abefore you apply changes to real users." },
-  { num: "03", title: "Your voice, transcribed", body: "AI-powered transcripts and summaries for voice channels. Never miss what was said, even if you joined late." },
-  { num: "04", title: "Take it with you", body: "Export your data. Self-host the platform. Fork the code. Your community is never locked in." },
-]
-
-const builtInApps = [
-  {
-    icon: Bot,
-    name: "Welcome Bot",
-    description: "Custom greetings, server rules, auto-role assignment, and optional DMs for every new member.",
-    accent: "#3ddc97",
-  },
-  {
-    icon: PartyPopper,
-    name: "Giveaway Bot",
-    description: "Timed giveaways with automatic winner selection, rerolls, and entry tracking.",
-    accent: "#f92aad",
-  },
-  {
-    icon: ClipboardCheck,
-    name: "Standup Assistant",
-    description: "Async daily standups with custom questions, scheduled reminders, and team response views.",
-    accent: "#00e5ff",
-  },
-  {
-    icon: Siren,
-    name: "Incident Bot",
-    description: "Track outages with severity levels, status workflows, timeline updates, and resolution logs.",
-    accent: "#ff6b6b",
-  },
-  {
-    icon: Bell,
-    name: "Reminder Bot",
-    description: "Personal reminders up to 24 hours out. Set it, forget it, get notified on time.",
-    accent: "#ffb84d",
-  },
+  { num: "01", title: "Just DMs and small groups", body: "No servers to manage, no channels to organize — just you, your friends, and the conversations that matter." },
+  { num: "02", title: "Voice with a real EQ", body: "Tune bass, treble, and noise suppression on every call — 1:1 or with the whole group — instead of a fixed default." },
+  { num: "03", title: "A theme for every conversation", body: "Pick a look and feel per DM or group chat, so every conversation has its own vibe." },
+  { num: "04", title: "Take it with you", body: "Export your data. Self-host the platform. Fork the code. You’re never locked in." },
 ]
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -228,7 +188,7 @@ export default async function HomePage() {
                 color: "var(--theme-accent)",
               }}
             >
-              Open source · Fully auditable · No dark patterns
+              Open source · Encrypted DMs · No dark patterns
             </div>
 
             <h1
@@ -236,23 +196,23 @@ export default async function HomePage() {
               className="text-4xl font-extrabold leading-[1.1] tracking-tight font-display md:text-6xl"
               style={{ color: "var(--theme-text-bright)" }}
             >
-              The chat platform with{" "}
-              <span style={{ color: "var(--theme-accent)" }}>nothing to hide</span>
+              Chat, hang out,{" "}
+              <span style={{ color: "var(--theme-accent)" }}>belong</span>
             </h1>
 
             <p
               className="mt-5 text-lg md:text-xl leading-relaxed"
               style={{ color: "var(--theme-text-secondary)" }}
             >
-              Every moderation action logged. Every permission testable.
-              Every line of code open. VortexChat is the community platform
-              that trusts you as much as you trust it.
+              Encrypted DMs, small group chats, and voice calls with a real
+              audio EQ. Every line of code open. VortexChat is the focused
+              home for your closest conversations.
             </p>
 
             <ul className="mt-5 space-y-2 text-sm" style={{ color: "var(--theme-text-secondary)" }}>
               {[
-                "Full audit trail on every moderation action",
-                "Test permissions before applying them to real users",
+                "End-to-end encrypted 1:1 and group DMs",
+                "Voice & video calls with a real audio EQ",
                 "Open-source, self-hostable, and free forever",
               ].map((point) => (
                 <li key={point} className="flex items-center gap-2">
@@ -268,7 +228,7 @@ export default async function HomePage() {
                 className="inline-flex items-center gap-2 rounded-lg px-6 py-3 font-semibold transition-opacity hover:opacity-90"
                 style={{ background: "var(--theme-accent)", color: "var(--theme-bg-tertiary)" }}
               >
-                Start Your Community <ArrowRight aria-hidden="true" className="h-4 w-4" />
+                Start Chatting <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </Link>
               <a
                 href="https://github.com/TheShield2594/vortexchat"
@@ -363,7 +323,7 @@ export default async function HomePage() {
               className="inline-flex items-center gap-2 rounded-lg px-6 py-3 font-semibold transition-opacity hover:opacity-90"
               style={{ background: "var(--theme-accent)", color: "var(--theme-bg-tertiary)" }}
             >
-              Start Your Community <ArrowRight aria-hidden="true" className="h-4 w-4" />
+              Start Chatting <ArrowRight aria-hidden="true" className="h-4 w-4" />
             </Link>
           </div>
         </div>
@@ -452,7 +412,7 @@ export default async function HomePage() {
               className="text-2xl font-bold font-display"
               style={{ color: "var(--theme-text-bright)" }}
             >
-              Built for communities that outgrew Discord.
+              Built for people who just want to chat.
             </h2>
           </div>
         </ScrollReveal>
@@ -485,11 +445,11 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Built-in Apps ─────────────────────────────────────────────── */}
+      {/* ── Feature highlights ───────────────────────────────────────── */}
       <section
         className="border-t"
         style={{ borderColor: "rgba(255,255,255,0.06)", background: "var(--theme-bg-secondary)" }}
-        aria-labelledby="apps-heading"
+        aria-labelledby="features-heading"
       >
         <div className="mx-auto max-w-6xl px-6 py-16 md:px-10">
           <ScrollReveal>
@@ -498,24 +458,39 @@ export default async function HomePage() {
                 className="mb-2 text-xs font-semibold uppercase tracking-widest font-display"
                 style={{ color: "var(--theme-accent)" }}
               >
-                No bot setup required
+                Built for real conversations
               </p>
               <h2
-                id="apps-heading"
+                id="features-heading"
                 className="text-2xl font-bold font-display"
                 style={{ color: "var(--theme-text-bright)" }}
               >
-                Essential tools, built right in.
+                Everything a DM or group chat needs — nothing it doesn't.
               </h2>
-              <p className="mt-3 mx-auto max-w-lg text-sm leading-relaxed" style={{ color: "var(--theme-text-secondary)" }}>
-                Every VortexChat server ships with 5 verified apps — no hunting for third-party bots
-                that might go offline. Install with one click, configure in settings.
-              </p>
             </div>
           </ScrollReveal>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {builtInApps.map(({ icon: Icon, name, description, accent }, i) => (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                icon: SlidersHorizontal,
+                name: "Voice with a real audio EQ",
+                description: "Tune bass, treble, and noise suppression on every call — not a one-size-fits-all default.",
+                accent: "#00e5ff",
+              },
+              {
+                icon: Palette,
+                name: "A theme per conversation",
+                description: "Give each DM or group chat its own look and feel — set it once, it applies every time you open that chat.",
+                accent: "#f92aad",
+              },
+              {
+                icon: Users,
+                name: "Small group chats, real calls",
+                description: "Group DMs support voice and video calls for everyone in the conversation, not just 1:1.",
+                accent: "#3ddc97",
+              },
+            ].map(({ icon: Icon, name, description, accent }, i) => (
               <ScrollReveal key={name} delay={i * 80}>
                 <div
                   className="h-full rounded-xl border p-5 text-center"
@@ -540,18 +515,6 @@ export default async function HomePage() {
               </ScrollReveal>
             ))}
           </div>
-
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--theme-text-muted)" }}>
-              <Slash aria-hidden="true" className="h-4 w-4" style={{ color: "var(--theme-accent)" }} />
-              <span>Slash command autocomplete for every app</span>
-            </div>
-            <span className="hidden sm:inline" style={{ color: "rgba(255,255,255,0.15)" }}>|</span>
-            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--theme-text-muted)" }}>
-              <ShieldCheck aria-hidden="true" className="h-4 w-4" style={{ color: "var(--theme-accent)" }} />
-              <span>All verified &amp; permission-scoped</span>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -567,9 +530,9 @@ export default async function HomePage() {
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 text-center">
               {[
                 { stat: "100%", label: "Open Source", sublabel: "All public, all auditable" },
-                { stat: "21", label: "Permissions", sublabel: "All testable in the Sandbox" },
-                { stat: "0", label: "Shadow Bans", sublabel: "Every action logged in the Mod Ledger" },
-                { stat: "0", label: "Algorithms", sublabel: "Your feed is chronological, always" },
+                { stat: "E2E", label: "Encrypted DMs", sublabel: "Only you and the recipient can read them" },
+                { stat: "0", label: "Ads", sublabel: "No tracking, no ad-tech, ever" },
+                { stat: "0", label: "Algorithms", sublabel: "Your inbox is chronological, always" },
               ].map(({ stat, label, sublabel }) => (
                 <div key={label}>
                   <p
@@ -615,7 +578,7 @@ export default async function HomePage() {
           className="mb-3 text-3xl font-bold font-display md:text-4xl"
           style={{ color: "var(--theme-text-bright)" }}
         >
-          Your community deserves transparency.
+          Your conversations deserve a home like this.
         </h2>
         <p className="mb-8 text-base max-w-md mx-auto" style={{ color: "var(--theme-text-secondary)" }}>
           Free forever. No credit card. Every feature included. Start on our hosted platform
@@ -627,19 +590,7 @@ export default async function HomePage() {
             className="inline-flex items-center gap-2 rounded-lg px-7 py-3.5 font-semibold transition-opacity hover:opacity-90 text-base"
             style={{ background: "var(--theme-accent)", color: "var(--theme-bg-tertiary)" }}
           >
-            Start Your Community <ArrowRight aria-hidden="true" className="h-4 w-4" />
-          </Link>
-          <Link
-            href="/self-host"
-            className="inline-flex items-center gap-2 rounded-lg border px-7 py-3.5 font-semibold transition-colors hover:opacity-80 text-base"
-            style={{
-              borderColor: "rgba(255,255,255,0.15)",
-              background: "rgba(255,255,255,0.05)",
-              color: "var(--theme-text-primary)",
-            }}
-          >
-            <Server className="h-4 w-4" aria-hidden="true" />
-            Deploy Your Own
+            Start Chatting <ArrowRight aria-hidden="true" className="h-4 w-4" />
           </Link>
         </div>
         </ScrollReveal>
@@ -662,7 +613,7 @@ export default async function HomePage() {
                 </span>
               </div>
               <p className="text-sm leading-relaxed" style={{ color: "var(--theme-text-muted)" }}>
-                The transparent community platform. Open-source, fully auditable, and free
+                A focused home for your closest conversations. Open-source and free
                 forever — with nothing to hide.
               </p>
             </div>
@@ -678,9 +629,7 @@ export default async function HomePage() {
                     { label: "Sign Up", href: "/register" },
                     { label: "Sign In", href: "/login" },
                     { label: "What\u2019s Different", href: "/#how-it-works-heading" },
-                    { label: "Built-in Apps", href: "/#apps-heading" },
                     { label: "Themes", href: "/#themes-heading" },
-                    { label: "Self-Host", href: "/self-host" },
                   ].map(({ label, href }) => (
                     <li key={label}>
                       <Link
@@ -770,7 +719,7 @@ export default async function HomePage() {
             <p>
               Made with{" "}
               <Heart className="inline h-3 w-3 mx-0.5" style={{ color: "var(--theme-accent-secondary)" }} aria-label="love" />{" "}
-              for communities everywhere.
+              for conversations everywhere.
             </p>
           </div>
         </div>
