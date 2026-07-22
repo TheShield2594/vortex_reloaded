@@ -72,7 +72,10 @@ export const users = sqliteTable(
       sql`length(coalesce(json_extract(${table.appearanceSettings}, '$.customCss'), '')) <= 50000`
     ),
     check("users_status_emoji_length_check", sql`length(${table.statusEmoji}) <= 8`),
-    check("users_interests_max_count", sql`json_array_length(${table.interests}) <= 15`),
+    check(
+      "users_interests_max_count",
+      sql`json_type(${table.interests}) = 'array' and json_array_length(${table.interests}) <= 15`
+    ),
     check(
       "users_status_check",
       sql`${table.status} in ('online', 'idle', 'dnd', 'invisible', 'offline')`

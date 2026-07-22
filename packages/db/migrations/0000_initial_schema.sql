@@ -20,7 +20,11 @@ CREATE TABLE `auth_security_policies` (
 	`fallback_password` integer DEFAULT true NOT NULL,
 	`fallback_magic_link` integer DEFAULT true NOT NULL,
 	`updated_at` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "auth_security_policies_passkey_first_check" CHECK("auth_security_policies"."passkey_first" in (0, 1)),
+	CONSTRAINT "auth_security_policies_enforce_passkey_check" CHECK("auth_security_policies"."enforce_passkey" in (0, 1)),
+	CONSTRAINT "auth_security_policies_fallback_password_check" CHECK("auth_security_policies"."fallback_password" in (0, 1)),
+	CONSTRAINT "auth_security_policies_fallback_magic_link_check" CHECK("auth_security_policies"."fallback_magic_link" in (0, 1))
 );
 --> statement-breakpoint
 CREATE TABLE `auth_sessions` (
@@ -94,7 +98,8 @@ CREATE TABLE `passkey_credentials` (
 	`revoked_at` text,
 	`last_used_at` text,
 	`created_at` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
+	CONSTRAINT "passkey_credentials_transports_check" CHECK(json_type("passkey_credentials"."transports") = 'array')
 );
 --> statement-breakpoint
 CREATE UNIQUE INDEX `passkey_credentials_credential_id_unique` ON `passkey_credentials` (`credential_id`);--> statement-breakpoint
@@ -455,7 +460,7 @@ CREATE TABLE `users` (
 	`updated_at` text NOT NULL,
 	CONSTRAINT "users_appearance_settings_custom_css_length_check" CHECK(length(coalesce(json_extract("users"."appearance_settings", '$.customCss'), '')) <= 50000),
 	CONSTRAINT "users_status_emoji_length_check" CHECK(length("users"."status_emoji") <= 8),
-	CONSTRAINT "users_interests_max_count" CHECK(json_array_length("users"."interests") <= 15),
+	CONSTRAINT "users_interests_max_count" CHECK(json_type("users"."interests") = 'array' and json_array_length("users"."interests") <= 15),
 	CONSTRAINT "users_status_check" CHECK("users"."status" in ('online', 'idle', 'dnd', 'invisible', 'offline')),
 	CONSTRAINT "users_activity_visibility_check" CHECK("users"."activity_visibility" in ('public', 'friends', 'private'))
 );

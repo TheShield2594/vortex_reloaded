@@ -30,4 +30,6 @@ function main() {
   console.log(`Migrated ${dbPath}`)
 }
 
-main()
+if (require.main === module) {
+  main()
+}

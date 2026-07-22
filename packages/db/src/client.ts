@@ -12,11 +12,14 @@ export function createDb(path: string = resolveDbPath()) {
   // src/sql/fts5-and-triggers.sql, several of which assume ON DELETE CASCADE
   // actually cascades.
   sqlite.pragma("foreign_keys = ON")
+  // Set before the WAL switch below so the busy handler is already active if
+  // another connection holds a lock during the switch itself, not just for
+  // later statements.
+  sqlite.pragma("busy_timeout = 5000")
   // WAL lets `apps/web` and `apps/signal` hold the same on-disk file open
   // concurrently (the deployment's bind-mounted SQLite file, shared between
   // both processes) without readers blocking on a writer.
   sqlite.pragma("journal_mode = WAL")
-  sqlite.pragma("busy_timeout = 5000")
 
   return drizzle(sqlite, { schema })
 }

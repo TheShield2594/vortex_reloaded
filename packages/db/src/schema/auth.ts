@@ -68,16 +68,28 @@ export const authSessions = sqliteTable(
 )
 
 /** One row per user — `user_id` is both PK and FK. */
-export const authSecurityPolicies = sqliteTable("auth_security_policies", {
-  userId: text("user_id")
-    .primaryKey()
-    .references(() => users.id, { onDelete: "cascade" }),
-  passkeyFirst: integer("passkey_first", { mode: "boolean" }).notNull().default(false),
-  enforcePasskey: integer("enforce_passkey", { mode: "boolean" }).notNull().default(false),
-  fallbackPassword: integer("fallback_password", { mode: "boolean" }).notNull().default(true),
-  fallbackMagicLink: integer("fallback_magic_link", { mode: "boolean" }).notNull().default(true),
-  updatedAt: updatedAt(),
-})
+export const authSecurityPolicies = sqliteTable(
+  "auth_security_policies",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    passkeyFirst: integer("passkey_first", { mode: "boolean" }).notNull().default(false),
+    enforcePasskey: integer("enforce_passkey", { mode: "boolean" }).notNull().default(false),
+    fallbackPassword: integer("fallback_password", { mode: "boolean" }).notNull().default(true),
+    fallbackMagicLink: integer("fallback_magic_link", { mode: "boolean" }).notNull().default(true),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    check("auth_security_policies_passkey_first_check", sql`${table.passkeyFirst} in (0, 1)`),
+    check("auth_security_policies_enforce_passkey_check", sql`${table.enforcePasskey} in (0, 1)`),
+    check("auth_security_policies_fallback_password_check", sql`${table.fallbackPassword} in (0, 1)`),
+    check(
+      "auth_security_policies_fallback_magic_link_check",
+      sql`${table.fallbackMagicLink} in (0, 1)`
+    ),
+  ]
+)
 
 /**
  * `transports` is a Postgres `TEXT[]` — the migration plan's TEXT[] mapping
@@ -103,7 +115,10 @@ export const passkeyCredentials = sqliteTable(
     lastUsedAt: text("last_used_at"),
     createdAt: createdAt(),
   },
-  (table) => [index("idx_passkey_credentials_user_id").on(table.userId)]
+  (table) => [
+    index("idx_passkey_credentials_user_id").on(table.userId),
+    check("passkey_credentials_transports_check", sql`json_type(${table.transports}) = 'array'`),
+  ]
 )
 
 export const recoveryCodes = sqliteTable(

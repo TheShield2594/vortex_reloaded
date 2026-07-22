@@ -24,9 +24,12 @@ export function createdAt(name = "created_at") {
 }
 
 /**
- * Same as createdAt, but also refreshed on every Drizzle-issued UPDATE —
- * the SQLite equivalent of the Postgres "set updated_at = now()"
- * BEFORE UPDATE triggers used throughout the source schema.
+ * Same as createdAt, but also refreshed on every Drizzle-issued UPDATE via
+ * `$onUpdateFn`. Unlike the Postgres "set updated_at = now()" BEFORE UPDATE
+ * triggers this stands in for, this is enforced by the ORM layer, not the
+ * database — a raw SQL UPDATE (another process, a migration script, a
+ * different client) bypasses it. No DB-level trigger enforces this today;
+ * callers that write outside Drizzle must set `updated_at` themselves.
  */
 export function updatedAt(name = "updated_at") {
   return text(name)

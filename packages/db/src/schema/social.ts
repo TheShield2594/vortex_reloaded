@@ -154,8 +154,9 @@ export const userPinnedItems = sqliteTable(
 /**
  * supabase/migrations/00058_user_activity_log.sql, 00070_verify_migration_fixes.sql.
  * The Postgres `trg_prune_activity_log` (caps each user at their 50 most
- * recent rows) has no SQLite equivalent worth a per-row trigger for — see
- * `../lib/prune-activity-log.ts`, called from application code after insert.
+ * recent rows) is a plain row-level AFTER INSERT trigger, so it's ported
+ * as a real SQLite trigger of the same name — see
+ * ../sql/fts5-and-triggers.sql — rather than application code.
  */
 export const userActivityLog = sqliteTable(
   "user_activity_log",

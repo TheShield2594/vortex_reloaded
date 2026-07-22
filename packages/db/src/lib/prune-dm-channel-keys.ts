@@ -22,20 +22,28 @@ export function pruneDmChannelKeys(
   keepVersions = 5
 ): void {
   const keep = Math.max(keepVersions, 1)
+  const ids = [...new Set(dmChannelIds)]
+  if (ids.length === 0) return
 
-  for (const dmChannelId of new Set(dmChannelIds)) {
-    const [row] = db
-      .select({ maxVersion: sql<number | null>`max(${dmChannelKeys.keyVersion})` })
-      .from(dmChannelKeys)
-      .where(eq(dmChannelKeys.dmChannelId, dmChannelId))
-      .all()
+  // better-sqlite3's transaction() is synchronous-only (see issue #4's
+  // spike) — fine here since every statement below is synchronous too.
+  // Keeps each channel's read-then-delete atomic against concurrent writers
+  // instead of racing a stale maxVersion against a fresh insert.
+  db.transaction((tx) => {
+    for (const dmChannelId of ids) {
+      const [row] = tx
+        .select({ maxVersion: sql<number | null>`max(${dmChannelKeys.keyVersion})` })
+        .from(dmChannelKeys)
+        .where(eq(dmChannelKeys.dmChannelId, dmChannelId))
+        .all()
 
-    if (row?.maxVersion == null) continue
+      if (row?.maxVersion == null) continue
 
-    db.delete(dmChannelKeys)
-      .where(
-        and(eq(dmChannelKeys.dmChannelId, dmChannelId), lte(dmChannelKeys.keyVersion, row.maxVersion - keep))
-      )
-      .run()
-  }
+      tx.delete(dmChannelKeys)
+        .where(
+          and(eq(dmChannelKeys.dmChannelId, dmChannelId), lte(dmChannelKeys.keyVersion, row.maxVersion - keep))
+        )
+        .run()
+    }
+  })
 }

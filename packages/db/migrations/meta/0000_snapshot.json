@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "84ff0a54-0d48-4091-b99c-6ad64369f027",
+  "id": "c182d701-4bbd-4c18-9ae5-43645dbbc4e1",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "auth_challenges": {
@@ -173,7 +173,24 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "auth_security_policies_passkey_first_check": {
+          "name": "auth_security_policies_passkey_first_check",
+          "value": "\"auth_security_policies\".\"passkey_first\" in (0, 1)"
+        },
+        "auth_security_policies_enforce_passkey_check": {
+          "name": "auth_security_policies_enforce_passkey_check",
+          "value": "\"auth_security_policies\".\"enforce_passkey\" in (0, 1)"
+        },
+        "auth_security_policies_fallback_password_check": {
+          "name": "auth_security_policies_fallback_password_check",
+          "value": "\"auth_security_policies\".\"fallback_password\" in (0, 1)"
+        },
+        "auth_security_policies_fallback_magic_link_check": {
+          "name": "auth_security_policies_fallback_magic_link_check",
+          "value": "\"auth_security_policies\".\"fallback_magic_link\" in (0, 1)"
+        }
+      }
     },
     "auth_sessions": {
       "name": "auth_sessions",
@@ -702,7 +719,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraints": {}
+      "checkConstraints": {
+        "passkey_credentials_transports_check": {
+          "name": "passkey_credentials_transports_check",
+          "value": "json_type(\"passkey_credentials\".\"transports\") = 'array'"
+        }
+      }
     },
     "recovery_codes": {
       "name": "recovery_codes",
@@ -3213,7 +3235,7 @@
         },
         "users_interests_max_count": {
           "name": "users_interests_max_count",
-          "value": "json_array_length(\"users\".\"interests\") <= 15"
+          "value": "json_type(\"users\".\"interests\") = 'array' and json_array_length(\"users\".\"interests\") <= 15"
         },
         "users_status_check": {
           "name": "users_status_check",
