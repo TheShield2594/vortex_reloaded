@@ -45,17 +45,6 @@ scenarios:
           expect:
             - statusCode: 200
 
-  - name: "Invite code lookup"
-    weight: 10
-    flow:
-      - get:
-          url: "/api/invites/test-invite"
-          expect:
-            - statusCode:
-                - 200
-                - 404
-                - 429
-
   # Static pages
   - name: "Login page load"
     weight: 30
@@ -93,9 +82,10 @@ scenarios:
     weight: 15
     flow:
       - get:
-          url: "/api/search?q=hello&serverId=00000000-0000-0000-0000-000000000000&limit=10"
+          url: "/api/search?q=hello&dmChannelId=00000000-0000-0000-0000-000000000000&limit=10"
           expect:
             - statusCode:
                 - 200
                 - 401
+                - 403
                 - 404

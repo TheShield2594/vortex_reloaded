@@ -1,38 +1,25 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react"
-import { Send, X, Smile, Reply, FileUp, BarChart3, Plus, MessageSquare, Paperclip } from "lucide-react"
+import { Send, X, Smile, Reply, FileUp, BarChart3, Plus, Paperclip } from "lucide-react"
 import type { MessageWithAuthor } from "@/types/database"
 import { cn } from "@/lib/utils/cn"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useShallow } from "zustand/react/shallow"
 import { useMentionAutocomplete } from "@/hooks/use-mention-autocomplete"
 import { useEmojiAutocomplete } from "@/hooks/use-emoji-autocomplete"
-import { useSlashCommandAutocomplete, type SlashCommand } from "@/hooks/use-slash-command-autocomplete"
-import { BUILT_IN_SLASH_COMMANDS, getAvailableBuiltInCommands, getTextInsertionForBuiltIn, type BuiltInSlashCommand } from "@/lib/built-in-slash-commands"
+import { useSlashCommandAutocomplete } from "@/hooks/use-slash-command-autocomplete"
+import { BUILT_IN_SLASH_COMMANDS, getTextInsertionForBuiltIn } from "@/lib/built-in-slash-commands"
 import { MentionSuggestions } from "@/components/chat/mention-suggestions"
 import { EmojiSuggestions } from "@/components/chat/emoji-suggestions"
 import { SlashCommandSuggestions } from "@/components/chat/slash-command-suggestions"
 import { resolveComposerKeybinding } from "@/lib/composer-keybindings"
-import { useServerEmojis } from "@/components/chat/server-emoji-context"
-import { CustomEmojiGrid } from "@/components/chat/custom-emoji-grid"
 import { useLazyEmojiPicker } from "@/hooks/use-lazy-emoji-picker"
 import { MAX_ATTACHMENT_BYTES, validateFileClient } from "@/lib/attachment-validation"
 import { toast } from "@/components/ui/use-toast"
 import { useGifMemeSticker } from "@/hooks/use-gif-meme-sticker"
 import { usePollCreator } from "@/hooks/use-poll-creator"
-import { useSlashModeration } from "@/hooks/use-slash-moderation"
 import { useMobileLayout } from "@/hooks/use-mobile-layout"
-import { SmartReplyTray } from "@/components/chat/smart-reply-tray"
-
-/** Module-level cache for slash commands to avoid refetching on every server revisit. */
-const SLASH_COMMAND_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
-const slashCommandCache = new Map<string, {
-  commands: SlashCommand[]
-  permissions: number
-  isOwner: boolean
-  fetchedAt: number
-}>()
 
 /** Reply context — accepts channel MessageWithAuthor or DM Message. */
 export interface ReplyToContext {
@@ -51,13 +38,12 @@ interface Props {
   onDraftChange: (value: string) => void
   onTyping?: () => void
   onSent?: () => void
-  onCreateThread?: () => void
-  /** When provided, slash command autocomplete is enabled for apps installed on this server. */
+  /** Legacy prop retained for the (currently unused) "channel" variant's mention/persona lookups. */
   serverId?: string
 }
 
 /** Composable message input with file attachments, emoji picker, @mention autocomplete, and reply-to indicator. */
-export function MessageInput({ variant = "channel", channelName, draft, replyTo, onCancelReply, onSend, onDraftChange, onTyping, onSent, onCreateThread, serverId }: Props) {
+export function MessageInput({ variant = "channel", channelName, draft, replyTo, onCancelReply, onSend, onDraftChange, onTyping, onSent, serverId }: Props) {
   const isMobile = useMobileLayout()
   const [content, setContent] = useState(draft)
   const [cursorPosition, setCursorPosition] = useState(0)
@@ -144,96 +130,19 @@ export function MessageInput({ variant = "channel", channelName, draft, replyTo,
   }, [])
 
   // Mention autocomplete
-  const { activeServerId, activeChannelId, members: membersByServer, serverRoles: rolesByServer, personas: personasByServer } = useAppStore(
-    useShallow((s) => ({ activeServerId: s.activeServerId, activeChannelId: s.activeChannelId, members: s.members, serverRoles: s.serverRoles, personas: s.personas }))
+  const { activeServerId, members: membersByServer, serverRoles: rolesByServer, personas: personasByServer } = useAppStore(
+    useShallow((s) => ({ activeServerId: s.activeServerId, members: s.members, serverRoles: s.serverRoles, personas: s.personas }))
   )
   const members = activeServerId ? membersByServer[activeServerId] ?? [] : []
   const roles = serverId ? rolesByServer[serverId] ?? [] : []
   const personas = serverId ? personasByServer[serverId] ?? [] : []
   const mention = useMentionAutocomplete({ content, cursorPosition, members, roles, personas })
 
-  // Slash command state (needed by moderation hook below)
-  const [appCommands, setAppCommands] = useState<SlashCommand[]>([])
-  const [userPermissions, setUserPermissions] = useState(0)
-  const [isServerOwner, setIsServerOwner] = useState(false)
+  // Emoji autocomplete (`:shortcode` trigger) — no custom/server emoji source in a DM-only app
+  const emoji = useEmojiAutocomplete({ content, cursorPosition, serverEmojis: [] })
 
-  // Slash moderation commands (kick, ban, unban, timeout, mute)
-  const clearInputForModeration = useCallback((): string => {
-    const saved = content
-    setContent("")
-    onDraftChange("")
-    if (textareaRef.current) textareaRef.current.style.height = "28px"
-    return saved
-  }, [content, onDraftChange])
-  const restoreInputForModeration = useCallback((saved: string): void => {
-    setContent(saved)
-    onDraftChange(saved)
-  }, [onDraftChange])
-  const moderation = useSlashModeration({
-    serverId,
-    members,
-    userPermissions,
-    isServerOwner,
-    setSending,
-    setSendError,
-    clearInput: clearInputForModeration,
-    restoreInput: restoreInputForModeration,
-    textareaRef,
-  })
-
-  // Emoji autocomplete (`:shortcode` trigger)
-  const { emojis: serverEmojis } = useServerEmojis()
-  const emoji = useEmojiAutocomplete({ content, cursorPosition, serverEmojis })
-
-  // Slash command autocomplete (`/command` prefix trigger)
-  // Cache responses per server to avoid refetching on every channel switch.
-  useEffect(() => {
-    // Reset immediately so stale commands from a previous server aren't shown
-    setAppCommands([])
-    setUserPermissions(0)
-    setIsServerOwner(false)
-
-    if (!serverId) return
-
-    // Check in-memory cache first (5-minute TTL)
-    const cached = slashCommandCache.get(serverId)
-    if (cached && Date.now() - cached.fetchedAt < SLASH_COMMAND_CACHE_TTL) {
-      setAppCommands(cached.commands)
-      setUserPermissions(cached.permissions)
-      setIsServerOwner(cached.isOwner)
-      return
-    }
-
-    const controller = new AbortController()
-    fetch(`/api/servers/${serverId}/apps/commands`, { signal: controller.signal })
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (!data) return
-        // New format: { commands, permissions, isOwner }
-        let commands: SlashCommand[] = []
-        let permissions = 0
-        let isOwner = false
-        if (data.commands) {
-          commands = Array.isArray(data.commands) ? data.commands : []
-          permissions = data.permissions ?? 0
-          isOwner = data.isOwner ?? false
-        } else if (Array.isArray(data)) {
-          // Backwards compat with old format
-          commands = data
-        }
-        setAppCommands(commands)
-        setUserPermissions(permissions)
-        setIsServerOwner(isOwner)
-        slashCommandCache.set(serverId!, { commands, permissions, isOwner, fetchedAt: Date.now() })
-      })
-      .catch(() => {/* non-fatal — includes AbortError */})
-    return () => controller.abort()
-  }, [serverId])
-  // Merge permission-filtered built-in commands with app commands
-  const slashCommands = useMemo(() => {
-    const builtIns = getAvailableBuiltInCommands(userPermissions, isServerOwner, !!onCreateThread)
-    return [...builtIns, ...appCommands]
-  }, [appCommands, userPermissions, isServerOwner, onCreateThread])
+  // Slash command autocomplete (`/command` prefix trigger) — built-ins only
+  const slashCommands = useMemo(() => BUILT_IN_SLASH_COMMANDS, [])
   const slash = useSlashCommandAutocomplete({ content, cursorPosition, commands: slashCommands })
 
   function getPreviewUrl(file: File): string {
@@ -387,89 +296,9 @@ export function MessageInput({ variant = "channel", channelName, draft, replyTo,
           poll.openPollCreator(args || undefined)
           return
         }
-        if (commandName === "thread") {
-          setContent("")
-          onDraftChange("")
-          if (textareaRef.current) textareaRef.current.style.height = "28px"
-          onCreateThread?.()
-          return
-        }
-        if (commandName === "nick") {
-          if (!serverId || !args.trim()) {
-            setSendError("/nick requires a nickname. Usage: /nick YourNewNick")
-            return
-          }
-          setSending(true)
-          setSendError(null)
-          setSendSuccess(null)
-          const savedContent = content
-          setContent("")
-          onDraftChange("")
-          if (textareaRef.current) textareaRef.current.style.height = "28px"
-          try {
-            const res = await fetch(`/api/servers/${serverId}/members/me/nickname`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ nickname: args.trim() }),
-            })
-            if (!res.ok) {
-              const payload = await res.json().catch(() => ({}))
-              throw new Error(payload?.error ?? `Failed to update nickname (${res.status})`)
-            }
-            setSendError(null)
-            setSendSuccess(`Nickname updated to "${args.trim()}"`)
-            setTimeout(() => setSendSuccess(null), 3000)
-          } catch (error: unknown) {
-            setContent(savedContent)
-            onDraftChange(savedContent)
-            setSendError(error instanceof Error ? error.message : "Failed to update nickname.")
-          } finally {
-            setSending(false)
-            textareaRef.current?.focus()
-          }
-          return
-        }
-
-        // --- Moderation commands (extracted to useSlashModeration hook) ---
-        const handled = await moderation.handleModeration(commandName, args)
-        if (handled) return
-
         // matchedBuiltIn is true but no handler matched — unknown built-in, don't send as message
         setSendError(`Unknown command "/${commandName}". Type / to see available commands.`)
         return
-      }
-
-      // App-installed commands (require serverId)
-      if (serverId) {
-        const matchedCommand = appCommands.find((cmd) => cmd.commandName.toLowerCase() === commandName)
-        if (matchedCommand) {
-          setSending(true)
-          setSendError(null)
-          const savedContent = content
-          setContent("")
-          onDraftChange("")
-          if (textareaRef.current) textareaRef.current.style.height = "28px"
-          onSent?.()
-          try {
-            const res = await fetch(`/api/servers/${serverId}/apps/commands/execute`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ commandId: matchedCommand.id, appId: matchedCommand.appId, args }),
-            })
-            if (!res.ok) {
-              const payload = await res.json().catch(() => ({}))
-              throw new Error(payload?.error ?? `Command failed (${res.status})`)
-            }
-          } catch (error: unknown) {
-            setContent(savedContent)
-            onDraftChange(savedContent)
-            setSendError(error instanceof Error ? error.message : "Command failed. Try again.")
-          } finally {
-            setSending(false)
-            textareaRef.current?.focus()
-          }
-          return
-        }
       }
     }
 
@@ -813,21 +642,6 @@ export function MessageInput({ variant = "channel", channelName, draft, replyTo,
         </div>
       )}
 
-      {/* Smart reply suggestions */}
-      {variant === "channel" && activeServerId && activeChannelId && (
-        <SmartReplyTray
-          serverId={activeServerId}
-          channelId={activeChannelId}
-          isTyping={content.length > 0 && content !== draft}
-          hasContent={content.trim().length > 0}
-          onSelect={(text) => {
-            setContent(text)
-            onDraftChange(text)
-            textareaRef.current?.focus()
-          }}
-        />
-      )}
-
       {/* Reply indicator */}
       {replyTo && (
         <div
@@ -1080,18 +894,6 @@ export function MessageInput({ variant = "channel", channelName, draft, replyTo,
                   <BarChart3 className="w-4 h-4 flex-shrink-0" style={{ color: "var(--theme-accent)" }} />
                   Create Poll
                 </button>
-                {onCreateThread && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setShowPlusMenu(false); onCreateThread() }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-left surface-hover motion-interactive"
-                    style={{ color: "var(--theme-text-primary)" }}
-                  >
-                    <MessageSquare className="w-4 h-4 flex-shrink-0" style={{ color: "var(--theme-accent)" }} />
-                    Create Thread
-                  </button>
-                )}
               </div>
             )}
           </div>
@@ -1301,29 +1103,6 @@ export function MessageInput({ variant = "channel", channelName, draft, replyTo,
                       />
                     </div>
                     <EmojiPicker.Viewport style={{ flex: 1, overflow: "hidden auto" }}>
-                      {serverEmojis.length > 0 && (
-                        <CustomEmojiGrid
-                          emojis={serverEmojis}
-                          search={emojiSearch}
-                          onSelect={(emoji) => {
-                            const textarea = textareaRef.current
-                            const start = textarea ? textarea.selectionStart ?? content.length : content.length
-                            const end = textarea ? textarea.selectionEnd ?? start : start
-                            const insertion = `:${emoji.name}: `
-                            const next = content.slice(0, start) + insertion + content.slice(end)
-                            setContent(next)
-                            setCursorPosition(start + insertion.length)
-                            onDraftChange(next)
-                            setShowEmojiPicker(false)
-                            requestAnimationFrame(() => {
-                              if (textarea) {
-                                textarea.focus()
-                                textarea.setSelectionRange(start + insertion.length, start + insertion.length)
-                              }
-                            })
-                          }}
-                        />
-                      )}
                       <EmojiPicker.Loading>
                         <div style={{ padding: "12px", color: "var(--theme-text-muted)", fontSize: "12px" }}>Loading…</div>
                       </EmojiPicker.Loading>

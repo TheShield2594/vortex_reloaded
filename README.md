@@ -7,7 +7,7 @@
 <h1 align="center">VortexChat</h1>
 
 <p align="center">
-  A full-featured, open-source real-time chat platform — think Discord, built with Next.js, Supabase, and WebRTC.
+  An open-source, focused chat app — encrypted DMs, small group chats, and voice calls with a real audio EQ. Built with Next.js, Supabase, and WebRTC.
 </p>
 
 <p align="center">
@@ -24,50 +24,42 @@
 
 ### Messaging
 
-- **Real-time messaging** — Supabase Realtime (Postgres CDC), zero polling
+- **1:1 and group DMs** — real-time messaging via Supabase Realtime (Postgres CDC), zero polling
+- **End-to-end encryption** — optional E2EE for direct messages
 - **Reactions** — emoji reactions, live-synced across clients
-- **Replies & threads** — reply to messages, edit, soft-delete; full threaded conversations with auto-archive
+- **Replies** — reply to messages, edit, soft-delete
 - **File uploads** — images and files via Supabase Storage
-- **Search** — full-text message search + local search index
-- **Slash commands** — built-in channel command bar
-
-### Servers & Channels
-
-- **Servers** — create/join with invite codes, icon uploads
-- **Server discovery** — public server directory
-- **Blueprints** — import/export reusable server configurations (Gaming, Study, Startup, Creator starters)
-- **Channel types** — text, voice, forum, stage, announcement, media, categories
-- **Roles** — 21-bit bitmask permission system (Discord-style), free color picker
-- **Webhooks** — incoming webhook support per channel
+- **Search** — full-text search within a conversation + local search index
+- **Slash commands, GIFs & stickers** — built-in composer shortcuts, GIF/sticker/meme pickers
 
 ### Voice & Video
 
-- **Voice chat** — dual-mode: P2P WebRTC (self-hosted signal server) or LiveKit SFU
-- **Voice activity detection** — speaking indicators via hark.js
-- **Screen share** — `getDisplayMedia`, streamed over WebRTC/LiveKit
-- **DM calls** — voice calls in direct messages
-- **Vortex Recap** — AI-powered transcripts and summaries
+- **Voice & video calls** — P2P WebRTC over a self-hosted Socket.IO signaling server, for both 1:1 DMs and small group chats (full-mesh)
+- **Audio EQ** — per-user audio settings (bass/treble/noise suppression), not a fixed default
+- **Screen share** — `getDisplayMedia`, streamed over WebRTC
+
+### Personalization
+
+- **Per-conversation themes** — set a theme preset per DM/group chat, shared with everyone in it
+- **Appearance settings** — theme presets, accent colors, fonts, message density, and more, applied account-wide
+- **Profiles** — display name, bio, status, custom tag, banner color
+- **Badges & connections** — Steam/YouTube account connections
 
 ### Social
 
-- **Direct messages** — 1:1 DMs with real-time updates and optional E2EE
-- **Friends** — friend requests, suggestions, status
-- **Profiles** — display name, bio, status, custom tag, banner color
-- **Member list** — online/offline presence via Supabase Realtime Presence
+- **Friends** — friend requests, suggestions, status — the way you find people to chat with
+- **Presence** — online/offline/idle presence via Supabase Realtime
 - **Blocking** — user blocking with configurable policy enforcement
 
 ### Platform
 
-- **Auth** — email/password + magic link via Supabase Auth
+- **Auth** — email/password + passkeys + MFA via Supabase Auth, with login-risk lockout and recovery codes
 - **Push notifications** — Web Push via VAPID
 - **PWA** — installable progressive web app with offline support
-- **Moderation** — reports, appeals, Mod Ledger, member timeouts
-- **Admin panel** — activity timeline, Permission Sandbox
 - **Rate limiting** — Upstash Redis-backed rate limiting on API routes
 - **Error monitoring** — Sentry integration
 - **Offline / outbox** — message consistency with reconnect replay ([docs](./docs/message-consistency-model.md))
 - **Quiet hours** — configurable notification suppression
-- **GIFs & stickers** — GIF provider integration, sticker and meme support
 
 ---
 
@@ -79,7 +71,7 @@
 | **Database** | Supabase (PostgreSQL + Realtime + Storage) |
 | **Auth** | Supabase Auth |
 | **Voice signaling** | Node.js + Socket.IO (+ Redis adapter for clustering) |
-| **Voice transport** | WebRTC (P2P) or LiveKit (SFU) |
+| **Voice transport** | WebRTC (P2P, full-mesh for group calls) |
 | **State** | Zustand |
 | **Rate limiting** | Upstash Redis |
 | **Monitoring** | Sentry |
@@ -130,8 +122,6 @@ npm run web       # Next.js on http://localhost:3000
 npm run signal    # WebRTC signaling server
 ```
 
-> **LiveKit (optional):** Set `NEXT_PUBLIC_LIVEKIT_URL` in `apps/web/.env.local` to switch voice from P2P WebRTC to a LiveKit SFU. If unset, the self-hosted signal server is used.
-
 ---
 
 ## Project Structure
@@ -142,46 +132,39 @@ vortexchat/
 │   ├── web/                    # Next.js 16 frontend + API routes
 │   │   ├── app/
 │   │   │   ├── (auth)/         # Login, register
-│   │   │   ├── api/            # 30+ REST endpoints
-│   │   │   ├── channels/       # Main chat interface
-│   │   │   ├── discover/       # Server discovery
-│   │   │   ├── appeals/        # Moderation appeals
+│   │   │   ├── api/            # REST endpoints (DMs, friends, auth, voice, ...)
+│   │   │   ├── channels/       # Main chat interface (DMs, friends, settings)
 │   │   │   ├── settings/       # User settings
-│   │   │   ├── invite/         # Invite link handler
 │   │   │   └── ...             # Privacy, terms, verify-email, etc.
 │   │   ├── components/
-│   │   │   ├── chat/           # MessageItem, ChatArea, MessageInput
-│   │   │   ├── voice/          # VoiceChannel, voice intelligence
-│   │   │   ├── dm/             # DM area, DM calls
-│   │   │   ├── roles/          # RoleManager
-│   │   │   ├── moderation/     # Moderation timeline
-│   │   │   ├── admin/          # Admin panel, permission sandbox
+│   │   │   ├── chat/           # Composer, emoji/mention/slash-command pieces
+│   │   │   ├── voice/          # Voice call UI, grid layout
+│   │   │   ├── dm/             # DM area, DM/group calls, conversation theme picker
 │   │   │   ├── notifications/  # Notification bell, push prompts
-│   │   │   ├── layout/         # ServerSidebar, ChannelSidebar, MemberList
-│   │   │   ├── modals/         # Create server/channel, profile, settings
-│   │   │   ├── onboarding/     # New user onboarding
+│   │   │   ├── layout/         # App shell, user panel
+│   │   │   ├── modals/         # Search, profile settings, keyboard shortcuts
+│   │   │   ├── onboarding/     # New user welcome flow
 │   │   │   └── ui/             # Shared UI primitives (Radix-based)
 │   │   └── lib/
 │   │       ├── supabase/       # Client, server, proxy helpers
-│   │       ├── webrtc/         # useVoice, useLivekitVoice, useUnifiedVoice
-│   │       ├── voice/          # Audio settings, voice intelligence
+│   │       ├── webrtc/         # Voice call hooks
+│   │       ├── voice/          # Audio settings / EQ
 │   │       ├── stores/         # Zustand state management
-│   │       └── ...             # Permissions, moderation, utils, etc.
+│   │       └── ...             # Utils, DM theme presets, etc.
 │   └── signal/                 # Node.js WebRTC signaling server
 │       └── src/
 │           ├── index.ts        # Socket.IO server entry
 │           ├── rooms.ts        # In-memory room state
-│           ├── redis-rooms.ts  # Redis-backed room state (clustering)
-│           └── voice-state-sync.ts
+│           └── redis-rooms.ts  # Redis-backed room state (clustering)
 ├── packages/
-│   └── shared/                 # Shared types, permission bitmasks, utilities
-│       └── src/index.ts        # PERMISSIONS, helpers, ChannelType, etc.
+│   └── shared/                 # Shared types, event-bus/gateway/presence contracts
+│       └── src/index.ts
 ├── supabase/
 │   └── migrations/             # SQL migrations + RLS policies
-├── scripts/                    # Dev tooling (dep cycles, parity reports, etc.)
+├── scripts/                    # Dev tooling (dep cycles, migration smoke test)
 ├── docs/                       # Architecture docs, feature tracking
 ├── deploy/                     # Deployment guide (Vercel + Railway + Supabase)
-├── .github/workflows/          # CI + parity reporting
+├── .github/workflows/          # CI
 ├── turbo.json                  # Turborepo pipeline config
 ├── docker-compose.yml          # Local dev services
 └── CONTRIBUTING.md             # Contribution guidelines
@@ -189,47 +172,9 @@ vortexchat/
 
 ---
 
-## Permissions
+## Per-Conversation Theming
 
-Defined in [`packages/shared/src/index.ts`](./packages/shared/src/index.ts) and imported via `@vortex/shared`. Never hardcode permission bits.
-
-| Permission | Bit | Value |
-|---|---|---|
-| `VIEW_CHANNELS` | 0 | 1 |
-| `SEND_MESSAGES` | 1 | 2 |
-| `MANAGE_MESSAGES` | 2 | 4 |
-| `KICK_MEMBERS` | 3 | 8 |
-| `BAN_MEMBERS` | 4 | 16 |
-| `MANAGE_ROLES` | 5 | 32 |
-| `MANAGE_CHANNELS` | 6 | 64 |
-| `ADMINISTRATOR` | 7 | 128 |
-| `CONNECT_VOICE` | 8 | 256 |
-| `SPEAK` | 9 | 512 |
-| `MUTE_MEMBERS` | 10 | 1024 |
-| `STREAM` | 11 | 2048 |
-| `MANAGE_WEBHOOKS` | 12 | 4096 |
-| `MANAGE_EVENTS` | 13 | 8192 |
-| `MODERATE_MEMBERS` | 14 | 16384 |
-| `CREATE_PUBLIC_THREADS` | 15 | 32768 |
-| `CREATE_PRIVATE_THREADS` | 16 | 65536 |
-| `SEND_MESSAGES_IN_THREADS` | 17 | 131072 |
-| `USE_APPLICATION_COMMANDS` | 18 | 262144 |
-| `MENTION_EVERYONE` | 19 | 524288 |
-| `MANAGE_EMOJIS` | 20 | 1048576 |
-
-`ADMINISTRATOR` overrides all other permissions. All features are free — no paywall.
-
----
-
-## Server Templates
-
-VortexChat supports reusable **server templates** for quick setup:
-
-- Built-in starters: **Gaming**, **Study**, **Startup**, and **Creator**
-- Templates include roles, categories, channels, and permission overrides
-- Import validates JSON, shows a diff preview, and applies transactionally
-- Export serializes any server into a reusable template
-- API: `POST /api/server-templates` — modes: `validate`, `preview`, `apply`, `create-server`, `export`
+Any member of a DM or group chat can set a shared theme preset for that conversation (`PATCH /api/dm/channels/{channelId}/theme`), stored on `dm_channels.theme_preset`. It reuses the same preset catalog as user-level appearance settings, applied by setting `data-theme-preset` on the conversation's root element so the existing theme CSS cascades to everyone viewing it. See `apps/web/lib/dm-theme.ts` and `apps/web/components/dm/conversation-theme-picker.tsx`.
 
 ---
 

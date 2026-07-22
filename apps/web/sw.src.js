@@ -149,10 +149,10 @@ self.addEventListener("fetch", (event) => {
   }
 
   // API message history — network-first with short TTL cache for offline access.
-  // Caches GET /api/messages and /api/channels/*/messages responses so users
-  // can view recent messages when offline.
+  // Caches GET /api/dm/channels/*/messages responses so users can view
+  // recent DM/group messages when offline.
   // Cache entries are scoped per-user via cookie hash to prevent cross-account leaks.
-  if (/^\/api\/(messages|channels\/[^/]+\/messages)\/?$/.test(url.pathname)) {
+  if (/^\/api\/dm\/channels\/[^/]+\/messages\/?$/.test(url.pathname)) {
     // Cache is keyed by full request URL (including channelId query params),
     // which is inherently user-scoped since channel access is auth-gated.
     // The SW runs in a single-user browser context so cross-account risk
