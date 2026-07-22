@@ -2,7 +2,10 @@ FROM node:20-alpine AS base
 
 # Install dependencies only when needed
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
+# python3/make/g++ are required to build better-sqlite3's native addon on
+# Alpine (musl) — there is no prebuilt binary for this platform, so it
+# compiles from source during `npm ci`.
+RUN apk add --no-cache libc6-compat python3 make g++
 WORKDIR /app
 
 # Copy workspace root + package manifests for all workspaces
@@ -43,6 +46,16 @@ RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/apps/web/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
+
+# Next's standalone output tracing sometimes misses native addons like
+# better-sqlite3's compiled .node binary — copy the whole package explicitly
+# from `deps` so the runtime image has it regardless of tracing behavior.
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+
+# Mount point for the SQLite database file (see docker-compose.yml — bind
+# mounted from the host so it's a plain file, easy to snapshot/back up).
+RUN mkdir -p /data && chown nextjs:nodejs /data
+VOLUME ["/data"]
 
 USER nextjs
 

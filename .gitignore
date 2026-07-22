@@ -20,6 +20,12 @@ build/
 .supabase/
 supabase/.temp/
 
+# Self-hosted deployment: generated config + the SQLite database itself
+# (scripts/setup.sh writes ./livekit.yaml with real secrets baked in; the
+# db file and its WAL/SHM companions live under ./data)
+/livekit.yaml
+/data/
+
 # MCP config (contains project-specific refs)
 .mcp.json
 
