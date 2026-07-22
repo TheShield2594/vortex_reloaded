@@ -6,15 +6,26 @@ import { parentPort, workerData } from "node:worker_threads"
 import Database from "better-sqlite3"
 
 // Synchronous sleep (Atomics.wait blocks the calling thread — fine here,
-// each worker has its own thread). Used to widen the check-then-act window
-// so the naive race reproduces reliably instead of only "sometimes."
+// each worker has its own thread). Used only in immediate-tx mode, to prove
+// the write lock stays held for the whole window, not to induce a race.
 function sleepSync(ms) {
   if (!ms) return
   const sab = new Int32Array(new SharedArrayBuffer(4))
   Atomics.wait(sab, 0, 0, ms)
 }
 
-const { dbPath, mode, userId, deviceId, publicKey, limit, delayMs } = workerData
+// Two-phase barrier for the naive mode: rather than betting on a fixed
+// delay to widen the check-then-act window, block on a SharedArrayBuffer
+// until the orchestrator confirms *both* workers have finished their count.
+// This makes the race deterministic by construction (both reads are
+// guaranteed to happen before either write) instead of timing-dependent.
+function waitForBarrierRelease(barrierBuffer) {
+  const view = new Int32Array(barrierBuffer)
+  parentPort.postMessage({ type: "count-complete" })
+  Atomics.wait(view, 0, 0)
+}
+
+const { dbPath, mode, userId, deviceId, publicKey, limit, delayMs, barrierBuffer } = workerData
 
 const db = new Database(dbPath)
 db.pragma("journal_mode = WAL")
@@ -33,10 +44,12 @@ const upsert = db.prepare(`
 
 // Mode A: direct port of the Postgres RPC's logic — two standalone
 // statements, no wrapping transaction. This is what a literal line-by-line
-// port to Drizzle/better-sqlite3 looks like.
+// port to Drizzle/better-sqlite3 looks like. The barrier below forces both
+// workers' counts to land before either insert, so the race is guaranteed,
+// not just likely.
 function naive() {
   const { n } = countOtherDevices.get(userId, deviceId)
-  sleepSync(delayMs)
+  waitForBarrierRelease(barrierBuffer)
   if (n >= Math.max(limit, 1)) throw new Error("device_limit_reached")
   upsert.run(userId, deviceId, publicKey)
 }
@@ -69,9 +82,9 @@ try {
   else if (mode === "trigger") triggerEnforced()
   else if (mode === "immediate-tx") immediateTx()
   else throw new Error(`unknown mode ${mode}`)
-  parentPort.postMessage({ ok: true, deviceId })
+  parentPort.postMessage({ type: "result", ok: true, deviceId })
 } catch (err) {
-  parentPort.postMessage({ ok: false, deviceId, error: String((err && err.message) || err) })
+  parentPort.postMessage({ type: "result", ok: false, deviceId, error: String((err && err.message) || err) })
 } finally {
   db.close()
 }

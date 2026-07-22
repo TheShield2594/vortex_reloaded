@@ -100,11 +100,20 @@ Postgres's `ts_rank`.
   `apps/web/app/api/dm/channels/[channelId]/messages/[messageId]/route.ts`) →
   excluded from results through both the `UPDATE OF content` trigger and the
   `dm.deleted_at IS NULL` filter (defense in depth).
-- Hard/cascade delete → row disappears from the FTS index; row counts between
-  `direct_messages` and `direct_messages_fts` stay equal.
-- `INSERT INTO direct_messages_fts(direct_messages_fts) VALUES('integrity-check')`
+- Cascade delete (a real `ON DELETE CASCADE` FK from `direct_messages` to a
+  minimal `dm_channels` parent table, with `PRAGMA foreign_keys = ON`) →
+  SQLite's cascade performs an actual `DELETE` on the child row, so the
+  `direct_messages_fts_ad` trigger still fires; the message disappears from
+  both `direct_messages` and the FTS index, and their row counts stay equal.
+- `INSERT INTO direct_messages_fts(direct_messages_fts, rank) VALUES('integrity-check', 1)`
   is FTS5's built-in consistency check between the shadow index and content
-  table — worth running in CI/smoke tests after the real migration lands.
+  table — the `rank = 1` form is required for it to actually diff FTS index
+  content against the `direct_messages` content table; verified empirically
+  that the bare `INSERT INTO direct_messages_fts(direct_messages_fts)
+  VALUES('integrity-check')` form does *not* catch a deliberately
+  desynced index/content pair (it only checks the FTS index's own internal
+  structure), while the `rank = 1` form does. Worth running in CI/smoke
+  tests after the real migration lands.
 
 ### Confirmed constraints
 
@@ -142,13 +151,16 @@ both read the same pre-insert count before either writes.
 The spike proves this isn't hypothetical: two `worker_threads`, each with its
 own connection to the same on-disk file, race to register a **new** device
 for one user against a `device_limit` of 1 (chosen for a sharp pass/fail
-signal). A 30ms synchronous sleep (`Atomics.wait`) is inserted between the
-count and the insert to widen the window so the race reproduces every run
-rather than only under unlucky timing — real production traffic doesn't need
-help finding this window, but a deterministic test does.
+signal). Rather than betting on a fixed delay to widen the check-then-act
+window, a two-phase barrier (`SharedArrayBuffer` + `Atomics.wait`/`notify`)
+holds both workers right after their `COUNT` until the orchestrator confirms
+*both* have finished it, then releases them together — so neither worker's
+insert can run before both counts are taken. This makes the race a direct
+consequence of the naive pattern's structure, not a probabilistic side
+effect of scheduling.
 
 Result: **both registrations report success**, and the table ends up with 2
-rows against a limit of 1. Confirmed over multiple runs (see script output).
+rows against a limit of 1 (see script output).
 
 Why this specific case matters more than most: of the 7 live Postgres RPCs,
 `upsert_user_device_key` is the one the issue and prior scoping work flagged
@@ -176,11 +188,24 @@ BEFORE INSERT ON user_device_keys
 WHEN (
   SELECT COUNT(*) FROM user_device_keys
   WHERE user_id = NEW.user_id AND device_id <> NEW.device_id
-) >= :device_limit
+) >= 20  -- literal, baked in at schema-creation time
 BEGIN
   SELECT RAISE(ABORT, 'device_limit_reached');
 END;
 ```
+
+(`20` here matches the app's existing `DEVICE_LIMIT`; the spike script itself
+uses `LIMIT = 1` for a sharper pass/fail signal under only two racing
+workers — same mechanism, smaller test value.)
+
+The cap is a literal interpolated into the DDL, not a runtime bind
+parameter — `CREATE TRIGGER` is DDL, and trigger bodies/`WHEN` clauses can't
+take bind parameters. That's a deliberate fixed-cap design, not a limitation
+worth working around: it's the same tradeoff the app already has today via
+the `DEVICE_LIMIT` constant in `apps/web/app/api/dm/keys/device/route.ts`
+(changing the cap means a code/migration change, not a config value), so
+moving the cap into the trigger doesn't make it any less flexible than it
+already is.
 
 The cap check becomes part of the same atomic `INSERT ... ON CONFLICT DO
 UPDATE` statement — there's no app-level window between check and write to

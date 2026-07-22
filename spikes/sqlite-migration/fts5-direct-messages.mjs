@@ -16,15 +16,21 @@ import assert from "node:assert/strict"
 
 const db = new Database(":memory:")
 db.pragma("journal_mode = WAL")
+db.pragma("foreign_keys = ON")
 
 // ---------------------------------------------------------------------------
-// 1. Base table (shape matches supabase/migrations/00001_initial_schema.sql,
-//    minus FK constraints/defaults that don't matter for this spike)
+// 1. Base tables. A minimal `dm_channels` parent is included (rather than
+//    stubbing FKs out) so the "cascade delete" exercise below is a real
+//    ON DELETE CASCADE, not a manual DELETE standing in for one.
 // ---------------------------------------------------------------------------
 db.exec(`
+  CREATE TABLE dm_channels (
+    id TEXT PRIMARY KEY
+  );
+
   CREATE TABLE direct_messages (
     id TEXT PRIMARY KEY,
-    dm_channel_id TEXT NOT NULL,
+    dm_channel_id TEXT NOT NULL REFERENCES dm_channels(id) ON DELETE CASCADE,
     sender_id TEXT NOT NULL,
     content TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -87,7 +93,7 @@ const update = db.prepare(`UPDATE direct_messages SET content = ? WHERE id = ?`)
 const softDelete = db.prepare(
   `UPDATE direct_messages SET content = NULL, deleted_at = datetime('now') WHERE id = ?`
 )
-const hardDelete = db.prepare(`DELETE FROM direct_messages WHERE id = ?`)
+const deleteChannel = db.prepare(`DELETE FROM dm_channels WHERE id = ?`)
 
 const search = db.prepare(`
   SELECT dm.id, dm.content, bm25(direct_messages_fts) AS rank
@@ -101,8 +107,14 @@ const search = db.prepare(`
 // ---------------------------------------------------------------------------
 // 4. End-to-end exercise
 // ---------------------------------------------------------------------------
+// msg-2 lives in its own channel so the cascade-delete exercise below can
+// remove exactly one message (via its parent dm_channel) without disturbing
+// msg-1/msg-3.
+db.prepare(`INSERT INTO dm_channels (id) VALUES (?)`).run("chan-1")
+db.prepare(`INSERT INTO dm_channels (id) VALUES (?)`).run("chan-2")
+
 insert.run("msg-1", "chan-1", "user-a", "Are we still on for the rocket launch tomorrow?", "2026-01-01")
-insert.run("msg-2", "chan-1", "user-b", "Yes! Bringing the telescope too.", "2026-01-02")
+insert.run("msg-2", "chan-2", "user-b", "Yes! Bringing the telescope too.", "2026-01-02")
 insert.run("msg-3", "chan-1", "user-a", "Great, see you at the launch pad at dawn.", "2026-01-03")
 
 let hits = search.all("launch")
@@ -130,14 +142,23 @@ hits = search.all("launch")
 assert.deepEqual(hits.map((h) => h.id), ["msg-1"], "soft-deleted message excluded from results")
 console.log("MATCH 'launch' after soft-delete of msg-3 ->", hits.map((h) => h.id))
 
-// physical delete (cascade) also removes it from the index, no orphaned rows
-hardDelete.run("msg-2")
+// physical delete via a real FK cascade (deleting msg-2's parent dm_channel,
+// with foreign_keys=ON) also removes it from the index, no orphaned rows.
+// SQLite's cascade delete performs an actual DELETE on the child row, so the
+// direct_messages_fts_ad AFTER DELETE trigger still fires.
+deleteChannel.run("chan-2")
+const msg2Row = db.prepare("SELECT 1 FROM direct_messages WHERE id = 'msg-2'").get()
+assert.equal(msg2Row, undefined, "msg-2 must be gone after its parent dm_channel cascades")
 const ftsRowCount = db.prepare("SELECT count(*) AS n FROM direct_messages_fts").get().n
 const baseRowCount = db.prepare("SELECT count(*) AS n FROM direct_messages").get().n
 assert.equal(ftsRowCount, baseRowCount, "FTS index row count must track base table after cascade delete")
-console.log(`Row counts after hard delete: base=${baseRowCount} fts=${ftsRowCount}`)
+console.log(`Row counts after cascade delete: base=${baseRowCount} fts=${ftsRowCount}`)
 
-// 'integrity-check' command detects any base/index drift directly
-db.prepare(`INSERT INTO direct_messages_fts(direct_messages_fts) VALUES('integrity-check')`).run()
+// 'integrity-check' alone only checks the FTS index's own internal
+// structure. For an external-content table, catching drift between the FTS
+// index and the content table (direct_messages) requires rank=1 — verified
+// empirically: without it, a deliberately desynced index/content pair does
+// NOT raise, silently passing a corrupted index.
+db.prepare(`INSERT INTO direct_messages_fts(direct_messages_fts, rank) VALUES('integrity-check', 1)`).run()
 
 console.log("\nAll FTS5 assertions passed.")
