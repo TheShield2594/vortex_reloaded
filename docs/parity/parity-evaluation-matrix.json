@@ -1,0 +1,73 @@
+{
+  "lastUpdated": "2026-03-05",
+  "items": [
+    {
+      "id": "P0-MSG-LIFECYCLE",
+      "priority": "P0",
+      "area": "message-lifecycle",
+      "type": "automated",
+      "owner": "@chat-platform",
+      "weight": 20,
+      "command": "npm run test:parity:critical --workspace=apps/web",
+      "evidence": "apps/web/__tests__/parity-acceptance-critical-flows.test.ts"
+    },
+    {
+      "id": "P0-PERMISSIONS",
+      "priority": "P0",
+      "area": "permissions",
+      "type": "automated",
+      "owner": "@trust-and-safety",
+      "weight": 15,
+      "command": "npm run test:parity:critical --workspace=apps/web",
+      "evidence": "apps/web/__tests__/parity-acceptance-critical-flows.test.ts"
+    },
+    {
+      "id": "P0-VOICE-JOIN-RECONNECT",
+      "priority": "P0",
+      "area": "voice",
+      "type": "automated",
+      "owner": "@realtime-platform",
+      "weight": 20,
+      "command": "npm test --workspace=apps/signal",
+      "evidence": "apps/signal/src/rooms.parity-check.ts"
+    },
+    {
+      "id": "P0-MODERATION",
+      "priority": "P0",
+      "area": "moderation",
+      "type": "automated",
+      "owner": "@trust-and-safety",
+      "weight": 15,
+      "command": "npm run test:parity:critical --workspace=apps/web",
+      "evidence": "apps/web/__tests__/parity-acceptance-critical-flows.test.ts"
+    },
+    {
+      "id": "P0-A11Y-FOCUS-ORDER",
+      "priority": "P0",
+      "area": "accessibility",
+      "type": "automated",
+      "owner": "@design-systems",
+      "weight": 10,
+      "command": "npm run test:a11y:focus --workspace=apps/web",
+      "evidence": "apps/web/__tests__/accessibility-focus-order.test.ts"
+    },
+    {
+      "id": "P1-MANUAL-CROSS-BROWSER-SMOKE",
+      "priority": "P1",
+      "area": "manual-smoke",
+      "type": "manual",
+      "owner": "@qa-parity",
+      "weight": 10,
+      "status": "pending"
+    },
+    {
+      "id": "P1-MANUAL-MOBILE-NAV-FOCUS",
+      "priority": "P1",
+      "area": "manual-a11y",
+      "type": "manual",
+      "owner": "@qa-parity",
+      "weight": 10,
+      "status": "pending"
+    }
+  ]
+}

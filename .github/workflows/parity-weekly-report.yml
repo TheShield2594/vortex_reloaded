@@ -1,0 +1,28 @@
+name: Weekly Parity Report
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+
+jobs:
+  parity-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run test:parity:critical --workspace=apps/web
+      - run: npm run test:a11y:focus --workspace=apps/web
+      - run: npm test --workspace=apps/signal
+      - run: npm run parity:report
+      - name: Upload parity trend artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-parity-report
+          path: |
+            docs/parity/reports/weekly-parity-report.md
+            docs/parity/reports/parity-trend.json

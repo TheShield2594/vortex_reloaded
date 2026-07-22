@@ -1,0 +1,101 @@
+# Artillery load test configuration for VortexChat
+#
+# Install:  npm install -g artillery
+# Run:      artillery run apps/web/load-test.yml
+# Report:   artillery run --output report.json apps/web/load-test.yml
+#           artillery report report.json
+#
+# Environment variables:
+#   LOAD_TEST_BASE_URL  — target URL (default: http://localhost:3000)
+#   LOAD_TEST_EMAIL     — test account email for authenticated flows
+#   LOAD_TEST_PASSWORD  — test account password
+
+config:
+  target: "{{ $processEnvironment.LOAD_TEST_BASE_URL || 'http://localhost:3000' }}"
+  phases:
+    # Warm-up: 5 users/sec for 30 seconds
+    - duration: 30
+      arrivalRate: 5
+      name: "Warm-up"
+    # Ramp-up: 5 → 30 users/sec over 60 seconds
+    - duration: 60
+      arrivalRate: 5
+      rampTo: 30
+      name: "Ramp-up"
+    # Sustained load: 30 users/sec for 120 seconds
+    - duration: 120
+      arrivalRate: 30
+      name: "Sustained load"
+    # Spike: 60 users/sec for 30 seconds
+    - duration: 30
+      arrivalRate: 60
+      name: "Spike"
+  defaults:
+    headers:
+      Accept: "application/json"
+      Content-Type: "application/json"
+
+scenarios:
+  # Public endpoints — no auth required
+  - name: "Health check"
+    weight: 20
+    flow:
+      - get:
+          url: "/api/health"
+          expect:
+            - statusCode: 200
+
+  - name: "Invite code lookup"
+    weight: 10
+    flow:
+      - get:
+          url: "/api/invites/test-invite"
+          expect:
+            - statusCode:
+                - 200
+                - 404
+                - 429
+
+  # Static pages
+  - name: "Login page load"
+    weight: 30
+    flow:
+      - get:
+          url: "/login"
+          expect:
+            - statusCode: 200
+
+  - name: "Register page load"
+    weight: 10
+    flow:
+      - get:
+          url: "/register"
+          expect:
+            - statusCode: 200
+
+  # Auth endpoints — rate limit testing
+  - name: "Login attempt (rate limit test)"
+    weight: 15
+    flow:
+      - post:
+          url: "/api/auth/login"
+          json:
+            email: "loadtest@example.com"
+            password: "wrongpassword"
+          expect:
+            - statusCode:
+                - 400
+                - 401
+                - 429
+
+  # API endpoint latency
+  - name: "Search API"
+    weight: 15
+    flow:
+      - get:
+          url: "/api/search?q=hello&serverId=00000000-0000-0000-0000-000000000000&limit=10"
+          expect:
+            - statusCode:
+                - 200
+                - 401
+                - 404

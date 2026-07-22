@@ -1,0 +1,17 @@
+{
+  "name": "@vortex/cron",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Portable cron runner for VortexChat self-hosted deployments",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "build": "echo 'No build step required'",
+    "lint": "echo 'No lint configured'",
+    "type-check": "echo 'No type-check configured'"
+  },
+  "dependencies": {
+    "node-cron": "^3.0.3"
+  }
+}

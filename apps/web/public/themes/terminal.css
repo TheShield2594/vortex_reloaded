@@ -1,0 +1,453 @@
+/**
+ * Terminal — VortexChat custom theme
+ *
+ * A retro green-phosphor CRT terminal aesthetic with scanlines,
+ * screen flicker, monospace font, and glowing text.
+ *
+ * HOW TO USE:
+ *   1. Open Profile Settings → Appearance tab
+ *   2. Select the "Terminal" preset from the theme picker
+ *   3. (Optional) For the full CRT effect, scroll to "Custom CSS"
+ *   4. Click "Clear" to remove any existing CSS
+ *   5. Paste the entire contents of this file into the textarea
+ *   6. Click "Save Theme & Appearance"
+ *
+ * The preset gives you the green-on-black color scheme. This custom CSS
+ * adds the CRT scanlines, screen flicker, phosphor glow, and monospace
+ * font for the complete terminal experience.
+ *
+ * You can layer this on top of the Terminal preset — custom CSS always wins.
+ */
+
+/* ── Monospace terminal font ─────────────────────────────────────────── */
+@import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap");
+
+:root {
+  /* Core phosphor green */
+  --term-green: rgb(74, 239, 152);
+  --term-green-dim: rgba(74, 239, 152, 0.6);
+  --term-green-muted: rgba(74, 239, 152, 0.35);
+  --term-green-faint: rgba(74, 239, 152, 0.15);
+  --term-green-ghost: rgba(74, 239, 152, 0.06);
+
+  /* Background — near-black with green tint */
+  --term-bg: #000900;
+  --term-bg-light: #001a05;
+  --term-bg-lighter: #002a0a;
+  --term-bg-panel: rgba(0, 14, 2, 0.92);
+
+  /* CRT effect controls — adjust these to taste */
+  --crt-scanline-opacity: 0.08;
+  --crt-flicker-intensity: 0.015;
+  --crt-glow-strength: 1;
+
+  /* Terminal title */
+  --term-title-text: "VORTEXCHAT TERMINAL";
+  --term-title-size: 13px;
+
+  /* Text brightness — needed by --theme-danger-foreground */
+  --theme-text-bright: var(--term-green);
+
+  /* Override border radius — terminals have sharp corners */
+  --radius: 0rem;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  GLOBAL — Terminal font override
+ * ═══════════════════════════════════════════════════════════════════════ */
+body,
+body * {
+  font-family: "Share Tech Mono", "Courier New", monospace !important;
+}
+
+body {
+  background: var(--term-bg) !important;
+  color: var(--term-green) !important;
+  caret-color: var(--term-green) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  CRT SCANLINE OVERLAY
+ *  Horizontal lines that sweep down the screen like a real CRT
+ * ═══════════════════════════════════════════════════════════════════════ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 2px,
+    rgba(0, 0, 0, var(--crt-scanline-opacity)) 2px,
+    rgba(0, 0, 0, var(--crt-scanline-opacity)) 4px
+  );
+  animation: crt-roll 8s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  CRT SCREEN FLICKER — subtle brightness oscillation
+ * ═══════════════════════════════════════════════════════════════════════ */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 60%,
+    rgba(0, 0, 0, 0.35) 100%
+  );
+  animation: crt-flicker 0.1s infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  CRT ANIMATIONS
+ * ═══════════════════════════════════════════════════════════════════════ */
+@keyframes crt-roll {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 100vh; }
+}
+
+@keyframes crt-flicker {
+  0%   { opacity: 0.97; }
+  5%   { opacity: 0.96; }
+  10%  { opacity: 0.98; }
+  15%  { opacity: 0.94; }
+  20%  { opacity: 0.98; }
+  50%  { opacity: 0.96; }
+  80%  { opacity: 0.98; }
+  90%  { opacity: 0.95; }
+  100% { opacity: 0.97; }
+}
+
+@keyframes terminal-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes text-glow-pulse {
+  0%, 100% { text-shadow: 0 0 4px var(--term-green-faint); }
+  50% { text-shadow: 0 0 8px var(--term-green-muted), 0 0 16px var(--term-green-ghost); }
+}
+
+@keyframes boot-fade {
+  0% { opacity: 0; filter: brightness(2); }
+  100% { opacity: 1; filter: brightness(1); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  TERMINAL TITLE BAR
+ * ═══════════════════════════════════════════════════════════════════════ */
+.channel-sidebar-header::before {
+  content: var(--term-title-text);
+  display: block;
+  font-size: var(--term-title-size);
+  font-weight: bold;
+  color: var(--term-green);
+  text-shadow: 0 0 6px var(--term-green-muted),
+               0 0 12px var(--term-green-ghost);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 2px 0;
+  animation: text-glow-pulse 3s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  PANELS — dark terminal green borders
+ * ═══════════════════════════════════════════════════════════════════════ */
+.server-sidebar,
+[class*="server-sidebar"],
+nav[aria-label] {
+  background: var(--term-bg) !important;
+  border-right: 1px solid var(--term-green-faint);
+}
+
+.channel-sidebar-surface {
+  background: var(--term-bg) !important;
+  border-right: 1px solid var(--term-green-faint);
+}
+
+.channel-sidebar-header {
+  background: var(--term-bg) !important;
+  border-bottom: 1px solid var(--term-green-faint);
+}
+
+.chat-area-root-surface {
+  background: var(--term-bg) !important;
+}
+
+.chat-area-header-surface {
+  background: var(--term-bg) !important;
+  border-bottom: 1px solid var(--term-green-faint);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  TEXT GLOW — phosphor bloom on all text
+ * ═══════════════════════════════════════════════════════════════════════ */
+body, p, span, div, h1, h2, h3, h4, h5, h6, a, li, label,
+button, input, textarea {
+  text-shadow:
+    0 0 calc(2px * var(--crt-glow-strength)) var(--term-green-ghost),
+    0 0 calc(6px * var(--crt-glow-strength)) rgba(74, 239, 152, 0.04);
+}
+
+h1, h2, h3,
+.channel-sidebar-title,
+.chat-area-header-surface * {
+  text-shadow:
+    0 0 4px var(--term-green-faint),
+    0 0 10px var(--term-green-ghost) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  CHANNELS — terminal menu items with > prompt prefix
+ * ═══════════════════════════════════════════════════════════════════════ */
+.channel-hover::before {
+  content: ">";
+  margin-right: 4px;
+  color: var(--term-green-muted);
+  font-weight: bold;
+  transition: color 0.3s ease;
+}
+
+.channel-hover:hover::before {
+  content: ">";
+  color: var(--term-green);
+  text-shadow: 0 0 6px var(--term-green-muted);
+}
+
+.channel-active {
+  background: var(--term-green-faint) !important;
+  border-radius: 0 !important;
+  border-left: 3px solid var(--term-green);
+  box-shadow: inset 0 0 20px var(--term-green-ghost);
+}
+
+.channel-active::before {
+  content: ">";
+  margin-right: 4px;
+  color: var(--term-green);
+  font-weight: bold;
+  text-shadow: 0 0 8px var(--term-green-muted);
+}
+
+.channel-hover:hover {
+  background: var(--term-green-ghost) !important;
+  border-radius: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  MESSAGES — terminal output styling
+ * ═══════════════════════════════════════════════════════════════════════ */
+.message-hover:hover {
+  background: var(--term-green-ghost) !important;
+  border-radius: 0 !important;
+}
+
+.message-content a {
+  color: rgb(140, 255, 200) !important;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+}
+
+.message-content a:hover {
+  color: #fff !important;
+  text-shadow: 0 0 8px var(--term-green-muted);
+}
+
+.message-content code {
+  background: rgba(0, 20, 5, 0.8) !important;
+  border: 1px solid var(--term-green-faint);
+  border-radius: 0 !important;
+  color: var(--term-green) !important;
+  padding: 1px 5px;
+}
+
+.message-content pre {
+  background: rgba(0, 5, 0, 0.9) !important;
+  border: 1px solid var(--term-green-faint);
+  border-radius: 0 !important;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.message-content blockquote {
+  border-left-color: var(--term-green-muted) !important;
+  border-radius: 0 !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  INPUTS — terminal command line styling
+ * ═══════════════════════════════════════════════════════════════════════ */
+input,
+textarea,
+[contenteditable="true"] {
+  background: var(--term-bg) !important;
+  border: 1px solid var(--term-green-faint) !important;
+  border-radius: 0 !important;
+  color: var(--term-green) !important;
+  caret-color: var(--term-green);
+}
+
+input:focus,
+textarea:focus,
+[contenteditable="true"]:focus {
+  border-color: var(--term-green-muted) !important;
+  box-shadow: 0 0 8px var(--term-green-ghost),
+              inset 0 0 12px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  SERVER ICONS — square terminal-style avatars
+ * ═══════════════════════════════════════════════════════════════════════ */
+.server-sidebar img,
+.server-sidebar [class*="avatar"] {
+  border-radius: 4px !important;
+  border: 1px solid var(--term-green-faint);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.server-sidebar img:hover,
+.server-sidebar [class*="avatar"]:hover {
+  border-color: var(--term-green-muted);
+  box-shadow: 0 0 10px var(--term-green-ghost);
+  border-radius: 4px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  BUTTONS — terminal action buttons
+ * ═══════════════════════════════════════════════════════════════════════ */
+button[class*="primary"],
+[class*="btn-primary"] {
+  background: var(--term-green-faint) !important;
+  color: var(--term-green) !important;
+  border: 1px solid var(--term-green-muted) !important;
+  border-radius: 0 !important;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+}
+
+button[class*="primary"]:hover,
+[class*="btn-primary"]:hover {
+  background: var(--term-green-muted) !important;
+  color: var(--term-bg) !important;
+  box-shadow: 0 0 12px var(--term-green-ghost);
+}
+
+button[class*="destructive"],
+button[class*="danger"] {
+  border-color: rgba(212, 18, 39, 0.5) !important;
+  color: rgb(212, 18, 39) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  SCROLLBAR — green terminal scrollbar
+ * ═══════════════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--term-bg);
+  border-left: 1px solid var(--term-green-ghost);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--term-green-faint) !important;
+  border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--term-green-muted) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  MODALS & POPUPS — terminal windows
+ * ═══════════════════════════════════════════════════════════════════════ */
+[role="dialog"] {
+  background: var(--term-bg) !important;
+  border: 1px solid var(--term-green-muted) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 20px var(--term-green-ghost),
+              inset 0 0 40px rgba(0, 0, 0, 0.4) !important;
+}
+
+[role="tooltip"],
+[data-radix-popper-content-wrapper] {
+  background: var(--term-bg) !important;
+  border: 1px solid var(--term-green-faint) !important;
+  border-radius: 0 !important;
+  box-shadow: 0 0 8px var(--term-green-ghost) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  DIVIDERS — dashed terminal separators
+ * ═══════════════════════════════════════════════════════════════════════ */
+hr,
+[class*="separator"],
+[class*="divider"] {
+  border-color: var(--term-green-faint) !important;
+  border-style: dashed !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  TEXT SELECTION — inverse terminal highlight
+ * ═══════════════════════════════════════════════════════════════════════ */
+::selection {
+  background: var(--term-green);
+  color: var(--term-bg);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  ICONS & SVG — force terminal green
+ * ═══════════════════════════════════════════════════════════════════════ */
+svg {
+  color: var(--term-green-dim) !important;
+}
+
+svg:hover {
+  color: var(--term-green) !important;
+}
+
+.chat-area-header-hash {
+  color: var(--term-green-muted) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  SHARP CORNERS — terminals don't have rounded corners
+ * ═══════════════════════════════════════════════════════════════════════ */
+img:not(.server-sidebar img),
+[class*="rounded"],
+[class*="avatar"]:not(.server-sidebar [class*="avatar"]) {
+  border-radius: 2px !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  BOOT ANIMATION — terminal startup flicker
+ * ═══════════════════════════════════════════════════════════════════════ */
+body > *:first-child {
+  animation: boot-fade 0.8s ease-out;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ *  REDUCED MOTION — disable CRT effects for accessibility
+ * ═══════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    text-shadow: none !important;
+  }
+}

@@ -1,0 +1,156 @@
+/**
+ * Sakura Blossom — VortexChat custom theme
+ *
+ * A warm cherry-blossom aesthetic with soft pinks, rose accents, and
+ * cream-white text on a dark plum background.
+ *
+ * HOW TO USE:
+ *   1. Open Profile Settings → Appearance tab
+ *   2. Scroll to "Custom CSS"
+ *   3. Click "Clear" to remove any existing CSS
+ *   4. Paste the entire contents of this file into the textarea
+ *   5. Click "Save Theme & Appearance"
+ *
+ * You can layer this on top of any preset — the custom CSS always wins.
+ */
+
+:root {
+  /* ── App shell backgrounds ─────────────────────────────────────────── */
+  --app-bg-primary: #2b1a2e;
+  --app-bg-secondary: #231525;
+
+  /* ── Surface palette ───────────────────────────────────────────────── */
+  --theme-bg-primary: #2b1a2e;
+  --theme-bg-secondary: #231525;
+  --theme-bg-tertiary: #1a0e1c;
+  --theme-surface-elevated: #3d2540;
+  --theme-surface-input: #35203a;
+  --theme-surface-elevation-1: #2f1c33;
+  --theme-surface-elevation-3: #45294a;
+  --theme-surface-passive: var(--theme-surface-elevation-1);
+  --theme-surface-active: var(--theme-surface-elevation-3);
+  --theme-focus-shift: color-mix(in srgb, var(--theme-accent) 35%, transparent);
+
+  /* ── Typography ────────────────────────────────────────────────────── */
+  --theme-text-primary: #fef0f5;
+  --theme-text-normal: #f5dde6;
+  --theme-text-secondary: #d4afc0;
+  --theme-text-muted: #b08a9e;
+  --theme-text-faint: #a08492;
+  --theme-text-bright: #fff5f9;
+
+  /* ── Accent & semantic colors ──────────────────────────────────────── */
+  --theme-accent: #e84393;
+  --theme-accent-secondary: #fd79a8;
+  --theme-link: #f8a5c2;
+  --theme-success: #55efc4;
+  --theme-positive: #00b894;
+  --theme-warning: #fdcb6e;
+  --theme-danger: #ff6b6b;
+  --theme-presence-offline: #8a6a7d;
+
+  /* ── Tailwind design tokens (HSL — no hsl() wrapper) ───────────── */
+  --background: 293 25% 14%;
+  --foreground: 338 90% 96%;
+  --card: 293 28% 11%;
+  --card-foreground: 338 90% 96%;
+  --popover: 293 30% 8%;
+  --popover-foreground: 338 90% 96%;
+  --primary: 338 80% 58%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 293 20% 16%;
+  --secondary-foreground: 330 30% 75%;
+  --accent: 338 80% 58%;
+  --accent-foreground: 0 0% 100%;
+  --muted: 293 18% 24%;
+  --muted-foreground: 330 25% 62%;
+  --border: 293 22% 22%;
+  --input: 293 25% 14%;
+  --ring: 338 80% 58%;
+  --destructive: 0 72% 63%;
+  --destructive-foreground: 0 0% 100%;
+}
+
+/* ── Cherry blossom touches ──────────────────────────────────────────── */
+
+/* Subtle pink glow on message hover */
+.message-hover:hover {
+  background: rgba(232, 67, 147, 0.04) !important;
+}
+
+/* Rose-tinted scrollbar */
+::-webkit-scrollbar-thumb {
+  background: rgba(232, 67, 147, 0.3) !important;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(232, 67, 147, 0.5) !important;
+}
+
+/* Accent border glow on focused inputs */
+input:focus,
+textarea:focus {
+  box-shadow: 0 0 0 2px rgba(232, 67, 147, 0.25) !important;
+}
+
+/* Links get a soft rose color */
+.message-content a { color: var(--theme-link); }
+
+/* ── Falling cherry blossom petals ─────────────────────────────────────
+   Pure-CSS petal rain using layered radial-gradient dots on a fixed
+   pseudo-element overlay. pointer-events:none keeps it non-intrusive.
+   Three petal layers fall at different speeds for parallax depth.
+   Covers both server chat and DM areas via body::after.               */
+
+@keyframes sakura-fall {
+  from { background-position-y: -200px, -120px, -320px; }
+  to   { background-position-y: calc(100vh + 200px), calc(100vh + 120px), calc(100vh + 320px); }
+}
+
+@keyframes sakura-sway {
+  0%   { background-position-x: 0px, 0px, 0px; }
+  25%  { background-position-x: 14px, -8px, 6px; }
+  50%  { background-position-x: 20px, -14px, 10px; }
+  75%  { background-position-x: 10px, -4px, 14px; }
+  100% { background-position-x: 0px, 0px, 0px; }
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  opacity: 0.30;
+  background-image:
+    /* Small near petals — fastest, most visible */
+    radial-gradient(2.5px 3.5px at center, #e8439366 65%, transparent 100%),
+    /* Medium mid-depth petals */
+    radial-gradient(2px 2.5px at center, #fd79a850 65%, transparent 100%),
+    /* Large far petals — slowest, most diffuse */
+    radial-gradient(3.5px 4.5px at center, #f8a5c230 60%, transparent 100%);
+  background-size:
+    160px 200px,
+    240px 280px,
+    340px 380px;
+  background-repeat: repeat;
+  animation:
+    sakura-fall 14s linear infinite,
+    sakura-sway 6s ease-in-out infinite;
+}
+
+/* Reduce petal intensity and slow animation on mobile to save GPU */
+@media (max-width: 768px) {
+  body::after {
+    opacity: 0.18;
+    animation-duration: 18s, 8s;
+  }
+}
+
+/* Respect reduced motion — disable petal rain entirely */
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none;
+    display: none;
+  }
+}

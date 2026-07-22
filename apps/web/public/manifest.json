@@ -1,0 +1,146 @@
+{
+  "name": "VortexChat",
+  "short_name": "Vortex",
+  "description": "The chat platform for focused teams and creative communities.",
+  "start_url": "/channels/me",
+  "id": "/channels/me",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "tabbed"],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "background_color": "#1b1f31",
+  "theme_color": "#00e5ff",
+  "orientation": "natural",
+  "lang": "en-US",
+  "dir": "ltr",
+  "handle_links": "preferred",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "icons": [
+    {
+      "src": "/icon-192.png?v=2",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192-maskable.png?v=2",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png?v=2",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512-maskable.png?v=2",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "social",
+    "communication"
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/mobile-chat.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "VortexChat mobile chat view",
+      "platform": "android"
+    },
+    {
+      "src": "/screenshots/mobile-dm.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "VortexChat direct messages",
+      "platform": "android"
+    },
+    {
+      "src": "/screenshots/desktop-chat.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "VortexChat desktop chat view",
+      "platform": "chromeos"
+    }
+  ],
+  "share_target": {
+    "action": "/api/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        { "name": "media", "accept": ["image/*", "video/*", "application/pdf"] }
+      ]
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Friends",
+      "short_name": "Friends",
+      "url": "/channels/me",
+      "icons": [
+        {
+          "src": "/shortcuts/friends.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        },
+        {
+          "src": "/icon-192.png?v=2",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "New Direct Message",
+      "short_name": "New DM",
+      "url": "/channels/me?new=1",
+      "icons": [
+        {
+          "src": "/shortcuts/new-dm.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        },
+        {
+          "src": "/icon-192.png?v=2",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Discover Servers",
+      "short_name": "Discover",
+      "url": "/discover",
+      "icons": [
+        {
+          "src": "/shortcuts/discover.svg",
+          "sizes": "96x96",
+          "type": "image/svg+xml"
+        },
+        {
+          "src": "/icon-192.png?v=2",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "scope": "/"
+}
