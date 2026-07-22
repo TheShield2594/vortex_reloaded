@@ -1,0 +1,57 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`next-gen layered depth visual system > defines 5 semantic elevation levels 1`] = `
+{
+  "elevation1": "#20243a",
+  "elevation2": "#252a42",
+  "elevation3": "#2a304b",
+  "elevation4": "#303654",
+  "elevation5": "#363d5c",
+  "shadow1": "0 1px 2px color-mix(in srgb, black 22%, transparent), 0 0 0 1px color-mix(in srgb, white 4%, transparent) inset",
+  "shadow2": "0 4px 12px color-mix(in srgb, black 28%, transparent), 0 1px 0 color-mix(in srgb, white 6%, transparent) inset",
+  "shadow3": "0 8px 24px color-mix(in srgb, black 34%, transparent), 0 1px 0 color-mix(in srgb, white 8%, transparent) inset",
+  "shadow4": "0 14px 32px color-mix(in srgb, black 38%, transparent), 0 1px 0 color-mix(in srgb, white 10%, transparent) inset",
+  "shadow5": "0 24px 42px color-mix(in srgb, black 45%, transparent), 0 1px 0 color-mix(in srgb, white 12%, transparent) inset",
+}
+`;
+
+exports[`next-gen layered depth visual system > keeps dark-mode presets contrast-safe with layered surface tokens 1`] = `
+[
+  {
+    "active": "var(--theme-surface-elevation-3)",
+    "focusShift": "color-mix(in srgb, var(--theme-accent) 35%, transparent)",
+    "passive": "var(--theme-surface-elevation-1)",
+    "preset": "twilight",
+  },
+  {
+    "active": "var(--theme-surface-elevation-3)",
+    "focusShift": "color-mix(in srgb, var(--theme-accent) 30%, transparent)",
+    "passive": "var(--theme-surface-elevation-1)",
+    "preset": "midnight-neon",
+  },
+  {
+    "active": "var(--theme-surface-elevation-3)",
+    "focusShift": "color-mix(in srgb, var(--theme-accent-secondary) 35%, transparent)",
+    "passive": "var(--theme-surface-elevation-1)",
+    "preset": "synthwave",
+  },
+  {
+    "active": "var(--theme-surface-elevation-3)",
+    "focusShift": "color-mix(in srgb, var(--theme-link) 34%, transparent)",
+    "passive": "var(--theme-surface-elevation-1)",
+    "preset": "carbon",
+  },
+  {
+    "active": "var(--theme-surface-elevation-3)",
+    "focusShift": "color-mix(in srgb, var(--theme-accent) 35%, transparent)",
+    "passive": "var(--theme-surface-elevation-1)",
+    "preset": "oled-black",
+  },
+  {
+    "active": "var(--theme-surface-elevation-3)",
+    "focusShift": "color-mix(in srgb, var(--theme-accent) 32%, transparent)",
+    "passive": "var(--theme-surface-elevation-1)",
+    "preset": "frost",
+  },
+]
+`;
