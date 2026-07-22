@@ -1331,6 +1331,7 @@ export type Database = {
           is_encrypted: boolean
           encryption_key_version: number
           encryption_membership_epoch: number
+          theme_preset: string | null
           created_at: string
           updated_at: string
         }
@@ -1343,6 +1344,7 @@ export type Database = {
           is_encrypted?: boolean
           encryption_key_version?: number
           encryption_membership_epoch?: number
+          theme_preset?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -1355,6 +1357,7 @@ export type Database = {
           is_encrypted?: boolean
           encryption_key_version?: number
           encryption_membership_epoch?: number
+          theme_preset?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -3260,6 +3263,10 @@ export type Database = {
       }
       mark_dm_read: {
         Args: { p_dm_channel_id: string }
+        Returns: void
+      }
+      set_dm_channel_theme: {
+        Args: { p_dm_channel_id: string; p_theme_preset: string | null }
         Returns: void
       }
       mark_thread_read: {
