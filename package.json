@@ -1,0 +1,30 @@
+{
+  "name": "vortex",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "npm@10.9.4",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "minimatch": "^10.2.1",
+    "serialize-javascript": ">=7.0.5"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "signal": "cd apps/signal && npm run dev",
+    "web": "cd apps/web && npm run dev",
+    "dep:cycles:web": "node scripts/dep-cycles-web.mjs",
+    "parity:report": "node scripts/parity/generate-weekly-report.mjs",
+    "test:migration-smoke": "node scripts/migration-smoke-test.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5",
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.5"
+  }
+}
