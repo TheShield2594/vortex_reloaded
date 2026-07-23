@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Shield, Download, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { authClient } from "@/lib/auth/auth-client"
 import { useRouter } from "next/navigation"
 import { PasskeysSection } from "@/components/settings/security/passkeys-section"
 import { SecurityPolicySection } from "@/components/settings/security/security-policy-section"
@@ -21,14 +21,13 @@ interface Props {
 export function SecuritySettingsPage({ userId: _userId, hasTOTP: _hasTOTP, userEmail }: Props) {
   const { toast } = useToast()
   const router = useRouter()
-  const [supabase] = useState(() => createClientSupabaseClient())
 
   // Data export
   const [exporting, setExporting] = useState(false)
 
   async function handleForcedLogout(): Promise<void> {
     try {
-      const { error } = await supabase.auth.signOut()
+      const { error } = await authClient.signOut()
       if (error) {
         toast({ variant: "destructive", title: "Sign out failed", description: error.message })
         return

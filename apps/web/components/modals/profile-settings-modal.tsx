@@ -29,7 +29,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/components/ui/use-toast"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { authClient } from "@/lib/auth/auth-client"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useShallow } from "zustand/react/shallow"
 import type { UserRow, UserPinnedItemRow } from "@/types/database"
@@ -444,8 +444,7 @@ export function ProfileSettingsModal({ open, onClose, user }: Props) {
   }
 
   async function handleLogout() {
-    const supabase = createClientSupabaseClient()
-    const { error } = await supabase.auth.signOut()
+    const { error } = await authClient.signOut()
     if (error) {
       toast({ variant: "destructive", title: "Sign out failed", description: error.message })
       return

@@ -88,6 +88,10 @@ services:
       REDIS_URL: redis://redis:6379
       ALLOWED_ORIGINS: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       DATABASE_URL: file:/data/vortex.db
+      # Handshake auth verification — see apps/signal/.env.example.
+      AUTH_JWKS_URL: http://web:3000/api/auth/jwks
+      AUTH_JWT_ISSUER: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+      AUTH_JWT_AUDIENCE: vortex-signal
     volumes:
       - ./data:/data
     depends_on:

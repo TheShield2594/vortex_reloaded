@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2, ShieldCheck } from "lucide-react"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { authClient } from "@/lib/auth/auth-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,36 +12,23 @@ import { VortexLogo } from "@/components/ui/vortex-logo"
 
 export const dynamic = "force-dynamic"
 
-/** Handles Supabase password-reset redirect links (type=recovery). */
+/** Handles Better Auth's password-reset redirect links (?token=...). */
 export default function UpdatePasswordPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const [password, setPassword] = useState("")
   const [confirm, setConfirm] = useState("")
   const [loading, setLoading] = useState(false)
-  const [checkingSession, setCheckingSession] = useState(true)
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
-
-  // Verify that a recovery session actually exists before showing the form.
-  // Without this guard, anyone who navigates directly to /update-password would
-  // see the form and get a confusing "not authenticated" error on submit.
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) {
-        toast({
-          variant: "destructive",
-          title: "Invalid or expired link",
-          description: "Please request a new password reset.",
-        })
-        router.push("/login")
-      } else {
-        setCheckingSession(false)
-      }
-    })
-  }, [supabase, router, toast])
+  const token = searchParams.get("token")
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!token) {
+      toast({ variant: "destructive", title: "Invalid or expired link", description: "Please request a new password reset." })
+      router.push("/login")
+      return
+    }
     if (password.length < 12) {
       toast({ variant: "destructive", title: "Password too short", description: "Minimum 12 characters." })
       return
@@ -52,8 +39,8 @@ export default function UpdatePasswordPage() {
     }
     setLoading(true)
     try {
-      const { error } = await supabase.auth.updateUser({ password })
-      if (error) throw error
+      const { error } = await authClient.resetPassword({ newPassword: password, token })
+      if (error) throw new Error(error.message)
       toast({ title: "Password updated!", description: "You can now sign in with your new password." })
       router.push("/login")
     } catch (error: unknown) {
@@ -63,8 +50,6 @@ export default function UpdatePasswordPage() {
       setLoading(false)
     }
   }
-
-  if (checkingSession) return null
 
   return (
     <div

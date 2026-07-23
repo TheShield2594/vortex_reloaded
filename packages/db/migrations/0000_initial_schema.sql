@@ -1,18 +1,3 @@
-CREATE TABLE `auth_challenges` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text,
-	`flow` text NOT NULL,
-	`challenge` text NOT NULL,
-	`rp_id` text NOT NULL,
-	`origin` text NOT NULL,
-	`expires_at` text NOT NULL,
-	`used_at` text,
-	`created_at` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "auth_challenges_flow_check" CHECK("auth_challenges"."flow" in ('register', 'login'))
-);
---> statement-breakpoint
-CREATE INDEX `idx_auth_challenges_user_flow` ON `auth_challenges` (`user_id`,`flow`);--> statement-breakpoint
 CREATE TABLE `auth_security_policies` (
 	`user_id` text PRIMARY KEY NOT NULL,
 	`passkey_first` integer DEFAULT false NOT NULL,
@@ -27,37 +12,6 @@ CREATE TABLE `auth_security_policies` (
 	CONSTRAINT "auth_security_policies_fallback_magic_link_check" CHECK("auth_security_policies"."fallback_magic_link" in (0, 1))
 );
 --> statement-breakpoint
-CREATE TABLE `auth_sessions` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text NOT NULL,
-	`trusted_device_id` text,
-	`session_token_hash` text NOT NULL,
-	`user_agent` text,
-	`ip_address` text,
-	`expires_at` text NOT NULL,
-	`revoked_at` text,
-	`created_at` text NOT NULL,
-	`last_seen_at` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
-	FOREIGN KEY (`trusted_device_id`) REFERENCES `auth_trusted_devices`(`id`) ON UPDATE no action ON DELETE set null
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `auth_sessions_session_token_hash_unique` ON `auth_sessions` (`session_token_hash`);--> statement-breakpoint
-CREATE INDEX `idx_auth_sessions_user_id` ON `auth_sessions` (`user_id`);--> statement-breakpoint
-CREATE TABLE `auth_trusted_devices` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text NOT NULL,
-	`label` text NOT NULL,
-	`token_hash` text NOT NULL,
-	`last_seen_at` text NOT NULL,
-	`expires_at` text NOT NULL,
-	`revoked_at` text,
-	`created_at` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `auth_trusted_devices_token_hash_unique` ON `auth_trusted_devices` (`token_hash`);--> statement-breakpoint
-CREATE INDEX `idx_auth_trusted_devices_user_id` ON `auth_trusted_devices` (`user_id`);--> statement-breakpoint
 CREATE TABLE `login_attempts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`email` text NOT NULL,
@@ -85,36 +39,80 @@ CREATE TABLE `login_risk_events` (
 --> statement-breakpoint
 CREATE INDEX `idx_login_risk_events_user_created` ON `login_risk_events` (`user_id`,`created_at`);--> statement-breakpoint
 CREATE INDEX `idx_login_risk_events_suspicious` ON `login_risk_events` (`suspicious`,`created_at`);--> statement-breakpoint
-CREATE TABLE `passkey_credentials` (
+CREATE TABLE `accounts` (
 	`id` text PRIMARY KEY NOT NULL,
 	`user_id` text NOT NULL,
-	`credential_id` text NOT NULL,
-	`public_key` text NOT NULL,
-	`counter` integer DEFAULT 0 NOT NULL,
-	`transports` text DEFAULT '[]' NOT NULL,
-	`backed_up` integer DEFAULT false NOT NULL,
-	`device_type` text DEFAULT 'singleDevice' NOT NULL,
-	`name` text DEFAULT 'Unnamed device' NOT NULL,
-	`revoked_at` text,
-	`last_used_at` text,
-	`created_at` text NOT NULL,
-	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade,
-	CONSTRAINT "passkey_credentials_transports_check" CHECK(json_type("passkey_credentials"."transports") = 'array')
-);
---> statement-breakpoint
-CREATE UNIQUE INDEX `passkey_credentials_credential_id_unique` ON `passkey_credentials` (`credential_id`);--> statement-breakpoint
-CREATE INDEX `idx_passkey_credentials_user_id` ON `passkey_credentials` (`user_id`);--> statement-breakpoint
-CREATE TABLE `recovery_codes` (
-	`id` text PRIMARY KEY NOT NULL,
-	`user_id` text NOT NULL,
-	`code_hash` text NOT NULL,
-	`used_at` text,
-	`created_at` text NOT NULL,
+	`account_id` text NOT NULL,
+	`provider_id` text NOT NULL,
+	`access_token` text,
+	`refresh_token` text,
+	`access_token_expires_at` integer,
+	`refresh_token_expires_at` integer,
+	`scope` text,
+	`id_token` text,
+	`password` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
 	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `idx_recovery_codes_user_id` ON `recovery_codes` (`user_id`);--> statement-breakpoint
-CREATE INDEX `idx_recovery_codes_user_unused` ON `recovery_codes` (`user_id`) WHERE "recovery_codes"."used_at" is null;--> statement-breakpoint
+CREATE TABLE `jwks` (
+	`id` text PRIMARY KEY NOT NULL,
+	`public_key` text NOT NULL,
+	`private_key` text NOT NULL,
+	`created_at` integer NOT NULL,
+	`expires_at` integer
+);
+--> statement-breakpoint
+CREATE TABLE `passkeys` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text,
+	`public_key` text NOT NULL,
+	`user_id` text NOT NULL,
+	`credential_id` text NOT NULL,
+	`counter` integer NOT NULL,
+	`device_type` text NOT NULL,
+	`backed_up` integer NOT NULL,
+	`transports` text,
+	`created_at` integer,
+	`aaguid` text,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `passkeys_credential_id_unique` ON `passkeys` (`credential_id`);--> statement-breakpoint
+CREATE TABLE `sessions` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`token` text NOT NULL,
+	`expires_at` integer NOT NULL,
+	`ip_address` text,
+	`user_agent` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE UNIQUE INDEX `sessions_token_unique` ON `sessions` (`token`);--> statement-breakpoint
+CREATE TABLE `two_factors` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`secret` text NOT NULL,
+	`backup_codes` text NOT NULL,
+	`verified` integer DEFAULT true NOT NULL,
+	`failed_verification_count` integer DEFAULT 0 NOT NULL,
+	`locked_until` integer,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE TABLE `verifications` (
+	`id` text PRIMARY KEY NOT NULL,
+	`identifier` text NOT NULL,
+	`value` text NOT NULL,
+	`expires_at` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE `direct_messages` (
 	`id` text PRIMARY KEY NOT NULL,
 	`sender_id` text NOT NULL,
@@ -437,6 +435,9 @@ CREATE TABLE `user_pinned_items` (
 CREATE INDEX `idx_user_pinned_items_user_position` ON `user_pinned_items` (`user_id`,`position`);--> statement-breakpoint
 CREATE TABLE `users` (
 	`id` text PRIMARY KEY NOT NULL,
+	`email` text,
+	`email_verified` integer DEFAULT false,
+	`two_factor_enabled` integer DEFAULT false,
 	`username` text NOT NULL,
 	`display_name` text,
 	`avatar_url` text,
@@ -465,6 +466,7 @@ CREATE TABLE `users` (
 	CONSTRAINT "users_activity_visibility_check" CHECK("users"."activity_visibility" in ('public', 'friends', 'private'))
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `users_email_unique` ON `users` (`email`);--> statement-breakpoint
 CREATE UNIQUE INDEX `users_username_unique` ON `users` (`username`);--> statement-breakpoint
 CREATE INDEX `idx_users_presence_heartbeat` ON `users` (`last_heartbeat_at`) WHERE "users"."status" in ('online', 'idle', 'dnd');--> statement-breakpoint
 CREATE INDEX `idx_users_last_online_at` ON `users` (`last_online_at`) WHERE "users"."last_online_at" is not null;

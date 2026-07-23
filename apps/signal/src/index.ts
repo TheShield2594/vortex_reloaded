@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "http"
 import { Server, type Socket } from "socket.io"
 import { createAdapter } from "@socket.io/redis-adapter"
 import { createClient } from "@supabase/supabase-js"
+import { createRemoteJWKSet, jwtVerify } from "jose"
 import Redis from "ioredis"
 import dotenv from "dotenv"
 import pino from "pino"
@@ -64,13 +65,52 @@ if (!rawOrigins || rawOrigins === "*") {
 const ALLOWED_ORIGINS = rawOrigins ? rawOrigins.split(",") : "*"
 
 // ─── Supabase admin client ────────────────────────────────────────────────────
+// Still used for voice_states sync (see createVoiceStateSync below) — only
+// handshake auth verification moved off Supabase, to Better Auth's JWT
+// plugin (see the JWKS setup right below).
 
 const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
   ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
   : null
 
 if (!supabase) {
-  logger.warn("SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not set — auth verification and voice_states sync disabled")
+  logger.warn("SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY not set — voice_states sync disabled")
+}
+
+// ─── Better Auth JWKS (handshake auth) ────────────────────────────────────────
+// Replaces the old supabase.auth.getUser() round-trip (see
+// docs/better-auth-verification-spike.md §3): apps/web's `jwt` plugin
+// (lib/auth/better-auth.ts) exposes a public JWKS at this URL; jose fetches
+// and caches it internally (its own cooldown/retry, no hand-rolled cache
+// needed here), then every handshake JWT is verified locally — no per-socket
+// network call once the key set is warm, no shared secret with apps/web.
+const AUTH_JWKS_URL = process.env.AUTH_JWKS_URL ?? ""
+const AUTH_JWT_ISSUER = process.env.AUTH_JWT_ISSUER ?? ""
+const AUTH_JWT_AUDIENCE = process.env.AUTH_JWT_AUDIENCE ?? "vortex-signal"
+
+const jwks = AUTH_JWKS_URL ? createRemoteJWKSet(new URL(AUTH_JWKS_URL)) : null
+
+if (!jwks) {
+  logger.warn("AUTH_JWKS_URL not set — handshake auth verification disabled")
+}
+
+/**
+ * Verifies a Better Auth-issued handshake JWT locally against the cached
+ * JWKS. Returns the authenticated user id, or null if the token is missing,
+ * expired, malformed, or signed by an unknown key.
+ */
+async function verifyAuthToken(token: string): Promise<string | null> {
+  if (!jwks) return null
+  // Deliberately doesn't catch here — jose throws for both "token is
+  // invalid/expired" and "JWKS endpoint unreachable" alike, and
+  // validateSession's caller already has fallback-to-cached-validation
+  // logic for exactly that combined case (same as it did for whatever
+  // supabase.auth.getUser() could throw, pre-cutover).
+  const { payload } = await jwtVerify(token, jwks, {
+    issuer: AUTH_JWT_ISSUER || undefined,
+    audience: AUTH_JWT_AUDIENCE,
+  })
+  return typeof payload.sub === "string" ? payload.sub : null
 }
 
 // ─── HTTP server + Socket.IO ──────────────────────────────────────────────────
@@ -579,13 +619,18 @@ async function evictUserFromServer(userId: string, serverId: string): Promise<nu
 }
 
 async function validateSession(socket: Socket): Promise<boolean> {
-  if (!supabase) return true // skip if no DB configured
+  if (!jwks) return true // skip if no JWKS configured
 
   const authToken = socket.handshake.auth?.token
   if (!authToken) return false
 
   // Always check revocation list first — an explicitly revoked token must
-  // never be accepted, regardless of cache state.
+  // never be accepted, regardless of cache state. Necessary here in a way it
+  // wasn't for Supabase's opaque token: a Better Auth handshake JWT verifies
+  // as valid locally right up until its (short, 15-minute) expiry, with no
+  // way to invalidate it early on its own — this revocation check is what
+  // makes password changes / forced logout / admin actions actually take
+  // effect before that expiry (see docs/better-auth-verification-spike.md §3).
   if (await isTokenRevoked(authToken)) {
     logger.warn({ socketId: socket.id }, "session rejected — token is on revocation list")
     sessionValidationCache.delete(socket.id)
@@ -599,15 +644,16 @@ async function validateSession(socket: Socket): Promise<boolean> {
   }
 
   try {
-    const { data: { user }, error } = await supabase.auth.getUser(authToken)
-    if (error || !user) {
+    const userId = await verifyAuthToken(authToken)
+    if (!userId) {
       sessionValidationCache.delete(socket.id)
       return false
     }
-    sessionValidationCache.set(socket.id, { validatedAt: Date.now(), userId: user.id })
+    sessionValidationCache.set(socket.id, { validatedAt: Date.now(), userId })
     return true
   } catch (err) {
-    // On transient errors, allow only if we have a recent cached validation
+    // On transient errors (e.g. JWKS endpoint temporarily unreachable),
+    // allow only if we have a recent cached validation
     if (cached && Date.now() - cached.validatedAt < SESSION_FALLBACK_MAX_AGE_MS) {
       logger.warn(
         { socketId: socket.id, userId: cached.userId, cachedAgeMs: Date.now() - cached.validatedAt, err },

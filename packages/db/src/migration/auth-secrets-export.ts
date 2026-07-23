@@ -15,29 +15,40 @@ import { resolveMigrationOutputDir } from "./output-dir"
  * docs/better-auth-verification-spike.md) — so this script can't import
  * these into a Drizzle table that doesn't exist.
  *
- * Instead, this exports a best-effort-mapped staging file for #8 to consume
- * once that schema lands, kept entirely separate from the normal
- * export.ts/import.ts NDJSON dumps:
+ * Instead, this exports a best-effort-mapped staging file, consumed by
+ * import-auth-secrets.ts (issue #8) once the target schema exists, kept
+ * entirely separate from the normal export.ts/import.ts NDJSON dumps:
  *
  *   - Passwords: `auth.users.encrypted_password` (a standard bcrypt hash)
  *     copied as-is. Per issue #7: verified with `bcrypt.compare()` in the
- *     new Credentials `authorize()` callback, NOT re-hashed into Better
- *     Auth's own (scrypt-based) password format — no forced reset.
+ *     Better Auth `emailAndPassword.password.verify` callback (see
+ *     apps/web/lib/auth/better-auth.ts), NOT re-hashed into Better Auth's
+ *     own (scrypt-based) password format — no forced reset.
  *   - TOTP secrets: `auth.mfa_factors` (factor_type = 'totp'), mapped
  *     toward Better Auth's `twoFactor` table shape (userId, secret).
- *     Backup codes are unaffected by this — those already live in the
- *     app's own `recovery_codes` table (schema/auth.ts), which is a normal
- *     public-schema table migrated by export.ts/import.ts like everything
- *     else, not part of this file.
+ *     Backup codes can't be carried over — Better Auth's backup-code
+ *     encoding is internal/opaque, not something this script can
+ *     reproduce — so migrated 2FA users start with none; the app should
+ *     prompt them to regenerate a set after their first post-migration
+ *     sign-in. This also obsoletes the app's own `recovery_codes` table
+ *     (schema/auth.ts), which is why that table was dropped rather than
+ *     migrated (see schema/better-auth.ts's module comment).
  *   - OAuth links: `auth.identities`, explicitly best-effort field-mapped
  *     (the decision issue #7 asks for, rather than "accept that linked-OAuth
  *     users re-link") toward Better Auth's `account` table shape — userId,
  *     provider, providerAccountId, email. Supabase's `auth.identities`
  *     doesn't expose OAuth access/refresh tokens through this table, so
  *     those are NOT carried over; only the identity link itself is, which
- *     is enough for #8 to pre-populate `account` rows so a returning user's
- *     next OAuth sign-in matches an existing linked identity instead of
- *     creating a duplicate account.
+ *     is enough to pre-populate `account` rows so a returning user's next
+ *     OAuth sign-in matches an existing linked identity instead of creating
+ *     a duplicate account.
+ *   - Passkeys: `public.passkey_credentials` — technically a normal
+ *     public-schema table (not part of Supabase's private `auth` schema
+ *     like the three above), but it's included here rather than in the
+ *     general export.ts/import.ts pass because its target shape changed
+ *     (-> `passkeys`, Better Auth's own WebAuthn credential table) enough
+ *     that it needs the same kind of field-mapping transform as the other
+ *     three, not a straight passthrough — see schema/better-auth.ts.
  *
  * Never logs secret values — only row counts. Output files are written
  * 0600 (owner read/write only) and MUST NOT be committed (see .gitignore;
@@ -65,15 +76,21 @@ export interface AuthSecretsCounts {
   credentials: number
   totpFactors: number
   oauthIdentities: number
+  passkeys: number
 }
 
 export async function exportAuthSecrets(pool: Pool, outputDir: string = resolveMigrationOutputDir()): Promise<AuthSecretsCounts> {
   const dir = path.join(outputDir, "auth-secrets")
 
+  // Not filtered to `encrypted_password IS NOT NULL` — magic-link-only and
+  // OAuth-only signups have no password but still need their
+  // email/emailVerified backfilled onto `users`, or they land in SQLite
+  // with `email = NULL` and can't sign in via magic link post-migration.
+  // import-auth-secrets.ts only creates a `credential` account row when
+  // passwordHash is present; the email/verified backfill runs for every row.
   const { rows: users } = await pool.query(
     `SELECT id, email, encrypted_password, email_confirmed_at IS NOT NULL AS email_verified
      FROM auth.users
-     WHERE encrypted_password IS NOT NULL
      ORDER BY id`
   )
   writeSecretFile(
@@ -83,10 +100,11 @@ export async function exportAuthSecrets(pool: Pool, outputDir: string = resolveM
         userId: u.id,
         email: u.email,
         emailVerified: u.email_verified,
-        // bcrypt — verify with bcrypt.compare() in the Credentials
-        // authorize() callback, not Better Auth's native password verifier.
+        // bcrypt — verify with bcrypt.compare() via Better Auth's
+        // emailAndPassword.password.verify, not its native password
+        // verifier. Null for magic-link-only / OAuth-only users.
         passwordHash: u.encrypted_password,
-        passwordHashAlgorithm: "bcrypt",
+        passwordHashAlgorithm: u.encrypted_password ? "bcrypt" : null,
       })
     )
   )
@@ -126,10 +144,32 @@ export async function exportAuthSecrets(pool: Pool, outputDir: string = resolveM
     )
   )
 
-  console.log(`  auth-secrets: ${users.length} credential(s), ${factors.length} TOTP factor(s), ${identities.length} OAuth identity(ies)`)
+  const { rows: passkeys } = await pool.query(
+    `SELECT id, user_id, credential_id, public_key, counter, transports, backed_up, device_type, name
+     FROM passkey_credentials
+     WHERE revoked_at IS NULL
+     ORDER BY id`
+  )
+  writeSecretFile(
+    path.join(dir, "passkeys.ndjson"),
+    passkeys.map((p) =>
+      JSON.stringify({
+        userId: p.user_id,
+        credentialID: p.credential_id,
+        publicKey: p.public_key,
+        counter: p.counter,
+        transports: Array.isArray(p.transports) ? p.transports.join(",") : null,
+        backedUp: p.backed_up,
+        deviceType: p.device_type,
+        name: p.name,
+      })
+    )
+  )
+
+  console.log(`  auth-secrets: ${users.length} credential(s), ${factors.length} TOTP factor(s), ${identities.length} OAuth identity(ies), ${passkeys.length} passkey(s)`)
   console.log(`  written to ${dir} (mode 0600, gitignored — never commit this)`)
 
-  return { credentials: users.length, totpFactors: factors.length, oauthIdentities: identities.length }
+  return { credentials: users.length, totpFactors: factors.length, oauthIdentities: identities.length, passkeys: passkeys.length }
 }
 
 async function main() {

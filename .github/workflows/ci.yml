@@ -92,6 +92,15 @@ jobs:
       NEXT_PUBLIC_SENTRY_DSN: ""
       PLAYWRIGHT_BASE_URL: http://localhost:3000
       SKIP_STRICT_ENV_VALIDATION: "true"
+      # next build runs with NODE_ENV=production, and Better Auth refuses to
+      # start without a real secret in production (see betterAuthSecret() in
+      # apps/web/lib/auth/better-auth.ts) — CI-only placeholder, never used
+      # to sign anything real.
+      BETTER_AUTH_SECRET: ci-placeholder-better-auth-secret-not-for-production-use
+      # Needed for any E2E flow that reaches an authenticated
+      # createServerSupabaseClient() call — see lib/auth/supabase-jwt.ts —
+      # or it throws instead of returning a graceful auth failure.
+      SUPABASE_JWT_SECRET: ci-placeholder-supabase-jwt-secret-not-for-production-use
       CI: "true"
     steps:
       - uses: actions/checkout@v4
@@ -134,6 +143,11 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
       NEXT_PUBLIC_APP_URL: https://placeholder.example.com
       NEXT_PUBLIC_SENTRY_DSN: ""
+      # next build runs with NODE_ENV=production, and Better Auth refuses to
+      # start without a real secret in production (see betterAuthSecret() in
+      # apps/web/lib/auth/better-auth.ts) — CI-only placeholder, never used
+      # to sign anything real.
+      BETTER_AUTH_SECRET: ci-placeholder-better-auth-secret-not-for-production-use
       CI: "true"
     steps:
       - uses: actions/checkout@v4

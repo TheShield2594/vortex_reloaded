@@ -1,0 +1,453 @@
+import bcrypt from "bcryptjs"
+import { and, desc, eq, gt, lt } from "drizzle-orm"
+import { betterAuth, APIError } from "better-auth"
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { createAuthMiddleware } from "better-auth/api"
+import { jwt, magicLink, twoFactor } from "better-auth/plugins"
+import { nextCookies } from "better-auth/next-js"
+import { passkey } from "@better-auth/passkey"
+import * as vortexDb from "@vortex/db"
+import { loginAttempts, loginRiskEvents, notifications, users } from "@vortex/db"
+import { computeLoginRisk } from "@/lib/auth/risk"
+import { sendAuthEmail } from "@/lib/auth/email"
+import { hasValidStepUpToken } from "@/lib/auth/step-up"
+import { rateLimiter } from "@/lib/rate-limit"
+import { createLogger } from "@/lib/logger"
+
+const log = createLogger("better-auth")
+
+const db = vortexDb.createDb()
+
+const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_ORIGIN ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+
+function betterAuthSecret(): string {
+  const secret = process.env.BETTER_AUTH_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("BETTER_AUTH_SECRET must be set in production")
+    }
+    return "local-dev-better-auth-secret-do-not-use-in-prod"
+  }
+  return secret
+}
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return "localhost"
+  }
+}
+
+/** Only register a social provider once both its client id and secret are configured. */
+function configuredSocialProviders() {
+  const providers: Parameters<typeof betterAuth>[0]["socialProviders"] = {}
+
+  if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
+    providers.github = {
+      clientId: process.env.GITHUB_CLIENT_ID,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    }
+  }
+  if (process.env.TWITCH_CLIENT_ID && process.env.TWITCH_CLIENT_SECRET) {
+    providers.twitch = {
+      clientId: process.env.TWITCH_CLIENT_ID,
+      clientSecret: process.env.TWITCH_CLIENT_SECRET,
+    }
+  }
+  if (process.env.REDDIT_CLIENT_ID && process.env.REDDIT_CLIENT_SECRET) {
+    providers.reddit = {
+      clientId: process.env.REDDIT_CLIENT_ID,
+      clientSecret: process.env.REDDIT_CLIENT_SECRET,
+      duration: "permanent",
+    }
+  }
+  return providers
+}
+
+const LOGIN_LOCKOUT_WINDOW_MS = 15 * 60 * 1000
+const LOGIN_LOCKOUT_MAX_ATTEMPTS = 5
+
+/** Port of the old `is_login_locked_out` Postgres RPC — 5 failed attempts / 15 min, per email. */
+async function isLoginLockedOut(email: string): Promise<boolean> {
+  const cutoff = new Date(Date.now() - LOGIN_LOCKOUT_WINDOW_MS).toISOString()
+  const rows = await db
+    .select({ id: loginAttempts.id })
+    .from(loginAttempts)
+    .where(and(eq(loginAttempts.email, email), gt(loginAttempts.attemptedAt, cutoff)))
+    .limit(LOGIN_LOCKOUT_MAX_ATTEMPTS)
+  return rows.length >= LOGIN_LOCKOUT_MAX_ATTEMPTS
+}
+
+async function recordFailedLoginAttempt(email: string, ipAddress: string | null): Promise<void> {
+  try {
+    await db.insert(loginAttempts).values({ email, ipAddress })
+  } catch (err) {
+    log.error({ err: err instanceof Error ? err.message : String(err) }, "Failed to record login attempt")
+  }
+}
+
+async function clearLoginAttempts(email: string): Promise<void> {
+  try {
+    await db.delete(loginAttempts).where(eq(loginAttempts.email, email))
+  } catch (err) {
+    log.error({ err: err instanceof Error ? err.message : String(err) }, "Failed to clear login attempts")
+  }
+}
+
+/**
+ * Extracts the client IP the same way the rest of the app's API routes do.
+ * `hooks.before`/`databaseHooks` run inside the Better Auth request pipeline,
+ * not a Next.js route handler, but `ctx.request` is still a standard
+ * `Request` with the same forwarded-for headers.
+ */
+function clientIpFromRequest(request: Request | undefined): string | null {
+  if (!request) return null
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    null
+  )
+}
+
+/**
+ * Risk-based login enforcement, ported from the old `/api/auth/login` route
+ * (see lib/auth/risk.ts's `computeLoginRisk`). Runs in `session.create.before`
+ * — by the time Better Auth is about to create a session, the `twoFactor`
+ * plugin has already gated any 2FA-enrolled user through a TOTP/backup-code
+ * challenge, so "user has 2FA enrolled" no longer needs handling here; this
+ * only has to cover the case the old code called `challenge_mfa` for a user
+ * *without* 2FA enrolled (soft-block, ask them to verify) and the
+ * `lock_and_verify` hard-block for clearly-anomalous logins.
+ */
+async function enforceLoginRisk(userId: string, request: Request | undefined): Promise<void> {
+  const ipAddress = clientIpFromRequest(request)
+  const userAgent = request?.headers.get("user-agent") ?? null
+  const locationHint =
+    request?.headers.get("x-vercel-ip-country") || request?.headers.get("cf-ipcountry") || null
+
+  const [prev] = await db
+    .select({
+      ipAddress: loginRiskEvents.ipAddress,
+      userAgent: loginRiskEvents.userAgent,
+      locationHint: loginRiskEvents.locationHint,
+    })
+    .from(loginRiskEvents)
+    .where(and(eq(loginRiskEvents.userId, userId), eq(loginRiskEvents.succeeded, true)))
+    .orderBy(desc(loginRiskEvents.createdAt))
+    .limit(1)
+
+  const risk = computeLoginRisk(
+    { userId, ipAddress, userAgent, locationHint },
+    prev ?? null
+  )
+
+  const [user] = await db.select({ email: users.email, twoFactorEnabled: users.twoFactorEnabled }).from(users).where(eq(users.id, userId)).limit(1)
+  const email = user?.email ?? ""
+
+  // A user already enrolled in 2FA has already proven possession of the
+  // second factor by the time this hook runs — don't re-block them.
+  const blocked =
+    risk.action === "lock_and_verify" || (risk.action === "challenge_mfa" && !user?.twoFactorEnabled)
+
+  try {
+    await db.insert(loginRiskEvents).values({
+      userId,
+      email,
+      ipAddress,
+      userAgent,
+      locationHint,
+      riskScore: risk.riskScore,
+      reasons: risk.reasons,
+      suspicious: risk.suspicious,
+      succeeded: !blocked,
+    })
+
+    if (risk.suspicious && !blocked) {
+      await db.insert(notifications).values({
+        userId,
+        type: "system",
+        title: "Suspicious login detected",
+        body: `We noticed a login from a new device or location (${ipAddress || "unknown IP"}). If this wasn't you, reset your password immediately.`,
+      })
+    }
+  } catch (err) {
+    log.error({ err: err instanceof Error ? err.message : String(err), userId }, "Failed to record login risk telemetry")
+  }
+
+  if (blocked) {
+    throw new APIError("FORBIDDEN", {
+      code: "risk_blocked",
+      message: "Unusual login activity detected. Please reset your password to continue.",
+    })
+  }
+}
+
+export const auth = betterAuth({
+  baseURL: APP_ORIGIN,
+  secret: betterAuthSecret(),
+  // usePlural isn't set — every model below has an explicit modelName instead,
+  // since the `user` model maps onto the pre-existing `users` table (not a
+  // fresh CLI-generated one) and needs a real field mapping, not just a
+  // pluralization guess.
+  database: drizzleAdapter(db, {
+    provider: "sqlite",
+    schema: vortexDb,
+    // better-sqlite3's own `.transaction()` rejects async callbacks outright
+    // (see docs/data-migration-runbook.md's spike, issue #4) — Better Auth's
+    // own multi-statement operations are sequenced without a wrapping
+    // transaction as a result, same conclusion the migration scripts reached.
+    transaction: false,
+  }),
+  user: {
+    modelName: "users",
+    fields: {
+      name: "username",
+      email: "email",
+      emailVerified: "emailVerified",
+      image: "avatarUrl",
+      createdAt: "createdAt",
+      updatedAt: "updatedAt",
+    },
+    additionalFields: {
+      displayName: { type: "string", required: false, input: true },
+    },
+    changeEmail: { enabled: true },
+  },
+  session: {
+    modelName: "sessions",
+    expiresIn: 60 * 60 * 24 * 7, // 7 days — matches the old auth_sessions default
+  },
+  account: {
+    modelName: "accounts",
+    accountLinking: {
+      enabled: true,
+      // OAuth linking here is an authenticated, user-initiated "connect my
+      // GitHub/Twitch/Reddit" action (see api/users/connections/oauth/*
+      // previously, now authClient.linkSocial()) — the linked provider's
+      // email routinely differs from the account's primary email, same as
+      // Supabase's linkIdentity() had no such restriction.
+      allowDifferentEmails: true,
+    },
+  },
+  verification: { modelName: "verifications" },
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+    minPasswordLength: 12,
+    autoSignIn: true,
+    revokeSessionsOnPasswordReset: true,
+    password: {
+      // Keep bcrypt for both migrated (see packages/db/src/migration/auth-secrets-export.ts)
+      // and newly-created accounts, instead of Better Auth's default scrypt —
+      // one algorithm for every account is simpler than branching per-user,
+      // and bcrypt.compare() works unmodified against the migrated hashes.
+      hash: (password) => bcrypt.hash(password, 12),
+      verify: ({ hash, password }) => bcrypt.compare(password, hash),
+    },
+    sendResetPassword: async ({ user, url }) => {
+      await sendAuthEmail({
+        to: user.email,
+        subject: "Reset your Vortex password",
+        text: `Reset your password: ${url}\n\nIf you didn't request this, you can safely ignore this email.`,
+      })
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    expiresIn: 60 * 60 * 24, // 24h — matches the verify-email page's copy
+    sendVerificationEmail: async ({ user, url }) => {
+      await sendAuthEmail({
+        to: user.email,
+        subject: "Verify your Vortex account",
+        text: `Welcome to Vortex! Verify your email to activate your account: ${url}`,
+      })
+    },
+  },
+  socialProviders: configuredSocialProviders(),
+  plugins: [
+    twoFactor({
+      issuer: "Vortex",
+      twoFactorTable: "two_factors",
+    }),
+    magicLink({
+      disableSignUp: true,
+      sendMagicLink: async ({ email, url }) => {
+        await sendAuthEmail({
+          to: email,
+          subject: "Your Vortex sign-in link",
+          text: `Sign in to Vortex: ${url}\n\nIf you didn't request this, you can safely ignore this email.`,
+        })
+      },
+    }),
+    passkey({
+      rpID: process.env.NEXT_PUBLIC_WEBAUTHN_RP_ID || safeHostname(APP_ORIGIN),
+      rpName: "Vortex",
+      origin: APP_ORIGIN,
+      schema: { passkey: { modelName: "passkeys" } },
+    }),
+    jwt({
+      // apps/signal verifies handshake JWTs locally against this plugin's
+      // public /api/auth/jwks endpoint (jose + JWKS caching) instead of the
+      // old per-connection supabase.auth.getUser() round-trip — see
+      // docs/better-auth-verification-spike.md §3 and apps/signal/src/index.ts.
+      jwt: {
+        issuer: APP_ORIGIN,
+        audience: "vortex-signal",
+        expirationTime: "15m",
+        // `name` here is Better Auth's canonical field — mapped to the
+        // `username` column via `user.fields.name` above, not a literal
+        // display name.
+        definePayload: ({ user }) => ({ username: user.name }),
+      },
+    }),
+    // Must be last — lets server actions (not just route handlers) set
+    // auth cookies via next/headers. Cheap to include even though today's
+    // auth flows all go through the [...all] route handler.
+    nextCookies(),
+  ],
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // Defense-in-depth: the app's own HMAC step-up cookie (lib/auth/step-up.ts)
+      // gates sensitive account-mutation endpoints the same way it gated
+      // OAuth-identity linking and MFA disable under Supabase Auth — these two
+      // don't otherwise re-verify the user's password/2FA at call time.
+      if (ctx.path === "/two-factor/disable" || ctx.path === "/link-social") {
+        const requestHeaders = ctx.headers ?? ctx.request?.headers ?? new Headers()
+        const session = await auth.api.getSession({ headers: requestHeaders })
+        if (session?.user && !(await hasValidStepUpToken(session.user.id))) {
+          throw new APIError("FORBIDDEN", { message: "Step-up authentication required" })
+        }
+        return
+      }
+
+      if (ctx.path !== "/sign-in/email") return
+      const email = typeof ctx.body?.email === "string" ? ctx.body.email.toLowerCase() : null
+      if (!email) return
+
+      const ipAddress = clientIpFromRequest(ctx.request)
+      const rl = await rateLimiter.check(`login:${ipAddress ?? "unknown"}`, {
+        limit: 20,
+        windowMs: LOGIN_LOCKOUT_WINDOW_MS,
+        failClosed: true,
+      })
+      if (!rl.allowed) {
+        throw new APIError("TOO_MANY_REQUESTS", { message: "Too many login attempts. Please try again later." })
+      }
+
+      if (await isLoginLockedOut(email)) {
+        throw new APIError("UNAUTHORIZED", { message: "Invalid credentials" })
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-in/email") return
+      const email = typeof ctx.body?.email === "string" ? ctx.body.email.toLowerCase() : null
+      if (!email) return
+
+      const failed = ctx.context.returned instanceof Error
+      if (failed) {
+        await recordFailedLoginAttempt(email, clientIpFromRequest(ctx.request))
+      } else {
+        await clearLoginAttempts(email)
+      }
+    }),
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session, context) => {
+          await enforceLoginRisk(session.userId, context?.request)
+        },
+        after: async (session) => {
+          try {
+            await db.update(users).set({ status: "online" }).where(eq(users.id, session.userId))
+          } catch (err) {
+            log.error({ err: err instanceof Error ? err.message : String(err) }, "Failed to set user online after login")
+          }
+        },
+      },
+    },
+    user: {
+      create: {
+        before: async (user) => {
+          // Better Auth doesn't lowercase emails itself; normalize the way
+          // the old login route (`email.toLowerCase()`) always did, so
+          // lookups stay consistent. `createdAt`/`updatedAt` need no
+          // handling here — `users.createdAt`/`updatedAt` use the `isoDate`
+          // custom column type (schema/columns.ts) specifically so the
+          // Date objects Better Auth constructs for these fields bind
+          // correctly without this hook's help.
+          if (typeof user.email === "string") {
+            return { data: { ...user, email: user.email.toLowerCase() } }
+          }
+        },
+      },
+    },
+    account: {
+      create: {
+        after: async (account) => {
+          const SUPPORTED = ["github", "twitch", "reddit"] as const
+          const provider = SUPPORTED.find((p) => p === account.providerId)
+          if (!provider) return
+          // `user_connections` (profile "connected accounts" display) still
+          // lives in Supabase Postgres, not the new `accounts` table this
+          // row was just written to — see the split-brain note in
+          // lib/utils/api-helpers.ts's requireAuth(). Best-effort only:
+          // Better Auth's account-create hook doesn't expose the OAuth
+          // provider's profile fields (username/avatar/profile URL), only
+          // token/account-id data, so this can't populate the same display
+          // fields the old Supabase-linkIdentity flow did.
+          try {
+            const { createServiceRoleClient } = await import("@/lib/supabase/server")
+            const supabase = await createServiceRoleClient()
+            await supabase.from("user_connections").upsert(
+              {
+                user_id: account.userId,
+                provider,
+                provider_user_id: account.accountId,
+                metadata: { linked_via: "better-auth" },
+              },
+              { onConflict: "user_id,provider" }
+            )
+          } catch (err) {
+            log.error({ err: err instanceof Error ? err.message : String(err), userId: account.userId, provider: account.providerId }, "Failed to sync user_connections after OAuth link")
+          }
+        },
+      },
+    },
+  },
+})
+
+/**
+ * Best-effort cleanup of expired login-risk lockout rows — mirrors the old
+ * `record_login_attempt` RPC's implicit TTL via the lockout window query
+ * itself, but also prevents unbounded growth of `login_attempts`. Call
+ * periodically from the existing cron app rather than on every request.
+ */
+export async function pruneExpiredLoginAttempts(): Promise<void> {
+  const cutoff = new Date(Date.now() - LOGIN_LOCKOUT_WINDOW_MS).toISOString()
+  await db.delete(loginAttempts).where(lt(loginAttempts.attemptedAt, cutoff))
+}
+
+/**
+ * Drop-in replacement for `supabase.auth.getUser()`'s return shape
+ * (`{data: {user}, error}`), backed by Better Auth instead. Exists so the
+ * ~30 API routes that called `supabase.auth.getUser()` directly (rather
+ * than through `lib/utils/api-helpers.ts`'s `requireAuth()`) needed only
+ * their auth *call* swapped, not their destructuring/error-handling — every
+ * one of those routes only ever reads `user.id`, so this only bothers
+ * shaping that field correctly.
+ */
+export async function getBetterAuthUser(): Promise<{
+  data: { user: { id: string } | null }
+  error: { message: string } | null
+}> {
+  try {
+    const { headers } = await import("next/headers")
+    const session = await auth.api.getSession({ headers: await headers() })
+    return { data: { user: session?.user ? { id: session.user.id } : null }, error: null }
+  } catch (err) {
+    return { data: { user: null }, error: { message: err instanceof Error ? err.message : "Auth check failed" } }
+  }
+}

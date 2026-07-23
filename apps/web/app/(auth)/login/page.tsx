@@ -3,13 +3,12 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { authClient } from "@/lib/auth/auth-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { Loader2, ShieldCheck, Sparkles, KeyRound, Eye, EyeOff, Info } from "lucide-react"
-import { startPasskeyLogin, supportsPasskeys } from "@/lib/auth/passkeys-client"
 import { VortexLogo } from "@/components/ui/vortex-logo"
 
 type LoginStep = "credentials" | "mfa-challenge" | "recovery-code"
@@ -120,17 +119,14 @@ export default function LoginPage() {
   const [magicLinkLoading, setMagicLinkLoading] = useState(false)
   const [passkeyLoading, setPasskeyLoading] = useState(false)
   const [forgotLoading, setForgotLoading] = useState(false)
-  const [policy, setPolicy] = useState<{ passkey_first?: boolean; enforce_passkey?: boolean; fallback_password?: boolean; fallback_magic_link?: boolean }>({})
   const [form, setForm] = useState({ email: "", password: "" })
   const [showPassword, setShowPassword] = useState(false)
   const [step, setStep] = useState<LoginStep>("credentials")
-  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null)
   const [totpCode, setTotpCode] = useState("")
   const [recoveryCode, setRecoveryCode] = useState("")
   const [mfaLoading, setMfaLoading] = useState(false)
   const [showPasskeyInfo, setShowPasskeyInfo] = useState(false)
   const [loginError, setLoginError] = useState<string | null>(null)
-  const supabase = createClientSupabaseClient()
 
   // Show toast if redirected here due to expired session
   useEffect(() => {
@@ -150,46 +146,42 @@ export default function LoginPage() {
   // Derive combined "any submission in flight" flag for disabling the whole form
   const formBusy = loading || magicLinkLoading || passkeyLoading || forgotLoading
 
+  function redirectDestination(): string {
+    const rd = searchParams.get("redirect")
+    // Must be exactly one leading slash followed by a non-slash,
+    // non-backslash character — `//evil.com` and browser-normalized
+    // backslash variants like `/\evil.com` are both protocol-relative
+    // external redirects, not app-internal paths.
+    return rd && /^\/[^/\\]/.test(rd) ? rd : "/channels/me"
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoginError(null)
     setLoading(true)
     try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: form.email, password: form.password }),
-      })
-      const data = await res.json()
+      const { data, error } = await authClient.signIn.email({ email: form.email, password: form.password })
 
-      if (data.emailUnverified) {
-        try { sessionStorage.setItem("verifyEmail", form.email) } catch {}
-        window.location.href = "/verify-email"
-        return
-      }
-
-      if (!res.ok) {
-        const msg = data.error || "Invalid credentials"
+      if (error) {
+        if (error.status === 403 && error.code === "EMAIL_NOT_VERIFIED") {
+          try { sessionStorage.setItem("verifyEmail", form.email) } catch {}
+          window.location.href = "/verify-email"
+          return
+        }
+        const msg = error.message || "Invalid credentials"
         setLoginError(msg)
         toast({ variant: "destructive", title: "Login failed", description: msg })
         return
       }
 
-      if (data.requiresMfa && data.factorId) {
-        setMfaFactorId(data.factorId)
+      if ((data as { twoFactorRedirect?: boolean })?.twoFactorRedirect) {
         setStep("mfa-challenge")
         return
       }
 
-      await supabase.from("users").update({ status: "online" }).eq("id", data.userId)
-      // Hard navigation ensures session cookies set by the login API are fully
+      // Hard navigation ensures session cookies set by sign-in are fully
       // committed by the browser before the next page's server render fires.
-      // router.push() (client-side nav) can race against Set-Cookie processing
-      // on mobile — window.location.href matches what the passkey flow does.
-      const redirectTo = searchParams.get("redirect")
-      // Only allow relative paths to prevent open-redirect attacks
-      const safeDest = redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//") ? redirectTo : "/channels/me"
-      window.location.href = safeDest
+      window.location.href = redirectDestination()
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Something went wrong"
       setLoginError(message)
@@ -201,28 +193,16 @@ export default function LoginPage() {
 
   async function handleMfaVerify(e: React.FormEvent) {
     e.preventDefault()
-    if (!mfaFactorId || totpCode.length !== 6) return
+    if (totpCode.length !== 6) return
     setMfaLoading(true)
     try {
-      const res = await fetch("/api/auth/mfa-challenge", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ factorId: mfaFactorId, code: totpCode }),
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        toast({ variant: "destructive", title: "Invalid code", description: data.error || "The code you entered is incorrect." })
+      const { error } = await authClient.twoFactor.verifyTotp({ code: totpCode })
+      if (error) {
+        toast({ variant: "destructive", title: "Invalid code", description: error.message || "The code you entered is incorrect." })
         setTotpCode("")
         return
       }
-
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        await supabase.from("users").update({ status: "online" }).eq("id", user.id)
-      }
-      const rd = searchParams.get("redirect")
-      window.location.href = rd && rd.startsWith("/") && !rd.startsWith("//") ? rd : "/channels/me"
+      window.location.href = redirectDestination()
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Verification failed"
       toast({ variant: "destructive", title: "Verification failed", description: message })
@@ -236,22 +216,13 @@ export default function LoginPage() {
     if (!recoveryCode.trim()) return
     setMfaLoading(true)
     try {
-      const res = await fetch("/api/auth/recovery-codes/redeem", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: form.email, password: form.password, code: recoveryCode.trim() }),
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        toast({ variant: "destructive", title: "Recovery failed", description: data.error || "Invalid recovery code" })
+      const { error } = await authClient.twoFactor.verifyBackupCode({ code: recoveryCode.trim() })
+      if (error) {
+        toast({ variant: "destructive", title: "Recovery failed", description: error.message || "Invalid recovery code" })
         setRecoveryCode("")
         return
       }
-
-      // Session cookies are now set by the redeem endpoint — navigate to the app
-      const rd = searchParams.get("redirect")
-      window.location.href = rd && rd.startsWith("/") && !rd.startsWith("//") ? rd : "/channels/me"
+      window.location.href = redirectDestination()
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Recovery failed"
       toast({ variant: "destructive", title: "Recovery failed", description: message })
@@ -267,15 +238,11 @@ export default function LoginPage() {
     }
     setMagicLinkLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await authClient.signIn.magicLink({
         email: form.email,
-        // Redirect to /auth/callback so the server-side route can exchange the
-        // PKCE code for session cookies before forwarding to the app.  Pointing
-        // directly at /channels/me means the code lands where no exchange
-        // handler exists; the server sees no session and redirects to login.
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        callbackURL: redirectDestination(),
       })
-      if (error) throw error
+      if (error) throw new Error(error.message)
       toast({ title: "Magic link sent!", description: `Check ${form.email} for your login link.` })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to send magic link"
@@ -292,10 +259,11 @@ export default function LoginPage() {
     }
     setForgotLoading(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(form.email, {
-        redirectTo: `${window.location.origin}/update-password`,
+      const { error } = await authClient.requestPasswordReset({
+        email: form.email,
+        redirectTo: "/update-password",
       })
-      if (error) throw error
+      if (error) throw new Error(error.message)
       toast({ title: "Reset link sent!", description: `Check ${form.email} for a password reset link.` })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Failed to send reset link"
@@ -306,14 +274,14 @@ export default function LoginPage() {
   }
 
   async function handlePasskeyLogin() {
-    if (!supportsPasskeys()) {
-      toast({ variant: "destructive", title: "Passkeys unavailable", description: "Your browser/device does not support WebAuthn passkeys." })
-      return
-    }
     setPasskeyLoading(true)
     try {
-      const resolvedPolicy = await startPasskeyLogin(form.email || undefined, "Trusted browser")
-      if (resolvedPolicy) setPolicy(resolvedPolicy)
+      const { error } = await authClient.signIn.passkey()
+      if (error) {
+        toast({ variant: "destructive", title: "Passkey login failed", description: error.message })
+        return
+      }
+      window.location.href = redirectDestination()
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Passkey login failed"
       toast({ variant: "destructive", title: "Passkey login failed", description: message })
@@ -321,8 +289,6 @@ export default function LoginPage() {
       setPasskeyLoading(false)
     }
   }
-
-  const showFallbacks = !policy.enforce_passkey
 
   // ── MFA Challenge Screen ────────────────────────────────────────────────
   if (step === "mfa-challenge") {
@@ -368,7 +334,7 @@ export default function LoginPage() {
 
         <button
           type="button"
-          onClick={() => { setStep("credentials"); setTotpCode(""); setMfaFactorId(null) }}
+          onClick={() => { setStep("credentials"); setTotpCode("") }}
           className="text-muted-interactive mt-3 w-full text-center text-sm"
         >
           Back to login
@@ -438,7 +404,7 @@ export default function LoginPage() {
 
         <button
           type="button"
-          onClick={() => { setStep("credentials"); setRecoveryCode(""); setTotpCode(""); setMfaFactorId(null) }}
+          onClick={() => { setStep("credentials"); setRecoveryCode(""); setTotpCode("") }}
           className="text-muted-interactive mt-2 w-full text-center text-sm"
         >
           Back to login
@@ -494,118 +460,108 @@ export default function LoginPage() {
               color: "var(--theme-text-secondary)",
             }}
           >
-            Passkeys use your device biometrics (fingerprint, face) for phishing-resistant sign in. If your policy allows it, password and magic link remain available as backups.
+            Passkeys use your device biometrics (fingerprint, face) for phishing-resistant sign in. Password and magic link remain available as backups.
           </div>
         )}
       </div>
 
-      {showFallbacks && (
-        <>
-          <form onSubmit={handleLogin} className="mt-6 space-y-4">
-            <div className="space-y-2">
-              <Label
-                htmlFor="email"
-                className="text-xs font-semibold uppercase tracking-wider"
-                style={{ color: "var(--theme-text-secondary)" }}
-              >
-                Email <span style={{ color: "var(--theme-danger)" }}>*</span>
-              </Label>
-              {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
-              <Input
-                id="email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                value={form.email}
-                onChange={(e) => { setForm({ ...form, email: e.target.value }); setLoginError(null) }}
-                required
-                autoFocus
-                disabled={formBusy}
-                aria-invalid={!!loginError}
-                aria-describedby={loginError ? "login-error" : undefined}
-                className="auth-input h-10 border"
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label
-                  htmlFor="password"
-                  className="text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: "var(--theme-text-secondary)" }}
-                >
-                  Password <span style={{ color: "var(--theme-danger)" }}>*</span>
-                </Label>
-                <button
-                  type="button"
-                  onClick={handleForgotPassword}
-                  disabled={formBusy}
-                  className="text-xs transition-colors hover:underline disabled:opacity-60"
-                  style={{ color: "var(--theme-accent)" }}
-                >
-                  {forgotLoading ? "Sending\u2026" : "Forgot password?"}
-                </button>
-              </div>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  autoComplete="current-password"
-                  value={form.password}
-                  onChange={(e) => { setForm({ ...form, password: e.target.value }); setLoginError(null) }}
-                  required
-                  disabled={formBusy}
-                  aria-invalid={!!loginError}
-                  aria-describedby={loginError ? "login-error" : undefined}
-                  className="auth-input h-10 border pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
-                  style={{ color: "var(--theme-text-secondary)" }}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                  tabIndex={0}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-            {loginError && (
-              <p id="login-error" role="alert" className="text-xs font-medium" style={{ color: "var(--theme-danger)" }}>
-                {loginError}
-              </p>
-            )}
-            <Button
-              type="submit"
-              disabled={formBusy}
-              className="auth-btn-accent h-11 w-full border-0 font-medium transition-opacity hover:opacity-90"
-            >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Log In with Password
-            </Button>
-          </form>
-
-          <Button
-            type="button"
-            variant="outline"
-            disabled={formBusy}
-            onClick={handleMagicLink}
-            className="mt-4 h-10 w-full transition-colors"
-            style={{
-              borderColor: "rgba(255,255,255,0.15)",
-              background: "rgba(255,255,255,0.04)",
-              color: "var(--theme-text-secondary)",
-            }}
+      <form onSubmit={handleLogin} className="mt-6 space-y-4">
+        <div className="space-y-2">
+          <Label
+            htmlFor="email"
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: "var(--theme-text-secondary)" }}
           >
-            {magicLinkLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send Magic Link
-          </Button>
-        </>
-      )}
+            Email <span style={{ color: "var(--theme-danger)" }}>*</span>
+          </Label>
+          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+          <Input
+            id="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={form.email}
+            onChange={(e) => { setForm({ ...form, email: e.target.value }); setLoginError(null) }}
+            required
+            autoFocus
+            disabled={formBusy}
+            aria-invalid={!!loginError}
+            aria-describedby={loginError ? "login-error" : undefined}
+            className="auth-input h-10 border"
+          />
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label
+              htmlFor="password"
+              className="text-xs font-semibold uppercase tracking-wider"
+              style={{ color: "var(--theme-text-secondary)" }}
+            >
+              Password <span style={{ color: "var(--theme-danger)" }}>*</span>
+            </Label>
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={formBusy}
+              className="text-xs transition-colors hover:underline disabled:opacity-60"
+              style={{ color: "var(--theme-accent)" }}
+            >
+              {forgotLoading ? "Sending…" : "Forgot password?"}
+            </button>
+          </div>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              value={form.password}
+              onChange={(e) => { setForm({ ...form, password: e.target.value }); setLoginError(null) }}
+              required
+              disabled={formBusy}
+              aria-invalid={!!loginError}
+              aria-describedby={loginError ? "login-error" : undefined}
+              className="auth-input h-10 border pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors"
+              style={{ color: "var(--theme-text-secondary)" }}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              tabIndex={0}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+        {loginError && (
+          <p id="login-error" role="alert" className="text-xs font-medium" style={{ color: "var(--theme-danger)" }}>
+            {loginError}
+          </p>
+        )}
+        <Button
+          type="submit"
+          disabled={formBusy}
+          className="auth-btn-accent h-11 w-full border-0 font-medium transition-opacity hover:opacity-90"
+        >
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Log In with Password
+        </Button>
+      </form>
 
-      {!showFallbacks && (
-        <p className="mt-3 text-xs" style={{ color: "var(--theme-warning)" }}>
-          Your account policy requires passkey login. Contact an owner/admin if you need recovery help.
-        </p>
-      )}
+      <Button
+        type="button"
+        variant="outline"
+        disabled={formBusy}
+        onClick={handleMagicLink}
+        className="mt-4 h-10 w-full transition-colors"
+        style={{
+          borderColor: "rgba(255,255,255,0.15)",
+          background: "rgba(255,255,255,0.04)",
+          color: "var(--theme-text-secondary)",
+        }}
+      >
+        {magicLinkLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send Magic Link
+      </Button>
 
       <p className="mt-6 text-center text-sm" style={{ color: "var(--theme-text-secondary)" }}>
         Need an account?{" "}

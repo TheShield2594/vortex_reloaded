@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Loader2, Eye, EyeOff, Lock } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { authClient } from "@/lib/auth/auth-client"
 
 export function PasswordChangeSection(): React.JSX.Element {
   const { toast } = useToast()
@@ -24,25 +25,16 @@ export function PasswordChangeSection(): React.JSX.Element {
     }
     setLoading(true)
     try {
-      const res = await fetch("/api/auth/password", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          currentPassword: form.currentPassword,
-          newPassword: form.newPassword,
-          revokeOtherSessions,
-        }),
+      const { error } = await authClient.changePassword({
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+        revokeOtherSessions,
       })
-      const data = await res.json()
-      if (!res.ok) {
-        toast({ variant: "destructive", title: "Password change failed", description: data.error || "Please try again" })
+      if (error) {
+        toast({ variant: "destructive", title: "Password change failed", description: error.message || "Please try again" })
         return
       }
-      if (data.warning) {
-        toast({ title: "Password changed", description: data.warning, variant: "destructive" })
-      } else {
-        toast({ title: "Password changed", description: revokeOtherSessions ? "All other sessions have been revoked." : "Your password has been updated." })
-      }
+      toast({ title: "Password changed", description: revokeOtherSessions ? "All other sessions have been revoked." : "Your password has been updated." })
       setForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
     } catch (error: unknown) {
       toast({ variant: "destructive", title: "Error", description: error instanceof Error ? error.message : "Unknown error" })

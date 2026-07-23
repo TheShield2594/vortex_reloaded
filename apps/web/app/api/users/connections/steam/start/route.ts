@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
 import { randomBytes } from "crypto"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 
 const STEAM_OPENID_URL = "https://steamcommunity.com/openid/login"
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }

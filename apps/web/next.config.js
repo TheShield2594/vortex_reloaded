@@ -103,6 +103,14 @@ const nextConfig = {
   },
   output: process.env.DOCKER_BUILD === '1' ? 'standalone' : undefined,
   transpilePackages: ['@vortex/shared'],
+  // better-sqlite3 (via @vortex/db, used by Better Auth's drizzle adapter —
+  // see lib/auth/better-auth.ts) is a native addon. This alone isn't
+  // enough to keep it out of the server bundle in this workspace (it's
+  // required through a raw-TypeScript workspace package rather than a
+  // pre-built node_modules entry point) — see the `eval("require")` in
+  // packages/db/src/client.ts for the fix that actually prevents webpack
+  // from bundling it. Kept here too as a harmless, standard safety net.
+  serverExternalPackages: ['better-sqlite3'],
   webpack: (config, { isServer }) => {
     if (!isServer) {
       // Split heavy client-side dependencies into separate chunks

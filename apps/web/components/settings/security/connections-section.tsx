@@ -6,6 +6,13 @@ import { Link2, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import { useConnectionsCallback } from "@/hooks/use-connections-callback"
+import { authClient } from "@/lib/auth/auth-client"
+
+const SOCIAL_PROVIDERS = [
+  { id: "github" as const, label: "GitHub" },
+  { id: "twitch" as const, label: "Twitch" },
+  { id: "reddit" as const, label: "Reddit" },
+]
 
 type ConnectionRow = {
   id: string
@@ -38,6 +45,22 @@ export function ConnectionsSection(): React.JSX.Element {
 
   useConnectionsCallback(loadConnections, toast, router)
 
+  async function connectSocial(provider: "github" | "twitch" | "reddit"): Promise<void> {
+    try {
+      const { data, error } = await authClient.linkSocial({
+        provider,
+        callbackURL: window.location.pathname + window.location.search,
+      })
+      if (error) {
+        toast({ variant: "destructive", title: `Failed to connect ${provider}`, description: error.message })
+        return
+      }
+      if (data?.url) window.location.href = data.url
+    } catch (err: unknown) {
+      toast({ variant: "destructive", title: `Failed to connect ${provider}`, description: err instanceof Error ? err.message : undefined })
+    }
+  }
+
   function connectSteam(): void {
     const next = window.location.pathname + window.location.search
     window.location.href = `/api/users/connections/steam/start?next=${encodeURIComponent(next)}`
@@ -66,6 +89,23 @@ export function ConnectionsSection(): React.JSX.Element {
 
   return (
     <div className="space-y-6">
+      {SOCIAL_PROVIDERS.map(({ id, label }) => {
+        const connection = connections.find((item) => item.provider === id)
+        return (
+          <div key={id} className="rounded-lg p-4 space-y-3" style={{ background: "var(--theme-bg-secondary)", border: "1px solid var(--theme-bg-tertiary)" }}>
+            <h3 className="text-base font-semibold text-white">{label}</h3>
+            {connection && (
+              <p className="text-xs" style={{ color: "var(--theme-text-secondary)" }}>
+                Connected as {connection.display_name || connection.username || connection.provider_user_id}
+              </p>
+            )}
+            <Button type="button" onClick={() => connectSocial(id)} style={{ background: "var(--theme-accent)" }}>
+              <Link2 className="w-4 h-4 mr-2" /> {connection ? `Reconnect ${label}` : `Connect ${label}`}
+            </Button>
+          </div>
+        )
+      })}
+
       <div className="rounded-lg p-4 space-y-3" style={{ background: "var(--theme-bg-secondary)", border: "1px solid var(--theme-bg-tertiary)" }}>
         <h3 className="text-base font-semibold text-white">Steam</h3>
         <p className="text-sm" style={{ color: "var(--theme-text-muted)" }}>Link your Steam account using official OpenID sign-in. We only store your Steam ID and profile URL.</p>

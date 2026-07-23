@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { authClient } from "@/lib/auth/auth-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,16 +13,14 @@ import { VortexLogo } from "@/components/ui/vortex-logo"
 
 function friendlySignupError(message: string): string {
   const lower = message.toLowerCase()
-  if (lower.includes("already registered") || lower.includes("already been registered"))
-    return "An account with this email already exists. Try logging in instead."
+  if (lower.includes("already exists") || lower.includes("already registered") || lower.includes("already taken"))
+    return "An account with this email or username already exists. Try logging in instead."
   if (lower.includes("password") && (lower.includes("strength") || lower.includes("weak") || lower.includes("short")))
     return "Password is too weak. Use at least 12 characters with a mix of letters, numbers, and symbols."
   if (lower.includes("rate") || lower.includes("too many"))
     return "Too many signup attempts. Please wait a moment and try again."
   if (lower.includes("invalid") && lower.includes("email"))
     return "Please enter a valid email address."
-  if (lower.includes("not authorized") || lower.includes("signup is disabled"))
-    return "Signups are currently disabled. Please try again later."
   return message
 }
 
@@ -38,7 +36,6 @@ export default function RegisterPage() {
     password: "",
     confirmPassword: "",
   })
-  const supabase = createClientSupabaseClient()
 
   async function handleRegister(e: React.FormEvent): Promise<void> {
     e.preventDefault()
@@ -67,27 +64,16 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await authClient.signUp.email({
         email: form.email,
         password: form.password,
-        options: {
-          data: {
-            username: form.username.toLowerCase(),
-            display_name: form.displayName || form.username,
-          },
-          emailRedirectTo: `${window.location.origin}/channels/me`,
-        },
+        // `name` is Better Auth's canonical field, mapped to the `username`
+        // DB column (see user.fields in lib/auth/better-auth.ts) — this is
+        // this app's username, not a display name.
+        name: form.username.toLowerCase(),
+        displayName: form.displayName || form.username,
       })
-      if (error) throw error
-
-      // Supabase returns a fake success (200, no error) for duplicate emails
-      // when email confirmation is enabled — detect via empty identities array
-      if (data.user?.identities?.length === 0) {
-        const msg = "An account with this email already exists. Try logging in instead."
-        setFormError(msg)
-        toast({ variant: "destructive", title: "Registration failed", description: msg })
-        return
-      }
+      if (error) throw new Error(error.message || "Registration failed")
 
       toast({
         title: "Account created!",

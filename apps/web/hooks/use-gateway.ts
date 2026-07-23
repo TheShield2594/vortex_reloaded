@@ -16,9 +16,8 @@
  * #597: Reconnection Catch-Up Protocol
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { io, type Socket } from "socket.io-client"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
 import type {
   VortexEvent,
   UserStatus,
@@ -44,8 +43,52 @@ interface GatewayState {
 
 const SIGNAL_SERVER_URL = process.env.NEXT_PUBLIC_SIGNAL_URL ?? "http://localhost:3001"
 
+/**
+ * Better Auth's `jwt` plugin issues short-lived tokens (15 min, see
+ * lib/auth/better-auth.ts) for apps/signal to verify locally against its
+ * JWKS — a deliberately shorter lifetime than Supabase's old ~1hr session
+ * JWT (see docs/better-auth-verification-spike.md §3). Fetched fresh on
+ * every (re)connection attempt via socket.io's function-form `auth` option
+ * below, rather than once at mount, so a long-lived tab reconnecting hours
+ * later doesn't hand the gateway an already-expired token.
+ */
+async function fetchGatewayToken(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/auth/token", { credentials: "include" })
+    if (!res.ok) return null
+    const data = (await res.json()) as { token?: string }
+    return data.token ?? null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The initial fetch (unlike the per-reconnect one passed to socket.io's
+ * function-form `auth` option) has no built-in retry mechanism of its own —
+ * if it fails once (a transient blip, or racing the session cookie not
+ * being fully committed yet right after login), `io()` is never called and
+ * there's no socket for socket.io's own reconnection logic to act on.
+ * Bounded exponential backoff here covers that gap without retrying forever.
+ */
+async function fetchGatewayTokenWithRetry(
+  isDestroyed: () => boolean,
+  maxAttempts = 5,
+): Promise<string | null> {
+  let delay = 500
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (isDestroyed()) return null
+    const token = await fetchGatewayToken()
+    if (token) return token
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delay))
+      delay = Math.min(delay * 2, 5000)
+    }
+  }
+  return null
+}
+
 export function useGateway(handlers?: GatewayEventHandlers) {
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
   const [status, setStatus] = useState<GatewayStatus>("disconnected")
   const socketRef = useRef<Socket | null>(null)
   const stateRef = useRef<GatewayState>({
@@ -62,12 +105,20 @@ export function useGateway(handlers?: GatewayEventHandlers) {
 
     async function connect(): Promise<void> {
       try {
-        // Get auth token from Supabase session
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session?.access_token || destroyed) return
+        const initialToken = await fetchGatewayTokenWithRetry(() => destroyed)
+        if (!initialToken || destroyed) {
+          if (!initialToken && !destroyed) {
+            console.error("[gateway] failed to fetch initial token after retries")
+          }
+          return
+        }
 
         const socket = io(SIGNAL_SERVER_URL, {
-          auth: { token: session.access_token },
+          // Function form: re-invoked on every (re)connection attempt so a
+          // near-expiry or already-expired JWT gets refreshed automatically
+          // instead of socket.io reusing whatever token was captured at the
+          // first `io()` call.
+          auth: async (cb) => cb({ token: (await fetchGatewayToken()) ?? initialToken }),
           transports: ["websocket"],
           reconnection: true,
           reconnectionAttempts: Infinity,
@@ -169,7 +220,7 @@ export function useGateway(handlers?: GatewayEventHandlers) {
         stateRef.current.socket = null
       }
     }
-  }, [supabase])
+  }, [])
 
   // ── Public API ──────────────────────────────────────────────────────────
 

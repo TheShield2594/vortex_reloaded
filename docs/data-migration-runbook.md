@@ -11,22 +11,38 @@ Code lives in `packages/db/src/migration/`.
 
 ## What this does and doesn't cover
 
-This migrates the 28 tables in the frozen target schema — every `public`-schema
-table in `packages/db/src/schema`, including the hand-rolled `auth_*` app
-tables (`auth_challenges`, `auth_sessions`, `auth_trusted_devices`,
-`auth_security_policies`, `passkey_credentials`, `recovery_codes`,
-`login_risk_events`, `login_attempts`) layered on top of Supabase Auth today.
+> **Update (issue #8):** the Better Auth cutover retired 5 of the original 8
+> `auth_*` tables in favor of Better Auth's own (`sessions`, `accounts`,
+> `passkeys`, `two_factors`, plus the `twoFactor` plugin's stateless
+> trusted-device cookie) — see
+> [`docs/better-auth-cutover.md`](./better-auth-cutover.md). The general
+> `MIGRATION_TABLES` list (`packages/db/src/migration/tables.ts`) now covers
+> 24 tables, not 28; `auth_challenges`, `auth_sessions`,
+> `auth_trusted_devices`, `passkey_credentials`, and `recovery_codes` are
+> gone from it (three of those had a straight passthrough; `passkey_credentials`
+> moved into the auth-secrets flow described below since its target shape
+> changed too much for a passthrough). `recovery_codes` is also gone —
+> superseded by `two_factors.backupCodes` — so despite the "Auth data"
+> checklist below still calling it out as a normal migrated table (it was
+> written for #7, before #8 retired it), it is no longer part of the
+> general-table pass either. The rest of this doc otherwise still describes
+> the general-table migration accurately.
+
+This migrates the tables in the frozen target schema — every `public`-schema
+table in `packages/db/src/schema` that Better Auth doesn't itself own,
+including the hand-rolled `auth_*` app tables that remain
+(`auth_security_policies`, `login_risk_events`, `login_attempts`) layered on
+top of Supabase Auth today.
 
 It does **not** migrate Supabase's own private `auth` schema
-(`auth.users`, `auth.mfa_factors`, `auth.identities`) into a Drizzle table,
-because Better Auth's own `user`/`session`/`account`/`twoFactor` tables don't
-exist in this repo yet — generating them is
-[#8](https://github.com/TheShield2594/vortex_reloaded/issues/8)'s job (its
-Better Auth CLI-generate step, per
-[`docs/better-auth-verification-spike.md`](./better-auth-verification-spike.md)).
-Instead, `auth-secrets-export.ts` exports a best-effort-mapped staging file
-for #8 to consume once that schema lands — see
-["Auth data" below](#auth-data-the-issue-7-checklist).
+(`auth.users`, `auth.mfa_factors`, `auth.identities`) into a Drizzle table
+via this general pass — `auth-secrets-export.ts`/`import-auth-secrets.ts`
+(issue #8) handle that separately, since Better Auth's own
+`user`/`session`/`account`/`twoFactor` tables need field-mapping/transform
+logic a straight passthrough can't do — see
+["Auth data" below](#auth-data-the-issue-7-checklist) and
+[`docs/better-auth-cutover.md`](./better-auth-cutover.md) for the full
+picture, including the passkeys row now also routed through this path.
 
 ## Procedure
 
@@ -110,15 +126,17 @@ index against the content table).
 
 - **Passwords.** `auth.users.encrypted_password` (a standard bcrypt hash) is
   copied as-is into `auth-secrets/credentials.ndjson` — no forced reset. #8's
-  Credentials `authorize()` callback should verify it with `bcrypt.compare()`
-  directly, not re-hash it into Better Auth's own (scrypt-based) native
+  Better Auth config (`emailAndPassword.password.verify` in
+  `apps/web/lib/auth/better-auth.ts`) verifies it with `bcrypt.compare()`
+  directly, not re-hashed into Better Auth's own (scrypt-based) native
   password format.
 - **TOTP secrets.** `auth.mfa_factors` (`factor_type = 'totp'`) exports to
   `auth-secrets/totp-factors.ndjson`, shaped toward Better Auth's
-  `twoFactor` table (`userId`, `secret`). This is unrelated to the app's own
-  `recovery_codes` table (`packages/db/src/schema/auth.ts`) — that's a normal
-  `public`-schema table migrated by `export.ts`/`import.ts` like everything
-  else, not part of this file.
+  `twoFactor` table (`userId`, `secret`). Backup/recovery codes are part of
+  that same `twoFactor` row (`backupCodes`) as of #8 — the old, standalone
+  `recovery_codes` table this used to describe as a separately-migrated
+  `public`-schema table was retired in the cutover (see the note above), not
+  migrated by `export.ts`/`import.ts` at all.
 - **OAuth links.** Decision made explicitly here, per the issue's ask:
   **best-effort field mapping**, not "accept that linked-OAuth users
   re-link." `auth.identities` exports to `auth-secrets/oauth-identities.ndjson`,

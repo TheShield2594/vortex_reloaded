@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { isUserConnectionsTableMissing } from "@/lib/supabase/user-connections-errors"
 
 const FETCH_TIMEOUT_MS = 8_000
@@ -103,7 +104,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
 
     if (authError || !user) {
       return NextResponse.redirect(buildRedirect(url, nextPath, "youtube_auth_required"))

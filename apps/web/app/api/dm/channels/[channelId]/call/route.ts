@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { sendPushToUser } from "@/lib/push"
 
 // POST /api/dm/channels/[channelId]/call — broadcast a WebRTC signaling event
@@ -10,7 +11,7 @@ export async function POST(
 ): Promise<NextResponse> {
   const { channelId } = await params
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getBetterAuthUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   // Verify membership

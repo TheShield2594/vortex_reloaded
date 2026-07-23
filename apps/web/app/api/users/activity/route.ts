@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { requireAuth } from "@/lib/utils/api-helpers"
 
 const FEED_LIMIT = 10
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
 
     if (userError || !targetUser) return NextResponse.json({ error: "User not found" }, { status: 404 })
 
-    const { data: { user: viewer } } = await supabase.auth.getUser()
+    const { data: { user: viewer } } = await getBetterAuthUser()
     const viewerIsOwner = viewer?.id === targetUserId
 
     // Resolve visibility

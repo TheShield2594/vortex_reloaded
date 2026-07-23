@@ -4,68 +4,28 @@ import { createdAt, updatedAt, uuidPk } from "./columns"
 import { users } from "./users"
 
 /**
- * All 8 tables below: supabase/migrations/00019_passkeys_and_sessions.sql
- * unless noted otherwise. These are hand-rolled MFA/passkey/session-risk
- * app tables layered on top of Supabase Auth today — not Supabase's own
- * `auth.users`/`auth.identities` schema, which is out of scope entirely
- * (Supabase Auth itself is being replaced, see issue #8).
+ * Hand-rolled MFA/passkey/session-risk app tables, originally all 8 layered
+ * on top of Supabase Auth (supabase/migrations/00019_passkeys_and_sessions.sql
+ * unless noted otherwise) — not Supabase's own `auth.users`/`auth.identities`
+ * schema, which was always out of scope (Supabase Auth itself was replaced,
+ * see issue #8).
+ *
+ * As of the Better Auth cutover (issue #8), 5 of the original 8 were retired
+ * in favor of tables/mechanisms Better Auth itself owns (see
+ * schema/better-auth.ts and lib/auth/better-auth.ts in apps/web):
+ *   - `auth_challenges`      -> the `@better-auth/passkey` plugin manages its
+ *     own WebAuthn challenge storage internally; the old table (and the
+ *     hand-rolled, dev-only-verified `verifyWithAdapter()` stub it backed)
+ *     is gone entirely, not ported.
+ *   - `auth_sessions`        -> `sessions`
+ *   - `auth_trusted_devices` -> the `twoFactor` plugin's own trusted-device
+ *     cookie (`trustDeviceMaxAge`, default 30 days) — stateless, no DB table.
+ *   - `passkey_credentials`  -> `passkeys`
+ *   - `recovery_codes`       -> `two_factors.backupCodes`
+ * The remaining 3 below have no Better Auth equivalent (passkey-first
+ * policy, login risk scoring) and stay as app-specific tables wired into
+ * the Better Auth config via hooks.
  */
-export const authChallenges = sqliteTable(
-  "auth_challenges",
-  {
-    id: uuidPk(),
-    userId: text("user_id").references(() => users.id, { onDelete: "cascade" }),
-    flow: text("flow", { enum: ["register", "login"] }).notNull(),
-    challenge: text("challenge").notNull(),
-    rpId: text("rp_id").notNull(),
-    origin: text("origin").notNull(),
-    expiresAt: text("expires_at").notNull(),
-    usedAt: text("used_at"),
-    createdAt: createdAt(),
-  },
-  (table) => [
-    index("idx_auth_challenges_user_flow").on(table.userId, table.flow),
-    check("auth_challenges_flow_check", sql`${table.flow} in ('register', 'login')`),
-  ]
-)
-
-export const authTrustedDevices = sqliteTable(
-  "auth_trusted_devices",
-  {
-    id: uuidPk(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    label: text("label").notNull(),
-    tokenHash: text("token_hash").notNull().unique(),
-    lastSeenAt: createdAt("last_seen_at"),
-    expiresAt: text("expires_at").notNull(),
-    revokedAt: text("revoked_at"),
-    createdAt: createdAt(),
-  },
-  (table) => [index("idx_auth_trusted_devices_user_id").on(table.userId)]
-)
-
-export const authSessions = sqliteTable(
-  "auth_sessions",
-  {
-    id: uuidPk(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    trustedDeviceId: text("trusted_device_id").references(() => authTrustedDevices.id, {
-      onDelete: "set null",
-    }),
-    sessionTokenHash: text("session_token_hash").notNull().unique(),
-    userAgent: text("user_agent"),
-    ipAddress: text("ip_address"),
-    expiresAt: text("expires_at").notNull(),
-    revokedAt: text("revoked_at"),
-    createdAt: createdAt(),
-    lastSeenAt: createdAt("last_seen_at"),
-  },
-  (table) => [index("idx_auth_sessions_user_id").on(table.userId)]
-)
 
 /** One row per user — `user_id` is both PK and FK. */
 export const authSecurityPolicies = sqliteTable(
@@ -88,55 +48,6 @@ export const authSecurityPolicies = sqliteTable(
       "auth_security_policies_fallback_magic_link_check",
       sql`${table.fallbackMagicLink} in (0, 1)`
     ),
-  ]
-)
-
-/**
- * `transports` is a Postgres `TEXT[]` — the migration plan's TEXT[] mapping
- * (JSON-array-serialized TEXT) applies here too, not just `users.interests`
- * (the only case the plan calls out by name, but the mapping rule itself is
- * general).
- */
-export const passkeyCredentials = sqliteTable(
-  "passkey_credentials",
-  {
-    id: uuidPk(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    credentialId: text("credential_id").notNull().unique(),
-    publicKey: text("public_key").notNull(),
-    counter: integer("counter").notNull().default(0),
-    transports: text("transports", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
-    backedUp: integer("backed_up", { mode: "boolean" }).notNull().default(false),
-    deviceType: text("device_type").notNull().default("singleDevice"),
-    name: text("name").notNull().default("Unnamed device"),
-    revokedAt: text("revoked_at"),
-    lastUsedAt: text("last_used_at"),
-    createdAt: createdAt(),
-  },
-  (table) => [
-    index("idx_passkey_credentials_user_id").on(table.userId),
-    check("passkey_credentials_transports_check", sql`json_type(${table.transports}) = 'array'`),
-  ]
-)
-
-export const recoveryCodes = sqliteTable(
-  "recovery_codes",
-  {
-    id: uuidPk(),
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    codeHash: text("code_hash").notNull(),
-    usedAt: text("used_at"),
-    createdAt: createdAt(),
-  },
-  (table) => [
-    index("idx_recovery_codes_user_id").on(table.userId),
-    index("idx_recovery_codes_user_unused")
-      .on(table.userId)
-      .where(sql`${table.usedAt} is null`),
   ]
 )
 

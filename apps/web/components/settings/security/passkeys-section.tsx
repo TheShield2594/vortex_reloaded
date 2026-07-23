@@ -7,11 +7,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
+import { authClient } from "@/lib/auth/auth-client"
+
+interface PasskeyRow {
+  id: string
+  name?: string
+  createdAt: string
+}
 
 export function PasskeysSection(): React.JSX.Element {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [credentials, setCredentials] = useState<Array<{ id: string; name: string; created_at: string; last_used_at: string | null; revoked_at: string | null }>>([])
+  const [credentials, setCredentials] = useState<PasskeyRow[]>([])
 
   // Rename dialog state
   const [renameOpen, setRenameOpen] = useState(false)
@@ -21,11 +28,8 @@ export function PasskeysSection(): React.JSX.Element {
 
   const loadCredentials = useCallback(async (): Promise<void> => {
     try {
-      const res = await fetch("/api/auth/passkeys/credentials")
-      const payload = await res.json()
-      if (res.ok && Array.isArray(payload.credentials)) {
-        setCredentials(payload.credentials.filter((cred: { revoked_at: string | null }) => !cred.revoked_at))
-      }
+      const { data } = await authClient.passkey.listUserPasskeys()
+      if (Array.isArray(data)) setCredentials(data as unknown as PasskeyRow[])
     } catch {
       // Network error — leave credentials unchanged
     }
@@ -38,8 +42,8 @@ export function PasskeysSection(): React.JSX.Element {
   async function handleRegisterPasskey(): Promise<void> {
     setLoading(true)
     try {
-      const { startPasskeyRegistration } = await import("@/lib/auth/passkeys-client")
-      await startPasskeyRegistration("Primary passkey")
+      const { error } = await authClient.passkey.addPasskey({ name: "Primary passkey" })
+      if (error) throw new Error(error.message)
       toast({ title: "Passkey added", description: "Your account can now use passkey-first login." })
       await loadCredentials()
     } catch (error: unknown) {
@@ -59,17 +63,10 @@ export function PasskeysSection(): React.JSX.Element {
     if (!renameId || !renameName.trim()) return
     setRenaming(true)
     try {
-      const res = await fetch("/api/auth/passkeys/credentials", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: renameId, name: renameName.trim() }),
-      })
-      if (res.ok) {
-        await loadCredentials()
-        setRenameOpen(false)
-      } else {
-        toast({ variant: "destructive", title: "Failed to rename passkey" })
-      }
+      const { error } = await authClient.passkey.updatePasskey({ id: renameId, name: renameName.trim() })
+      if (error) throw new Error(error.message)
+      await loadCredentials()
+      setRenameOpen(false)
     } catch {
       toast({ variant: "destructive", title: "Failed to rename passkey" })
     } finally {
@@ -79,9 +76,9 @@ export function PasskeysSection(): React.JSX.Element {
 
   async function revoke(id: string): Promise<void> {
     try {
-      const res = await fetch("/api/auth/passkeys/credentials", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ id }) })
-      if (res.ok) loadCredentials()
-      else toast({ variant: "destructive", title: "Failed to revoke passkey" })
+      const { error } = await authClient.passkey.deletePasskey({ id })
+      if (error) throw new Error(error.message)
+      loadCredentials()
     } catch {
       toast({ variant: "destructive", title: "Failed to revoke passkey" })
     }
@@ -100,10 +97,10 @@ export function PasskeysSection(): React.JSX.Element {
         {credentials.map((cred) => (
           <div key={cred.id} className="rounded p-3 flex items-center gap-2" style={{ background: "var(--theme-bg-secondary)", border: "1px solid var(--theme-bg-tertiary)" }}>
             <div className="flex-1">
-              <p className="text-sm text-white">{cred.name}</p>
-              <p className="text-xs" style={{ color: "var(--theme-text-muted)" }}>Last used: {cred.last_used_at ? new Date(cred.last_used_at).toLocaleString() : "Never"}</p>
+              <p className="text-sm text-white">{cred.name || "Unnamed device"}</p>
+              <p className="text-xs" style={{ color: "var(--theme-text-muted)" }}>Added: {cred.createdAt ? new Date(cred.createdAt).toLocaleString() : "Unknown"}</p>
             </div>
-            <button onClick={() => openRenameDialog(cred.id, cred.name)} className="p-2 rounded" style={{ background: "var(--theme-surface-input)" }} aria-label="Rename passkey"><Pencil className="w-4 h-4" /></button>
+            <button onClick={() => openRenameDialog(cred.id, cred.name || "")} className="p-2 rounded" style={{ background: "var(--theme-surface-input)" }} aria-label="Rename passkey"><Pencil className="w-4 h-4" /></button>
             <button onClick={() => revoke(cred.id)} className="p-2 rounded" style={{ background: "rgba(242,63,67,0.15)", color: "var(--theme-danger)" }} aria-label="Revoke passkey"><Trash2 className="w-4 h-4" /></button>
           </div>
         ))}
