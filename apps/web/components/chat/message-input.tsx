@@ -4,8 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { Send, X, Smile, Reply, FileUp, BarChart3, Plus, Paperclip } from "lucide-react"
 import type { MessageWithAuthor } from "@/types/database"
 import { cn } from "@/lib/utils/cn"
-import { useAppStore } from "@/lib/stores/app-store"
-import { useShallow } from "zustand/react/shallow"
+import type { MemberForMention } from "@/lib/stores/app-store"
 import { useMentionAutocomplete } from "@/hooks/use-mention-autocomplete"
 import { useEmojiAutocomplete } from "@/hooks/use-emoji-autocomplete"
 import { useSlashCommandAutocomplete } from "@/hooks/use-slash-command-autocomplete"
@@ -38,12 +37,12 @@ interface Props {
   onDraftChange: (value: string) => void
   onTyping?: () => void
   onSent?: () => void
-  /** Legacy prop retained for the (currently unused) "channel" variant's mention/persona lookups. */
-  serverId?: string
 }
 
+const EMPTY_MEMBERS: MemberForMention[] = []
+
 /** Composable message input with file attachments, emoji picker, @mention autocomplete, and reply-to indicator. */
-export function MessageInput({ variant = "channel", channelName, draft, replyTo, onCancelReply, onSend, onDraftChange, onTyping, onSent, serverId }: Props) {
+export function MessageInput({ variant = "channel", channelName, draft, replyTo, onCancelReply, onSend, onDraftChange, onTyping, onSent }: Props) {
   const isMobile = useMobileLayout()
   const [content, setContent] = useState(draft)
   const [cursorPosition, setCursorPosition] = useState(0)
@@ -129,14 +128,8 @@ export function MessageInput({ variant = "channel", channelName, draft, replyTo,
     return () => { if (draftTimerRef.current) clearTimeout(draftTimerRef.current) }
   }, [])
 
-  // Mention autocomplete
-  const { activeServerId, members: membersByServer, serverRoles: rolesByServer, personas: personasByServer } = useAppStore(
-    useShallow((s) => ({ activeServerId: s.activeServerId, members: s.members, serverRoles: s.serverRoles, personas: s.personas }))
-  )
-  const members = activeServerId ? membersByServer[activeServerId] ?? [] : []
-  const roles = serverId ? rolesByServer[serverId] ?? [] : []
-  const personas = serverId ? personasByServer[serverId] ?? [] : []
-  const mention = useMentionAutocomplete({ content, cursorPosition, members, roles, personas })
+  // Mention autocomplete — no member/role/persona source in a DM-only app
+  const mention = useMentionAutocomplete({ content, cursorPosition, members: EMPTY_MEMBERS })
 
   // Emoji autocomplete (`:shortcode` trigger) — no custom/server emoji source in a DM-only app
   const emoji = useEmojiAutocomplete({ content, cursorPosition, serverEmojis: [] })

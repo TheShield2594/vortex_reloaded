@@ -13,6 +13,12 @@ const VALID_REASONS = REPORT_REASON_VALUES
  *   reason: "spam" | "harassment" | "inappropriate_content" | "other"
  *   description?: string (max 1000 chars)
  * }
+ *
+ * Intentionally dormant: no DM UI currently links to this route (decided in
+ * issue #16 rather than left as an accident). It survived the server/App
+ * Store strip and was adapted to validate against DMs, so the backend is
+ * ready — wire up a "Report" action (e.g. a message context-menu entry in
+ * dm-channel-area.tsx) when that UI is prioritized.
  */
 export async function POST(req: NextRequest) {
   try {

@@ -7,7 +7,6 @@ import { AppProvider } from "@/components/layout/app-provider"
 import { ChannelsShell } from "@/components/layout/channels-shell"
 import { MobileBottomTabBar } from "@/components/layout/mobile-bottom-tab-bar"
 import { OnboardingGate } from "@/components/onboarding/onboarding-gate"
-import type { ServerRow } from "@/types/database"
 import { perfTimer } from "@/lib/perf"
 
 /** Skeleton shown while the channels layout streams server data. */
@@ -33,7 +32,7 @@ function ChannelsLayoutSkeleton(): React.ReactElement {
   )
 }
 
-/** Async inner component that fetches auth + profile + servers then renders the shell. */
+/** Async inner component that fetches auth + profile then renders the shell. */
 async function ChannelsLayoutContent({ children }: { children: React.ReactNode }): Promise<React.ReactElement> {
   const rootTimer = perfTimer("channels-layout total")
   try {
@@ -48,43 +47,25 @@ async function ChannelsLayoutContent({ children }: { children: React.ReactNode }
       redirect("/login")
     }
 
-    // Fetch user profile and server memberships in parallel
-    const profileTimer = perfTimer("channels-layout profile+memberships")
-    const [{ data: profile, error: profileError }, { data: serverMembers, error: serverMembersError }] = await Promise.all([
-      supabase.from("users").select("*").eq("id", user.id).single(),
-      supabase.from("server_members").select("server_id, joined_at").eq("user_id", user.id).order("joined_at", { ascending: true }),
-    ])
+    // Fetch user profile
+    const profileTimer = perfTimer("channels-layout profile")
+    const { data: profile, error: profileError } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single()
     profileTimer.end()
 
     if (profileError || !profile) redirect("/login")
 
-    if (serverMembersError) {
-      console.error("Failed to load server memberships:", serverMembersError.message)
-    }
-
-    const membershipIds = (serverMembers ?? []).map((membership) => membership.server_id)
-    const serverListTimer = perfTimer("channels-layout server-list")
-    const { data: serverRows, error: serversError } = membershipIds.length
-      ? await supabase.from("servers").select("*").in("id", membershipIds)
-      : { data: [], error: null }
-    serverListTimer.end()
-
-    if (serversError) {
-      console.error("Failed to load servers:", serversError.message)
-    }
-
-    const serversById = new Map((serverRows ?? []).map((server) => [server.id, server]))
-    const servers = membershipIds
-      .map((serverId) => serversById.get(serverId))
-      .filter((server): server is ServerRow => Boolean(server))
-
     rootTimer.end()
 
-    // Show onboarding for first-time users (no servers, haven't completed onboarding)
-    const needsOnboarding = servers.length === 0 && !profile.onboarding_completed_at
+    // Show onboarding for first-time users (haven't completed onboarding). There is no
+    // UI path left that can populate server membership, so this no longer needs to check it.
+    const needsOnboarding = !profile.onboarding_completed_at
 
     return (
-      <AppProvider user={profile} servers={servers}>
+      <AppProvider user={profile}>
         {needsOnboarding ? (
           <OnboardingGate username={profile.display_name || profile.username} userId={profile.id} />
         ) : (

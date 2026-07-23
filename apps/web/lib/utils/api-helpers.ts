@@ -3,14 +3,13 @@
  * boilerplate duplicated across 100+ route handlers.
  *
  * Usage:
- *   import { requireAuth, parseJsonBody, apiError, dbError, insertAuditLog } from "@/lib/utils/api-helpers"
+ *   import { requireAuth, parseJsonBody, apiError, dbError } from "@/lib/utils/api-helpers"
  */
 import { headers as nextHeaders } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { auth } from "@/lib/auth/better-auth"
 import { createLogger } from "@/lib/logger"
-import type { Json } from "@/types/database"
 
 const log = createLogger("api-helpers")
 
@@ -196,50 +195,4 @@ export async function checkRateLimit(
     )
   }
   return null
-}
-
-// ---------------------------------------------------------------------------
-// Audit logging
-// ---------------------------------------------------------------------------
-
-interface AuditLogEntry {
-  server_id: string
-  actor_id: string
-  action: string
-  target_id?: string | null
-  target_type?: string | null
-  changes?: Record<string, Json | undefined> | null
-}
-
-/**
- * Insert an audit log row using the provided Supabase client.
- *
- * Logs errors server-side rather than silently swallowing them.
- * Returns the Supabase result so callers can optionally handle errors.
- */
-export async function insertAuditLog(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  entry: AuditLogEntry
-): Promise<{ error: { message: string; code?: string } | null }> {
-  const { error } = await supabase.from("audit_logs").insert({
-    server_id: entry.server_id,
-    actor_id: entry.actor_id,
-    action: entry.action,
-    target_id: entry.target_id ?? null,
-    target_type: entry.target_type ?? null,
-    changes: (entry.changes as Json) ?? null,
-  })
-
-  if (error) {
-    log.error({
-      action: entry.action,
-      server_id: entry.server_id,
-      actor_id: entry.actor_id,
-      target_id: entry.target_id ?? null,
-      db_error: error.message,
-      db_code: error.code,
-    }, "Audit log insert failed")
-  }
-
-  return { error: error ? { message: error.message, code: error.code } : null }
 }

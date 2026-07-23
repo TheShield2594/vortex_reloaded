@@ -1,12 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { Bell, BellOff, Volume2, VolumeX, Moon, Loader2, Send, Monitor, Smartphone, Eye, EyeOff, Hash, AtSign, ChevronDown } from "lucide-react"
+import { Bell, BellOff, Volume2, VolumeX, Moon, Loader2, Send, Monitor, Smartphone, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { useAppStore } from "@/lib/stores/app-store"
-import { useShallow } from "zustand/react/shallow"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import type { NotificationMode } from "@/lib/notification-resolver"
 
 function DesktopNotificationSection(): React.ReactNode {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default")
@@ -143,12 +139,6 @@ const DEFAULT_SETTINGS: NotificationSettingsRow = {
   show_unread_badge: true,
 }
 
-const MODE_OPTIONS: { mode: NotificationMode; label: string; icon: React.ReactNode }[] = [
-  { mode: "all", label: "All Messages", icon: <Hash className="w-3.5 h-3.5" /> },
-  { mode: "mentions", label: "Only @Mentions", icon: <AtSign className="w-3.5 h-3.5" /> },
-  { mode: "muted", label: "Nothing", icon: <BellOff className="w-3.5 h-3.5" /> },
-]
-
 // localStorage key kept for sound_enabled cross-component sync
 const soundStorageKey = (userId: string) => `vortexchat:notif-sound:${userId}`
 // The hook reads from this key — keep it in sync when the user changes preferences
@@ -160,15 +150,6 @@ export function NotificationsSettingsPage({ userId }: Props) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testingSend, setTestingSend] = useState(false)
-  const [savingServerIds, setSavingServerIds] = useState<Record<string, boolean>>({})
-  const { servers, notificationModes, setNotificationMode, removeNotificationMode } = useAppStore(
-    useShallow((s) => ({
-      servers: s.servers,
-      notificationModes: s.notificationModes,
-      setNotificationMode: s.setNotificationMode,
-      removeNotificationMode: s.removeNotificationMode,
-    }))
-  )
 
   useEffect(() => {
     fetch("/api/user/notification-preferences")
@@ -351,87 +332,6 @@ export function NotificationsSettingsPage({ userId }: Props) {
           )
         })}
       </section>
-
-      {/* ── Server Notification Overrides ────────── */}
-      {servers.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
-            Server Notification Overrides
-          </h2>
-          <p className="text-xs mb-2" style={{ color: "var(--theme-text-muted)" }}>
-            Customize notification behavior for each server. Servers not listed use your default settings.
-          </p>
-          <div className="space-y-1">
-            {servers.map((server) => {
-              const currentMode: NotificationMode = (notificationModes[server.id] as NotificationMode) ?? "all"
-              const initials = server.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase()
-              return (
-                <div
-                  key={server.id}
-                  className="flex items-center gap-3 px-4 py-2.5 rounded-lg"
-                  style={{ background: "var(--theme-bg-secondary)", border: "1px solid var(--theme-bg-tertiary)" }}
-                >
-                  <Avatar className="w-8 h-8 rounded-xl flex-shrink-0">
-                    {server.icon_url && <AvatarImage src={server.icon_url} />}
-                    <AvatarFallback className="rounded-xl text-[10px] font-bold" style={{ background: "var(--theme-accent)", color: "white" }}>
-                      {initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium flex-1 truncate" style={{ color: "var(--theme-text-primary)" }}>
-                    {server.name}
-                  </span>
-                  <div className="relative flex-shrink-0">
-                    <select
-                      value={currentMode}
-                      disabled={Boolean(savingServerIds[server.id])}
-                      onChange={async (e) => {
-                        const newMode = e.target.value as NotificationMode
-                        const previousMode = currentMode
-                        setSavingServerIds((prev) => ({ ...prev, [server.id]: true }))
-                        if (newMode === "all") {
-                          removeNotificationMode(server.id)
-                        } else {
-                          setNotificationMode(server.id, newMode)
-                        }
-                        try {
-                          const res = await fetch("/api/notification-settings", {
-                            method: "PUT",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ serverId: server.id, mode: newMode }),
-                          })
-                          if (!res.ok) throw new Error("Failed to save notification setting")
-                        } catch {
-                          // Rollback optimistic update
-                          if (previousMode === "all") {
-                            removeNotificationMode(server.id)
-                          } else {
-                            setNotificationMode(server.id, previousMode)
-                          }
-                          toast({ title: "Failed to update server notification", variant: "destructive" })
-                        } finally {
-                          setSavingServerIds((prev) => { const next = { ...prev }; delete next[server.id]; return next })
-                        }
-                      }}
-                      className="appearance-none pl-3 pr-8 py-1.5 rounded-md text-xs font-medium cursor-pointer focus-ring"
-                      style={{
-                        background: currentMode === "muted" ? "rgba(242,63,67,0.1)" : currentMode === "mentions" ? "rgba(88,101,242,0.1)" : "var(--theme-bg-tertiary)",
-                        color: currentMode === "muted" ? "var(--theme-danger)" : currentMode === "mentions" ? "var(--theme-accent)" : "var(--theme-text-secondary)",
-                        border: "1px solid var(--theme-bg-tertiary)",
-                      }}
-                      aria-label={`Notification mode for ${server.name}`}
-                    >
-                      {MODE_OPTIONS.map((opt) => (
-                        <option key={opt.mode} value={opt.mode}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: "var(--theme-text-muted)" }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )}
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
@@ -716,10 +616,7 @@ export function NotificationsSettingsPage({ userId }: Props) {
       </section>
 
       {/* ── Save ── */}
-      <div className="flex items-center justify-between pt-2 pb-4">
-        <p className="text-xs" style={{ color: "var(--theme-text-muted)" }}>
-          Per-server and per-channel notification overrides can be set by right-clicking on servers and channels.
-        </p>
+      <div className="flex items-center justify-end pt-2 pb-4">
         <button
           type="button"
           onClick={async () => {
@@ -727,7 +624,7 @@ export function NotificationsSettingsPage({ userId }: Props) {
             toast({ title: "Notification preferences saved!" })
           }}
           disabled={saving}
-          className="flex items-center gap-2 px-5 py-2 rounded-md font-semibold text-sm transition-all hover:brightness-110 disabled:opacity-60 shrink-0 ml-4"
+          className="flex items-center gap-2 px-5 py-2 rounded-md font-semibold text-sm transition-all hover:brightness-110 disabled:opacity-60 shrink-0"
           style={{ background: "var(--theme-accent)", color: "white" }}
         >
           {saving && <Loader2 className="w-4 h-4 animate-spin" />}

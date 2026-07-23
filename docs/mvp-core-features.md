@@ -397,7 +397,8 @@
 | Giveaway relative timestamp handles future dates (#680) | Done | `TimestampDisplay` `:R` format now renders "in X hours/minutes/days" for future timestamps; proper singular/plural |
 | LinkEmbed oembed client-side cache (#705) | Done | Module-level `Map<url, OGData>` cache + in-flight dedup in `link-embed.tsx`; eliminates redundant `/api/oembed` fetches when same URL mounts multiple times |
 | Replace `select('*')` over-fetching in API routes (#704) | Done | Explicit column projections in `notification-settings`, `dm/route`, `voice/sessions/route`, `channels/[channelId]/route`; layout queries kept as `select('*')` since results are passed as full Row types to downstream components |
+| Server-shaped dead code cleanup (#16) | Done | Removed unused server-oriented `app-store.ts` fields (`servers`, `activeServerId`, `serverRoles`, `personas`, `channels`, `members`, `voice*`, `serverHasUnread`) and their now-dead consumers; dropped the `server_members`/`servers` query in `channels/layout.tsx` (onboarding gate now just checks `onboarding_completed_at`). **Decision on `audit_logs`:** `insertAuditLog()` had zero callers (its only callers were server-scoped moderation/role/emoji actions removed in the strip) and its schema is server-scoped, which no longer fits the DM-only app — removed the dead helper; the `audit_logs` table itself is left for the SQLite schema migration to drop, so it isn't silently dropped as a side effect. **Decision on `api/reports`:** left intentionally dormant — the route works for DMs but no UI links to it; a "Report" entry point (e.g. a DM message context-menu action) can be added later without backend changes. |
 
 ---
 
-*Last updated: 2026-04-04 (sprint 4)*
+*Last updated: 2026-07-23*
