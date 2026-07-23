@@ -299,11 +299,17 @@ export const olmDeviceIdentities = sqliteTable(
 
 /**
  * One-time prekeys for X3DH-style Olm session establishment. Each row is
- * claimed (and deleted) at most once via
- * apps/web/app/api/dm/olm/keys/claim/route.ts's atomic
- * select-then-delete, so two initiators can never race onto the same OTK —
- * reusing an Olm one-time key breaks the forward-secrecy guarantee it exists
- * to provide.
+ * claimed at most once via apps/web/app/api/dm/olm/keys/claim/route.ts's
+ * atomic select-then-mark-consumed — reusing an Olm one-time key breaks the
+ * forward-secrecy guarantee it exists to provide.
+ *
+ * Claiming sets `consumedAt` rather than deleting the row. A hard delete
+ * would free up the (userId, deviceId, keyId) primary key slot, and
+ * apps/web/app/api/dm/olm/keys/device/route.ts's publish endpoint inserts
+ * with `onConflictDoNothing()` — so a replayed/duplicate publish request
+ * carrying an already-claimed keyId would silently resurrect it as
+ * claimable again. Leaving a consumed tombstone in place keeps that primary
+ * key permanently occupied, so the conflict (and no-op) always wins instead.
  */
 export const olmOneTimeKeys = sqliteTable(
   "olm_one_time_keys",
@@ -315,11 +321,12 @@ export const olmOneTimeKeys = sqliteTable(
     keyId: text("key_id").notNull(),
     publicKey: text("public_key").notNull(),
     signature: text("signature").notNull(),
+    consumedAt: text("consumed_at"),
     createdAt: createdAt(),
   },
   (table) => [
     primaryKey({ columns: [table.userId, table.deviceId, table.keyId] }),
-    index("olm_one_time_keys_claim_idx").on(table.userId, table.deviceId, table.createdAt),
+    index("olm_one_time_keys_claim_idx").on(table.userId, table.deviceId, table.consumedAt, table.createdAt),
   ]
 )
 

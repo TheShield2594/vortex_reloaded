@@ -276,11 +276,21 @@ export async function encryptMessage(
  * ciphertext is a PreKey message (type 0), establishes a new inbound
  * session and consumes the one-time key it used. Otherwise decrypts against
  * the existing cached session.
+ *
+ * `expectedIdentityKey`, when given, is the remote device's curve25519
+ * identity key resolved from a pin or a directory lookup (see
+ * olm-protocol-store.ts's decryptFrom) — establishing a new session then
+ * uses `create_inbound_from`, which THROWS if the message wasn't actually
+ * sent by that identity, instead of the unauthenticated `create_inbound`.
+ * Without this, a malicious/compromised server could inject a phantom
+ * device under a real userId and have the client silently treat it as
+ * that user's real device — see issue #46's Strix HIGH finding.
  */
 export async function decryptMessage(
   account: SerializedAccount,
   session: SerializedSession | null,
-  ciphertext: OlmCiphertext
+  ciphertext: OlmCiphertext,
+  expectedIdentityKey?: string
 ): Promise<{ account: SerializedAccount; session: SerializedSession; plaintext: string }> {
   const Olm = await loadOlm()
   const acc = new Olm.Account()
@@ -290,16 +300,23 @@ export async function decryptMessage(
 
     if (session) {
       s.unpickle(OLM_PICKLE_KEY, session.pickle)
-      if (ciphertext.type === 0 && !s.matches_inbound(ciphertext.body)) {
+      const matchesExisting = ciphertext.type !== 0 || (expectedIdentityKey
+        ? s.matches_inbound_from(expectedIdentityKey, ciphertext.body)
+        : s.matches_inbound(ciphertext.body))
+      if (!matchesExisting) {
         // A PreKey message that doesn't match our cached session (the remote
         // started a fresh session, e.g. after losing local state) — fall
-        // through to establishing a new inbound session below. `s`/`acc`
-        // (this call's, now-unused) are freed by the `finally` below exactly
-        // once; the recursive call allocates and frees its own pair.
-        return decryptMessage(account, null, ciphertext)
+        // through to establishing a new inbound session below, still under
+        // the same expectedIdentityKey check. `s`/`acc` (this call's,
+        // now-unused) are freed by the `finally` below exactly once; the
+        // recursive call allocates and frees its own pair.
+        return decryptMessage(account, null, ciphertext, expectedIdentityKey)
       }
     } else if (ciphertext.type !== 0) {
       throw new Error("No session for non-PreKey message")
+    } else if (expectedIdentityKey) {
+      s.create_inbound_from(acc, expectedIdentityKey, ciphertext.body)
+      acc.remove_one_time_keys(s)
     } else {
       s.create_inbound(acc, ciphertext.body)
       acc.remove_one_time_keys(s)

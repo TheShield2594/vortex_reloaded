@@ -55,7 +55,6 @@ CREATE TABLE `__new_two_factors` (
 INSERT INTO `__new_two_factors`("id", "user_id", "secret", "backup_codes", "verified", "failed_verification_count", "locked_until") SELECT "id", "user_id", "secret", "backup_codes", "verified", "failed_verification_count", "locked_until" FROM `two_factors`;--> statement-breakpoint
 DROP TABLE `two_factors`;--> statement-breakpoint
 ALTER TABLE `__new_two_factors` RENAME TO `two_factors`;--> statement-breakpoint
-PRAGMA foreign_keys=ON;--> statement-breakpoint
 CREATE TABLE `__new_dm_channels` (
 	`id` text PRIMARY KEY NOT NULL,
 	`name` text,
@@ -81,4 +80,5 @@ CREATE TABLE `__new_dm_channels` (
 INSERT INTO `__new_dm_channels`("id", "name", "icon_url", "owner_id", "is_group", "is_encrypted", "encryption_key_version", "encryption_membership_epoch", "encryption_scheme", "theme_preset", "created_at", "updated_at") SELECT "id", "name", "icon_url", "owner_id", "is_group", "is_encrypted", "encryption_key_version", "encryption_membership_epoch", 'legacy-ecdh', "theme_preset", "created_at", "updated_at" FROM `dm_channels`;--> statement-breakpoint
 DROP TABLE `dm_channels`;--> statement-breakpoint
 ALTER TABLE `__new_dm_channels` RENAME TO `dm_channels`;--> statement-breakpoint
-CREATE INDEX `dm_channels_updated_idx` ON `dm_channels` (`updated_at`);
+CREATE INDEX `dm_channels_updated_idx` ON `dm_channels` (`updated_at`);--> statement-breakpoint
+PRAGMA foreign_keys=ON;

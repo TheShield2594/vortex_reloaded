@@ -1,6 +1,6 @@
 import { cache } from "react"
 import bcrypt from "bcryptjs"
-import { and, desc, eq, gt, lt, sql } from "drizzle-orm"
+import { and, desc, eq, gt, lt, or, sql } from "drizzle-orm"
 import { betterAuth, APIError } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { createAuthMiddleware } from "better-auth/api"
@@ -88,6 +88,25 @@ async function isFirstEverAccount(): Promise<boolean> {
   return (row?.count ?? 0) === 0
 }
 
+/**
+ * A best-effort pre-check ahead of consumeInviteCode below: without it, a
+ * signup doomed by Better Auth's own email/username unique constraint still
+ * burns a single-use invite code before that constraint ever gets a chance
+ * to reject it. Not atomic with the insert that follows — two truly
+ * simultaneous signups for the same email could both pass this check — but
+ * that race is no worse than the pre-existing isFirstEverAccount bootstrap
+ * escape hatch above, and the DB unique constraint still has final say over
+ * whether the account actually gets created either way.
+ */
+async function isEmailOrUsernameTaken(email: string, username: string): Promise<boolean> {
+  const [existing] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(or(eq(users.email, email), eq(users.username, username)))
+    .limit(1)
+  return !!existing
+}
+
 /** Port of the old `is_login_locked_out` Postgres RPC — 5 failed attempts / 15 min, per email. */
 async function isLoginLockedOut(email: string): Promise<boolean> {
   const cutoff = new Date(Date.now() - LOGIN_LOCKOUT_WINDOW_MS).toISOString()
@@ -121,7 +140,7 @@ async function clearLoginAttempts(email: string): Promise<void> {
  * not a Next.js route handler, but `ctx.request` is still a standard
  * `Request` with the same forwarded-for headers.
  */
-function clientIpFromRequest(request: Request | undefined): string | null {
+export function clientIpFromRequest(request: Request | undefined): string | null {
   if (!request) return null
   return (
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -400,14 +419,24 @@ export const auth = betterAuth({
           // creates an `accounts` row, not a `users` row (see
           // databaseHooks.account.create.after below).
           if (!(await isFirstEverAccount())) {
-            const body = (context?.body ?? {}) as Record<string, unknown>
-            const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode : ""
-            const consumed = await consumeInviteCode(db, inviteCode)
-            if (!consumed) {
-              throw new APIError("BAD_REQUEST", {
-                code: "invalid_invite_code",
-                message: "A valid invite code is required to create an account.",
-              })
+            const email = typeof user.email === "string" ? user.email.toLowerCase() : ""
+            const username = typeof user.name === "string" ? user.name : ""
+            // Skip straight to Better Auth's own unique-constraint handling
+            // (further down the pipeline, past this hook) for a signup that
+            // was never going to succeed anyway — otherwise consumeInviteCode
+            // below burns a single-use invite on a doomed duplicate signup.
+            const alreadyExists = email && username && (await isEmailOrUsernameTaken(email, username))
+
+            if (!alreadyExists) {
+              const body = (context?.body ?? {}) as Record<string, unknown>
+              const inviteCode = typeof body.inviteCode === "string" ? body.inviteCode : ""
+              const consumed = await consumeInviteCode(db, inviteCode)
+              if (!consumed) {
+                throw new APIError("BAD_REQUEST", {
+                  code: "invalid_invite_code",
+                  message: "A valid invite code is required to create an account.",
+                })
+              }
             }
           }
 

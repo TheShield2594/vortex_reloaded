@@ -15,6 +15,13 @@
       "when": 1784842608862,
       "tag": "0001_strong_slayback",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784845417170,
+      "tag": "0002_harsh_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }

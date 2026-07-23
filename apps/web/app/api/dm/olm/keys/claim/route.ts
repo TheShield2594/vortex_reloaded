@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { and, asc, eq } from "drizzle-orm"
+import { and, asc, eq, isNull } from "drizzle-orm"
 import { createDb, olmDeviceIdentities, olmOneTimeKeys } from "@vortex/db"
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { createLogger } from "@/lib/logger"
@@ -59,26 +59,34 @@ export async function POST(req: NextRequest) {
     let claimed: { keyId: string; publicKey: string; signature: string; isFallback: boolean }
     try {
       // better-sqlite3's transaction() is synchronous-only (see issue #4's
-      // spike) — select-then-delete inside one transaction so two
+      // spike) — select-then-mark-consumed inside one transaction so two
       // simultaneous claimers can never walk away with the same one-time
       // key (reusing an Olm one-time key breaks the forward secrecy it
-      // exists to provide).
+      // exists to provide). Consumed rows are kept (not deleted) — see
+      // olmOneTimeKeys's schema comment for why a hard delete here would
+      // reopen a replay hole in the publish endpoint.
       claimed = db.transaction((tx) => {
         const otk = tx
           .select({ keyId: olmOneTimeKeys.keyId, publicKey: olmOneTimeKeys.publicKey, signature: olmOneTimeKeys.signature })
           .from(olmOneTimeKeys)
-          .where(and(eq(olmOneTimeKeys.userId, targetUserId), eq(olmOneTimeKeys.deviceId, targetDeviceId)))
+          .where(and(
+            eq(olmOneTimeKeys.userId, targetUserId),
+            eq(olmOneTimeKeys.deviceId, targetDeviceId),
+            isNull(olmOneTimeKeys.consumedAt)
+          ))
           .orderBy(asc(olmOneTimeKeys.createdAt))
           .limit(1)
           .get()
 
         if (otk) {
-          tx.delete(olmOneTimeKeys)
+          tx.update(olmOneTimeKeys)
+            .set({ consumedAt: new Date().toISOString() })
             .where(
               and(
                 eq(olmOneTimeKeys.userId, targetUserId),
                 eq(olmOneTimeKeys.deviceId, targetDeviceId),
-                eq(olmOneTimeKeys.keyId, otk.keyId)
+                eq(olmOneTimeKeys.keyId, otk.keyId),
+                isNull(olmOneTimeKeys.consumedAt)
               )
             )
             .run()

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { and, eq, sql } from "drizzle-orm"
+import { and, eq, isNull, sql } from "drizzle-orm"
 import { createDb, olmDeviceIdentities, olmOneTimeKeys } from "@vortex/db"
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { createLogger } from "@/lib/logger"
@@ -131,20 +131,24 @@ export async function POST(req: NextRequest) {
             .run()
         }
 
-        // Prune down to MAX_STORED_ONE_TIME_KEYS per device, oldest first —
-        // caps storage if a client re-uploads without the server ever
-        // claiming keys (e.g. a low-traffic device).
+        // Prune down to MAX_STORED_ONE_TIME_KEYS *unclaimed* keys per
+        // device, oldest first — caps storage if a client re-uploads
+        // without the server ever claiming keys (e.g. a low-traffic
+        // device). Only ever targets unconsumed rows: a claimed key's row
+        // is a permanent tombstone (see olmOneTimeKeys's schema comment) —
+        // deleting it would free its (userId, deviceId, keyId) slot back up
+        // for a replayed publish request to resurrect as claimable again.
         const excess = tx
           .select({ count: sql<number>`count(*)` })
           .from(olmOneTimeKeys)
-          .where(and(eq(olmOneTimeKeys.userId, user.id), eq(olmOneTimeKeys.deviceId, deviceId)))
+          .where(and(eq(olmOneTimeKeys.userId, user.id), eq(olmOneTimeKeys.deviceId, deviceId), isNull(olmOneTimeKeys.consumedAt)))
           .get()
         const overflow = (excess?.count ?? 0) - MAX_STORED_ONE_TIME_KEYS
         if (overflow > 0) {
           const staleIds = tx
             .select({ keyId: olmOneTimeKeys.keyId })
             .from(olmOneTimeKeys)
-            .where(and(eq(olmOneTimeKeys.userId, user.id), eq(olmOneTimeKeys.deviceId, deviceId)))
+            .where(and(eq(olmOneTimeKeys.userId, user.id), eq(olmOneTimeKeys.deviceId, deviceId), isNull(olmOneTimeKeys.consumedAt)))
             .orderBy(olmOneTimeKeys.createdAt)
             .limit(overflow)
             .all()
@@ -154,7 +158,8 @@ export async function POST(req: NextRequest) {
                 and(
                   eq(olmOneTimeKeys.userId, user.id),
                   eq(olmOneTimeKeys.deviceId, deviceId),
-                  eq(olmOneTimeKeys.keyId, row.keyId)
+                  eq(olmOneTimeKeys.keyId, row.keyId),
+                  isNull(olmOneTimeKeys.consumedAt)
                 )
               )
               .run()

@@ -38,6 +38,8 @@ import {
   encryptTo as olmEncryptTo,
   decryptFrom as olmDecryptFrom,
   hasSessionWith,
+  saveOwnPlaintext,
+  loadOwnPlaintext,
 } from "@/lib/olm-protocol-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useLocalSearch } from "@/hooks/use-local-search"
@@ -883,13 +885,38 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
 
         const mine = envelope.ciphertexts[`${currentUserId}:${identity.deviceId}`]
         if (!mine || !isValidOlmCiphertext(mine)) {
-          next[msg.id] = { text: "Not available on this device", failed: true }
+          // Our own sent messages never carry a ciphertext for our own
+          // device (see encryptOlmText) — recover the plaintext from the
+          // local cache saveOwnPlaintext wrote when we sent it, instead of
+          // reporting it as undecryptable.
+          const ownPlaintext = msg.sender_id === currentUserId ? await loadOwnPlaintext(msg.id) : null
+          next[msg.id] = ownPlaintext !== null
+            ? { text: ownPlaintext, failed: false }
+            : { text: "Not available on this device", failed: true }
           changed = true
           continue
         }
 
         try {
-          next[msg.id] = { text: await olmDecryptFrom(msg.sender_id, envelope.senderDeviceId, mine), failed: false }
+          const senderTarget = { userId: msg.sender_id, deviceId: envelope.senderDeviceId }
+          let identityHint: { curve25519IdentityKey: string; ed25519IdentityKey: string } | undefined
+          if (!(await hasSessionWith(senderTarget))) {
+            // Establishing a session with this sender device for the first
+            // time — resolve its claimed identity from the directory so
+            // it's pinned/verified the same way an outbound contact would
+            // be (see olmDecryptFrom's create_inbound_from check), instead
+            // of blindly trusting whatever identity the PreKey message
+            // itself embeds.
+            const dirRes = await fetch(`/api/dm/olm/keys/devices/${msg.sender_id}`)
+            if (dirRes.ok) {
+              const dir = await dirRes.json()
+              const entry = (dir.devices ?? []).find((d: { device_id: string }) => d.device_id === envelope.senderDeviceId)
+              if (entry) {
+                identityHint = { curve25519IdentityKey: entry.curve25519_identity_key, ed25519IdentityKey: entry.ed25519_identity_key }
+              }
+            }
+          }
+          next[msg.id] = { text: await olmDecryptFrom(msg.sender_id, envelope.senderDeviceId, mine, identityHint), failed: false }
         } catch {
           next[msg.id] = { text: "Unable to decrypt this message", failed: true }
         }
@@ -1134,11 +1161,15 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     // envelope carries no ciphertext entry for the sending device itself
     // (see encryptOlmText) — seed the local decrypted-content cache
     // directly with the plaintext we already have in hand instead of
-    // routing it through the decrypt effect.
+    // routing it through the decrypt effect. Also persisted to IndexedDB
+    // (saveOwnPlaintext) since decryptedContent is in-memory only and would
+    // otherwise be unrecoverable after a reload (see the Olm decrypt effect,
+    // which falls back to loadOwnPlaintext for our own messages).
     const seedOwnPlaintext = (id: string, plaintext: string) => {
       if (channel?.is_encrypted && channel.encryption_scheme === "olm") {
         decryptedRef.current = { ...decryptedRef.current, [id]: { text: plaintext, failed: false } }
         setDecryptedContent(decryptedRef.current)
+        saveOwnPlaintext(id, plaintext).catch(() => {})
       }
     }
 

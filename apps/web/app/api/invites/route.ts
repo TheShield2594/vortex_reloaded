@@ -77,8 +77,9 @@ export async function POST(req: NextRequest) {
       } catch (err) {
         // Unique constraint collision on `code` — vanishingly unlikely
         // (8 chars from a 32-symbol alphabet) but retry rather than fail.
+        const code = err && typeof err === "object" && "code" in err ? (err as { code?: unknown }).code : undefined
         const message = err instanceof Error ? err.message : String(err)
-        if (!message.includes("UNIQUE") || attempt === CODE_GENERATION_RETRIES - 1) {
+        if (code !== "SQLITE_CONSTRAINT_UNIQUE" || attempt === CODE_GENERATION_RETRIES - 1) {
           log.error({ route: "/api/invites", action: "POST", userId: user.id, error: message }, "failed to create invite")
           return NextResponse.json({ error: "Failed to create invite" }, { status: 500 })
         }

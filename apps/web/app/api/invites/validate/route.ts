@@ -2,18 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { createDb } from "@vortex/db"
 import { checkInviteCode } from "@/lib/auth/invites"
 import { checkRateLimit } from "@/lib/utils/api-helpers"
+import { clientIpFromRequest } from "@/lib/auth/better-auth"
 import { createLogger } from "@/lib/logger"
 
 const log = createLogger("api/invites/validate")
 const db = createDb()
-
-function clientIp(req: NextRequest): string {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    "unknown"
-  )
-}
 
 // GET /api/invites/validate?code=XXX — public pre-check for the register
 // page (no auth: prospective users don't have an account yet). This is
@@ -25,7 +18,7 @@ export async function GET(req: NextRequest) {
     // IP-keyed since the caller isn't authenticated — codes have ~40 bits of
     // entropy, but rate limiting still meaningfully raises the cost of
     // enumeration attempts against it.
-    const limited = await checkRateLimit(clientIp(req), "invites:validate", { limit: 20, windowMs: 60_000 })
+    const limited = await checkRateLimit(clientIpFromRequest(req) ?? "unknown", "invites:validate", { limit: 20, windowMs: 60_000 })
     if (limited) return limited
 
     const code = req.nextUrl.searchParams.get("code")

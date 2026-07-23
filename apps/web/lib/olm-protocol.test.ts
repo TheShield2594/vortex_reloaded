@@ -187,6 +187,30 @@ describe("olm-protocol: pairwise session (1:1)", () => {
     await expect(decryptMessage(bob.account, null, tampered)).rejects.toThrow()
   })
 
+  it("decryptMessage rejects a PreKey message whose sender doesn't match expectedIdentityKey (issue #46 Strix HIGH)", async () => {
+    const alice = await makeDevice("alice", "device-1")
+    const bob = await makeDevice("bob", "device-1")
+    const mallory = await makeDevice("mallory", "device-1")
+
+    // Mallory encrypts to Bob using one of Bob's real one-time keys — same
+    // as the outbound-session store test, this models a claim endpoint
+    // (honest or malicious) handing out Bob's published material to
+    // whoever calls it, which is expected: X3DH prekey bundles are public.
+    const { session: mallorySession } = await createOutboundSession(mallory.account, oneTimeKeyBundle(bob.publish, 0))
+    const enc = await encryptMessage(mallorySession, "trust me, it's alice")
+
+    // Bob expects this to come from Alice's identity (e.g. a prior pin) —
+    // decrypting against that expectation must reject Mallory's message.
+    await expect(
+      decryptMessage(bob.account, null, enc.ciphertext, alice.publish.curve25519IdentityKey)
+    ).rejects.toThrow()
+
+    // Without an expectation (today's pre-pinning behavior), it's accepted.
+    await expect(
+      decryptMessage(bob.account, null, enc.ciphertext)
+    ).resolves.toMatchObject({ plaintext: "trust me, it's alice" })
+  })
+
   it("a third party's account cannot decrypt a session it isn't part of", async () => {
     const alice = await makeDevice("alice", "device-1")
     const bob = await makeDevice("bob", "device-1")
