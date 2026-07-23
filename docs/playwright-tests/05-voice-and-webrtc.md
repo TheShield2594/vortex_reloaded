@@ -6,7 +6,7 @@
 - `voice-channel.tsx`, `voice-channel-lazy.tsx`, `compact-voice-bar.tsx`
 - `voice-grid-layout.tsx`, `voice-stats-overlay.tsx`, `voice-consent-modal.tsx`
 - `voice-transcript-viewer.tsx`, `voice-summary-card.tsx`, `voice-recap-card.tsx`
-- `vortex-recap-indicator.tsx`, `incoming-call-ui.tsx`
+- `vortex-recap-indicator.tsx`
 - `voice-settings-page.tsx` (settings)
 - Hooks: `use-push-to-talk.ts`
 - API: `/api/servers/[serverId]/channels/[channelId]/voice-token`
