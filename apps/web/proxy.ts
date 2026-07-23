@@ -1,10 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { auth } from "@/lib/auth/better-auth"
 
-// better-auth's SQLite adapter (better-sqlite3) is a native Node addon and
-// cannot run on the Edge runtime that Next.js middleware defaults to — opt
-// into the Node.js middleware runtime so `auth.api.getSession()` below can
-// actually open the database. (Stable since Next 15.2; this repo is on ^16.)
+// Next.js 16's proxy.ts (the middleware.ts successor) always runs on the
+// Node.js runtime unconditionally — unlike old Edge-only middleware.ts,
+// there's no separate runtime to opt into, and no `runtime` config key to
+// set (Next rejects it: "Route segment config is not allowed in Proxy
+// file"). That's what makes it safe for `auth.api.getSession()` below to
+// open Better Auth's SQLite database (better-sqlite3, a native Node addon)
+// directly from here.
 
 /**
  * Generate a per-request nonce and Content-Security-Policy header.
@@ -219,6 +222,14 @@ export async function proxy(request: NextRequest) {
     sessionResult = await auth.api.getSession({ headers: request.headers })
   } catch {
     // If the DB is unreachable or misconfigured, fail closed to login.
+    // API clients expect JSON, not an HTML redirect.
+    if (pathname.startsWith("/api/")) {
+      return applyCsp(
+        NextResponse.json({ error: "unauthorized" }, { status: 403 }),
+        nonce,
+        cspHeader,
+      )
+    }
     const loginUrl = new URL("/login", request.url)
     const dest = request.nextUrl.searchParams.get("redirect") || request.nextUrl.pathname
     loginUrl.searchParams.set("redirect", dest)
@@ -226,6 +237,13 @@ export async function proxy(request: NextRequest) {
   }
 
   if (!sessionResult?.user) {
+    if (pathname.startsWith("/api/")) {
+      return applyCsp(
+        NextResponse.json({ error: "unauthorized" }, { status: 403 }),
+        nonce,
+        cspHeader,
+      )
+    }
     const loginUrl = new URL("/login", request.url)
     loginUrl.searchParams.set("redirect", pathname)
     return applyCsp(NextResponse.redirect(loginUrl), nonce, cspHeader)
@@ -252,7 +270,4 @@ export const config = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|webmanifest|txt|xml)$).*)",
   ],
-  // Better Auth's SQLite adapter (better-sqlite3) is a native Node addon and
-  // cannot run on the Edge runtime Next.js middleware defaults to.
-  runtime: "nodejs",
 }
