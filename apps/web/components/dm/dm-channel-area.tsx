@@ -4,6 +4,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, laz
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { Room, RoomEvent, createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, type RemoteParticipant, type RemoteTrack } from "livekit-client"
+import { createEqTrackProcessor } from "@/lib/voice/eq-track-processor"
+import { useVoiceAudioStore } from "@/lib/stores/voice-audio-store"
 import { setActiveDmChannel } from "@/lib/notification-manager"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Phone, Video, Users, Paperclip, Pencil, Trash2, PhoneOff, Mic, MicOff, VideoOff, Search, Pin, Smile, Reply, X, ArrowLeft } from "lucide-react"
@@ -1913,16 +1916,12 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
 
 // ─── DM Call View ───────────────────────────────────────────────────────────
 //
-// Full-mesh WebRTC: one RTCPeerConnection per other participant, all
-// signaled over a single shared Supabase Realtime broadcast channel
-// (`dm-call:{channelId}`). For a 1:1 DM this is exactly one peer connection
-// (unchanged behavior); for a group DM it's one per other member.
-//
-// Every payload carries `from` (sender's user id) and, for offer/answer/
-// ice-candidate, `to` (the intended recipient's user id) so peers ignore
-// signals addressed to someone else. Initiator-per-pair is decided by
-// comparing user ids (higher id creates the offer) — the same rule the
-// original 1:1 implementation used, just applied per pair instead of once.
+// LiveKit SFU: a single Room.connect() to a room scoped to this DM channel
+// (`dm-{channelId}`), authorized by a short-lived AccessToken minted by
+// /api/dm/channels/[channelId]/call/token after a membership check. Remote
+// media arrives via TrackSubscribed/TrackUnsubscribed events, keyed by each
+// participant's identity (== their user id, per the token's `identity`
+// claim) — Room.remoteParticipants replaces the old per-peer Map.
 
 interface CallProps {
   channelId: string
@@ -1934,20 +1933,12 @@ interface CallProps {
   onHangup: () => void
 }
 
-interface CallSignalPayload {
-  type: "offer" | "answer" | "ice-candidate" | "hangup"
-  from: string
-  to?: string
-  offer?: RTCSessionDescriptionInit
-  answer?: RTCSessionDescriptionInit
-  candidate?: RTCIceCandidateInit
-}
-
 function DMCallView({ channelId, currentUserId, participants, displayName, withVideo, onHangup }: CallProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null)
-  const localStreamRef = useRef<MediaStream | null>(null)
-  const peersRef = useRef<Map<string, RTCPeerConnection>>(new Map())
-  const sigChannelRef = useRef<ReturnType<ReturnType<typeof createClientSupabaseClient>["channel"]> | null>(null)
+  const roomRef = useRef<Room | null>(null)
+  const localAudioTrackRef = useRef<LocalAudioTrack | null>(null)
+  const localVideoTrackRef = useRef<LocalVideoTrack | null>(null)
+  const intentionalDisconnectRef = useRef(false)
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
   const [status, setStatus] = useState<"connecting" | "connected" | "failed">("connecting")
   const [failReason, setFailReason] = useState("")
@@ -1975,128 +1966,81 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
   }
   const [muted, setMuted] = useState(false)
   const [videoOff, setVideoOff] = useState(false)
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
 
   useEffect(() => {
     let mounted = true
 
-    const sigChannel = supabase.channel(`dm-call:${channelId}`)
-    sigChannelRef.current = sigChannel
+    const room = new Room()
+    roomRef.current = room
+    intentionalDisconnectRef.current = false
 
-    function removePeer(peerId: string): void {
-      const pc = peersRef.current.get(peerId)
-      pc?.close()
-      peersRef.current.delete(peerId)
+    function addRemoteTrack(track: RemoteTrack, participant: RemoteParticipant): void {
       setRemoteStreams((prev) => {
-        if (!(peerId in prev)) return prev
-        const next = { ...prev }
-        delete next[peerId]
-        return next
+        const stream = prev[participant.identity] ?? new MediaStream()
+        stream.addTrack(track.mediaStreamTrack)
+        return { ...prev, [participant.identity]: stream }
+      })
+      setStatus("connected")
+    }
+
+    function removeRemoteTrack(track: RemoteTrack, participant: RemoteParticipant): void {
+      setRemoteStreams((prev) => {
+        const stream = prev[participant.identity]
+        if (!stream) return prev
+        stream.removeTrack(track.mediaStreamTrack)
+        return { ...prev, [participant.identity]: stream }
       })
     }
 
-    function getOrCreatePeer(peerId: string, iceServers: RTCIceServer[]): RTCPeerConnection {
-      const existing = peersRef.current.get(peerId)
-      if (existing) return existing
-
-      const pc = new RTCPeerConnection({ iceServers })
-      peersRef.current.set(peerId, pc)
-
-      pc.ontrack = (e) => {
-        const remoteStream = (e.streams && e.streams.length > 0)
-          ? e.streams[0]
-          : (() => { const s = new MediaStream(); s.addTrack(e.track); return s })()
-        setRemoteStreams((prev) => ({ ...prev, [peerId]: remoteStream }))
-        setStatus("connected")
-      }
-
-      pc.onicecandidate = ({ candidate }) => {
-        if (candidate) {
-          sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "ice-candidate", candidate, from: currentUserId, to: peerId } satisfies CallSignalPayload })
-        }
-      }
-
-      if (localStreamRef.current) {
-        const stream = localStreamRef.current
-        stream.getTracks().forEach((t) => pc.addTrack(t, stream))
-      }
-
-      // Initiator rule per pair: higher user id creates the offer.
-      if (currentUserId > peerId) {
-        pc.onnegotiationneeded = async () => {
-          try {
-            const offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "offer", offer, from: currentUserId, to: peerId } satisfies CallSignalPayload })
-          } catch (err) {
-            console.error("[dm-channel-area] negotiation failed:", { peerId }, err)
-          }
-        }
-      }
-
-      return pc
+    function removeParticipant(participant: RemoteParticipant): void {
+      setRemoteStreams((prev) => {
+        if (!(participant.identity in prev)) return prev
+        const next = { ...prev }
+        delete next[participant.identity]
+        return next
+      })
+      // 1:1 calls end entirely when the only other party leaves. Group
+      // calls keep going for whoever's left — the local user hangs up
+      // explicitly when they're done.
+      if (!isGroupCall && room.remoteParticipants.size === 0) onHangup()
     }
 
-    async function processSignal(payload: CallSignalPayload): Promise<void> {
-      const pc = peersRef.current.get(payload.from)
-      if (!pc) return
+    room
+      .on(RoomEvent.TrackSubscribed, (track, _pub, participant) => addRemoteTrack(track, participant))
+      .on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => removeRemoteTrack(track, participant))
+      .on(RoomEvent.ParticipantDisconnected, removeParticipant)
+      .on(RoomEvent.Disconnected, () => {
+        if (!mounted || intentionalDisconnectRef.current) return
+        setStatus((prev) => (prev === "connected" ? "failed" : prev))
+      })
+
+    async function connect(): Promise<void> {
       try {
-        if (payload.type === "offer" && payload.offer) {
-          await pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
-          const answer = await pc.createAnswer()
-          await pc.setLocalDescription(answer)
-          sigChannel.send({ type: "broadcast", event: "call-signal", payload: { type: "answer", answer, from: currentUserId, to: payload.from } satisfies CallSignalPayload })
-        } else if (payload.type === "answer" && payload.answer) {
-          await pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
-        } else if (payload.type === "ice-candidate" && payload.candidate && pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(payload.candidate))
-        }
-      } catch (err) {
-        console.error("WebRTC signal handling failed:", { from: payload.from, type: payload.type }, err)
-        setStatus("failed")
-      }
-    }
-
-    sigChannel.on("broadcast", { event: "call-signal" }, async ({ payload }: { payload: CallSignalPayload }) => {
-      if (payload.from === currentUserId) return
-
-      if (payload.type === "hangup") {
-        removePeer(payload.from)
-        // 1:1 calls end entirely when the only other party leaves. Group
-        // calls keep going for whoever's left — the local user hangs up
-        // explicitly when they're done.
-        if (!isGroupCall && peersRef.current.size === 0) onHangup()
-        return
-      }
-
-      // offer/answer/ice-candidate are addressed — ignore ones meant for someone else
-      if (payload.to && payload.to !== currentUserId) return
-      await processSignal(payload)
-    })
-
-    sigChannel.subscribe(async (subStatus) => {
-      if (subStatus !== "SUBSCRIBED") return
-      try {
-        const { fetchIceServers } = await import("@/lib/webrtc/ice-servers")
-        const iceServers = await fetchIceServers()
+        const res = await fetch(`/api/dm/channels/${channelId}/call/token`, { method: "POST" })
+        if (!res.ok) throw new Error(`token-fetch-failed:${res.status}`)
+        const { token, url } = (await res.json()) as { token: string; url: string }
         if (!mounted) return
 
-        // Request audio always; video only for video calls
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true },
-          video: withVideo,
-        })
-        if (!mounted) { stream.getTracks().forEach((t) => t.stop()); return }
-        localStreamRef.current = stream
-        if (withVideo && localVideoRef.current) localVideoRef.current.srcObject = stream
+        await room.connect(url, token)
+        if (!mounted) { await room.disconnect(); return }
 
-        // Connect to every other member of the conversation. Members who
-        // aren't actually on the call yet simply won't answer — their tile
-        // stays in "connecting" until they join or the call ends.
-        for (const participant of participants) {
-          getOrCreatePeer(participant.id, iceServers)
+        const audioTrack = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true })
+        if (!mounted) { audioTrack.stop(); return }
+        localAudioTrackRef.current = audioTrack
+        await room.localParticipant.publishTrack(audioTrack)
+
+        const audioSettings = useVoiceAudioStore.getState().getEffectiveSettings(currentUserId)
+        await audioTrack.setProcessor(createEqTrackProcessor(audioSettings))
+
+        if (withVideo) {
+          const videoTrack = await createLocalVideoTrack()
+          if (!mounted) { videoTrack.stop(); return }
+          localVideoTrackRef.current = videoTrack
+          await room.localParticipant.publishTrack(videoTrack)
+          if (localVideoRef.current) videoTrack.attach(localVideoRef.current)
         }
       } catch (err: unknown) {
+        if (!mounted) return
         setStatus("failed")
         const errName = err instanceof DOMException ? err.name : ""
         if (errName === "NotAllowedError") {
@@ -2104,18 +2048,21 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
         } else if (errName === "NotFoundError") {
           setFailReason("No " + (withVideo ? "camera or " : "") + "microphone found.")
         } else {
-          setFailReason("Could not access media devices.")
+          setFailReason("Could not connect to the call.")
         }
       }
-    })
+    }
+    connect()
 
     return () => {
       mounted = false
-      localStreamRef.current?.getTracks().forEach((t) => t.stop())
-      for (const pc of peersRef.current.values()) pc.close()
-      peersRef.current.clear()
-      supabase.removeChannel(sigChannel)
-      sigChannelRef.current = null
+      intentionalDisconnectRef.current = true
+      localAudioTrackRef.current?.stop()
+      localVideoTrackRef.current?.stop()
+      localAudioTrackRef.current = null
+      localVideoTrackRef.current = null
+      room.disconnect()
+      roomRef.current = null
     }
   // participants intentionally omitted — the member list is fixed for the lifetime of a call
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2127,24 +2074,21 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
     setMuted,
     setVideoOff,
     onToggleMute: (isMuted) => {
-      localStreamRef.current?.getAudioTracks().forEach((track) => {
-        track.enabled = isMuted
-      })
+      if (isMuted) localAudioTrackRef.current?.unmute()
+      else localAudioTrackRef.current?.mute()
     },
     onToggleVideo: (isVideoOff) => {
-      localStreamRef.current?.getVideoTracks().forEach((track) => {
-        track.enabled = isVideoOff
-      })
+      if (isVideoOff) localVideoTrackRef.current?.unmute()
+      else localVideoTrackRef.current?.mute()
     },
   })
 
   async function hangup() {
-    if (sigChannelRef.current) {
-      await sigChannelRef.current.send({ type: "broadcast", event: "call-signal", payload: { type: "hangup", from: currentUserId } satisfies CallSignalPayload })
-      supabase.removeChannel(sigChannelRef.current)
-      sigChannelRef.current = null
+    intentionalDisconnectRef.current = true
+    if (roomRef.current) {
+      await roomRef.current.disconnect()
+      roomRef.current = null
     }
-    for (const pc of peersRef.current.values()) pc.close()
     onHangup()
   }
 

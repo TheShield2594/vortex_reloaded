@@ -34,6 +34,7 @@ const OPTIONAL: EnvVar[] = [
   { name: "LIVEKIT_API_KEY", required: false, description: "LiveKit API key for voice channels" },
   { name: "LIVEKIT_API_SECRET", required: false, description: "LiveKit API secret for voice channels" },
   { name: "NEXT_PUBLIC_LIVEKIT_URL", required: false, description: "LiveKit server URL" },
+  { name: "LIVEKIT_API_URL", required: false, description: "LiveKit server-to-server host, for the DM call token route's defense-in-depth room creation" },
 
   { name: "NEXT_PUBLIC_KLIPY_API_KEY", required: false, description: "Klipy API key for GIF/sticker picker (primary provider)", alternativeName: "KLIPY_API_KEY" },
   { name: "NEXT_PUBLIC_GIPHY_API_KEY", required: false, description: "Giphy API key for GIF picker (fallback)", alternativeName: "GIPHY_API_KEY" },
