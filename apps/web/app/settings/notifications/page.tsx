@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { getAuthUser } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/better-auth"
 import { NotificationsSettingsPage } from "@/components/settings/notifications-settings-page"
 
 export const metadata = { title: "Notifications — VortexChat" }

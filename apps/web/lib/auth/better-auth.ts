@@ -1,3 +1,4 @@
+import { cache } from "react"
 import bcrypt from "bcryptjs"
 import { and, desc, eq, gt, lt } from "drizzle-orm"
 import { betterAuth, APIError } from "better-auth"
@@ -451,3 +452,6 @@ export async function getBetterAuthUser(): Promise<{
     return { data: { user: null }, error: { message: err instanceof Error ? err.message : "Auth check failed" } }
   }
 }
+
+/** Per-request cached auth check — deduplicates the session lookup across nested layouts/pages within a single render. */
+export const getAuthUser = cache(getBetterAuthUser)

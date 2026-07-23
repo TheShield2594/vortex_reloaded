@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { and, eq, isNull, lt, ne, or } from "drizzle-orm"
 import { createDb, users } from "@vortex/db"
-import { getAuthUser } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/better-auth"
 import {
   PRESENCE_HEARTBEAT_DEBOUNCE_MS,
   type UserStatus,

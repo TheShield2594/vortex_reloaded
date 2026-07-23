@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm"
 
 export const dynamic = "force-dynamic"
 import { createDb, users } from "@vortex/db"
-import { getAuthUser } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/better-auth"
 import { toSnakeCase } from "@/lib/utils/case"
 import type { UserRow } from "@/types/database"
 import { SettingsResponsiveContent } from "@/components/settings/settings-responsive-content"

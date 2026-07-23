@@ -1,10 +1,13 @@
 import { createReadStream } from "node:fs"
 import { Readable } from "node:stream"
 import { NextRequest, NextResponse } from "next/server"
+import { and, eq } from "drizzle-orm"
+import { createDb, dmAttachments, dmChannelMembers, directMessages } from "@vortex/db"
 import { requireAuth } from "@/lib/utils/api-helpers"
 import { maybeRenewExpiry } from "@vortex/shared"
-import { untypedFrom } from "@/lib/supabase/untyped-table"
 import { attachmentsDir, statUploadFile } from "@/lib/storage/local-storage"
+
+const db = createDb()
 
 /** Parsed byte range for a single-range `Range: bytes=...` request. */
 interface ByteRange {
@@ -57,71 +60,85 @@ export async function GET(
       return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
     }
 
-    const { supabase, user, error: authError } = await requireAuth()
+    const { user, error: authError } = await requireAuth()
     if (authError) return authError
     if (!user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    // dm_attachments table is not yet in generated Supabase types
-    const { data: attachment, error } = await untypedFrom(supabase, "dm_attachments")
-      .select("id, url, dm_id, filename, content_type, size, expires_at, purged_at")
-      .eq("id", attachmentId)
-      .maybeSingle() as { data: { id: string; url: string; dm_id: string; filename: string; content_type: string; size: number; expires_at: string | null; purged_at: string | null } | null; error: unknown }
-
-    if (error) {
+    let attachment: { id: string; url: string; dmId: string; filename: string; contentType: string; size: number; expiresAt: string | null; purgedAt: string | null } | undefined
+    try {
+      const rows = await db
+        .select({
+          id: dmAttachments.id,
+          url: dmAttachments.url,
+          dmId: dmAttachments.dmId,
+          filename: dmAttachments.filename,
+          contentType: dmAttachments.contentType,
+          size: dmAttachments.size,
+          expiresAt: dmAttachments.expiresAt,
+          purgedAt: dmAttachments.purgedAt,
+        })
+        .from(dmAttachments)
+        .where(eq(dmAttachments.id, attachmentId))
+        .limit(1)
+      attachment = rows[0]
+    } catch (error) {
       console.error("dm-attachments/download: fetch failed", { userId: user.id, attachmentId, error: String(error) })
       return NextResponse.json({ error: "Failed to fetch attachment" }, { status: 500 })
     }
     if (!attachment) return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
 
     // Block access to purged (expired + deleted from storage) attachments
-    if (attachment.purged_at) {
+    if (attachment.purgedAt) {
       return NextResponse.json({ error: "This file has expired and is no longer available" }, { status: 410 })
     }
 
     // Get the DM to find the channel
-    const { data: dm, error: dmError } = await supabase
-      .from("direct_messages")
-      .select("dm_channel_id")
-      .eq("id", attachment.dm_id)
-      .maybeSingle()
-
-    if (dmError) {
-      console.error("dm-attachments/download: DM lookup failed", { userId: user.id, attachmentId, error: dmError.message })
+    let dm: { dmChannelId: string | null } | undefined
+    try {
+      const rows = await db
+        .select({ dmChannelId: directMessages.dmChannelId })
+        .from(directMessages)
+        .where(eq(directMessages.id, attachment.dmId))
+        .limit(1)
+      dm = rows[0]
+    } catch (dmError) {
+      console.error("dm-attachments/download: DM lookup failed", { userId: user.id, attachmentId, error: dmError instanceof Error ? dmError.message : String(dmError) })
       return NextResponse.json({ error: "Failed to fetch message" }, { status: 500 })
     }
-    if (!dm?.dm_channel_id) return NextResponse.json({ error: "Message not found" }, { status: 404 })
+    if (!dm?.dmChannelId) return NextResponse.json({ error: "Message not found" }, { status: 404 })
 
     // Verify the user is a member of this DM channel
-    const { data: membership, error: membershipError } = await supabase
-      .from("dm_channel_members")
-      .select("user_id")
-      .eq("dm_channel_id", dm.dm_channel_id)
-      .eq("user_id", user.id)
-      .maybeSingle()
-
-    if (membershipError) {
-      console.error("dm-attachments/download: membership check failed", { userId: user.id, attachmentId, error: membershipError.message })
+    let membership: { userId: string } | undefined
+    try {
+      const rows = await db
+        .select({ userId: dmChannelMembers.userId })
+        .from(dmChannelMembers)
+        .where(and(eq(dmChannelMembers.dmChannelId, dm.dmChannelId), eq(dmChannelMembers.userId, user.id)))
+        .limit(1)
+      membership = rows[0]
+    } catch (membershipError) {
+      console.error("dm-attachments/download: membership check failed", { userId: user.id, attachmentId, error: membershipError instanceof Error ? membershipError.message : String(membershipError) })
       return NextResponse.json({ error: "Failed to verify membership" }, { status: 500 })
     }
     if (!membership) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
     // ── Decay renewal: extend expiry if accessed near deadline ──────────────
-    if (attachment.expires_at && attachment.size) {
+    if (attachment.expiresAt && attachment.size) {
       const now = new Date()
       const sizeMB = attachment.size / 1024 / 1024
       const renewed = maybeRenewExpiry({
-        currentExpiry: new Date(attachment.expires_at),
+        currentExpiry: new Date(attachment.expiresAt),
         now,
         sizeMB,
       })
-      const updatePayload: Record<string, string> = { last_accessed_at: now.toISOString() }
+      const updatePayload: { lastAccessedAt: string; expiresAt?: string } = { lastAccessedAt: now.toISOString() }
       if (renewed) {
-        updatePayload.expires_at = renewed.toISOString()
+        updatePayload.expiresAt = renewed.toISOString()
       }
       // Fire-and-forget update
-      ;untypedFrom(supabase, "dm_attachments")
-        .update(updatePayload)
-        .eq("id", attachment.id)
+      db.update(dmAttachments)
+        .set(updatePayload)
+        .where(eq(dmAttachments.id, attachment.id))
         .then(() => {}, (err: unknown) => {
           console.error("[dm-attachments/download] renewal update failed", { attachmentId: attachment.id, error: err })
         })
@@ -150,7 +167,7 @@ export async function GET(
     }
 
     const baseHeaders: Record<string, string> = {
-      "Content-Type": attachment.content_type || "application/octet-stream",
+      "Content-Type": attachment.contentType || "application/octet-stream",
       "Content-Disposition": `inline; filename="${encodeURIComponent(attachment.filename)}"`,
       "Cache-Control": "private, max-age=3600",
       "Accept-Ranges": "bytes",

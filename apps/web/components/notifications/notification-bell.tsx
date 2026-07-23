@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Bell, Check, CheckCheck, Hash, AtSign, UserPlus, Trash2, X } from "lucide-react"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences"
@@ -50,7 +49,6 @@ interface Props {
 }
 
 export function NotificationBell({ userId, variant = "icon" }: Props) {
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
   const gateway = useGatewayContext()
   const router = useRouter()
   const { playNotification } = useNotificationSound()
@@ -333,19 +331,13 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
         const params = new URLSearchParams()
 
         if (n.message_id) {
+          // `n.server_id`/`n.channel_id`/thread context pointed at the
+          // servers/channels/threads feature, which no longer exists (see
+          // packages/db/src/schema/notifications.ts) — nothing populates
+          // these fields anymore, so this branch is structurally dead, but
+          // left in place rather than deleted since `Notification`'s shape
+          // still carries the fields.
           params.set("message", n.message_id)
-          try {
-            const { data: message } = await supabase
-              .from("messages")
-              .select("thread_id")
-              .eq("id", n.message_id)
-              .maybeSingle()
-
-            const threadId = message?.thread_id
-            if (threadId) params.set("thread", threadId)
-          } catch (error) {
-            console.error("Failed to resolve thread context from notification", error)
-          }
       }
 
       const query = params.toString()

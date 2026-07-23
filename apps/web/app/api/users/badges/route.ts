@@ -6,7 +6,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { and, desc, eq } from "drizzle-orm"
 import { badgeDefinitions, createDb, userBadges } from "@vortex/db"
-import { requireAuthWithServiceRole } from "@/lib/utils/api-helpers"
+import { requireAuth } from "@/lib/utils/api-helpers"
 import { toSnakeCase } from "@/lib/utils/case"
 import type { BadgeDefinitionRow, UserBadgeRow } from "@/types/database"
 
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user, error: authError } = await requireAuthWithServiceRole()
+    const { user, error: authError } = await requireAuth()
     if (authError || !user) return authError ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json().catch(() => null)
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { user, error: authError } = await requireAuthWithServiceRole()
+    const { user, error: authError } = await requireAuth()
     if (authError || !user) return authError ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { searchParams } = new URL(req.url)

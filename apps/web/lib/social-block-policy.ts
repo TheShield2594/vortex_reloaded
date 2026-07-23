@@ -1,4 +1,7 @@
-import type { SupabaseClient } from "@supabase/supabase-js"
+import { and, eq, or } from "drizzle-orm"
+import { createDb, friendships } from "@vortex/db"
+
+const db = createDb()
 
 type FriendshipStatus = "pending" | "accepted" | "blocked"
 
@@ -13,7 +16,6 @@ type FriendshipRow = {
  * Returns user ids that are blocked in either direction relative to `userId`.
  */
 export async function getBlockedUserIdsForViewer(
-  supabase: SupabaseClient,
   userId: string,
   candidateUserIds?: string[]
 ): Promise<Set<string>> {
@@ -21,19 +23,20 @@ export async function getBlockedUserIdsForViewer(
 
   const uniqueCandidates = Array.from(new Set((candidateUserIds ?? []).filter(Boolean))).filter((id) => id !== userId)
 
-  let query = supabase
-    .from("friendships")
-    .select("requester_id, addressee_id, status")
-    .eq("status", "blocked")
-    .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
-
-  const { data, error } = await query
-
-  if (error) {
-    throw new Error(`Failed to resolve block policy: ${error.message}`)
+  let rows: Array<{ requesterId: string; addresseeId: string; status: FriendshipStatus }>
+  try {
+    rows = await db
+      .select({ requesterId: friendships.requesterId, addresseeId: friendships.addresseeId, status: friendships.status })
+      .from(friendships)
+      .where(and(eq(friendships.status, "blocked"), or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId))))
+  } catch (error) {
+    throw new Error(`Failed to resolve block policy: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  const blocked = deriveBlockedUserIds(userId, data ?? [])
+  const blocked = deriveBlockedUserIds(
+    userId,
+    rows.map((r) => ({ requester_id: r.requesterId, addressee_id: r.addresseeId, status: r.status }))
+  )
   if (uniqueCandidates.length === 0) return blocked
   return new Set(uniqueCandidates.filter((id) => blocked.has(id)))
 }

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { createDb, users } from "@vortex/db"
-import { getAuthUser } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/better-auth"
 
 const db = createDb()
 

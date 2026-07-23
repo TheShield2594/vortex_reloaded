@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
+import { and, desc, eq } from "drizzle-orm"
+import { createDb, directMessages, dmChannelMembers, reports } from "@vortex/db"
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { REPORT_REASON_VALUES, type ReportReason } from "@/lib/report-reasons"
+import { toSnakeCase } from "@/lib/utils/case"
 
 const VALID_REASONS = REPORT_REASON_VALUES
+const db = createDb()
 
 /**
  * POST /api/reports — submit a report (e.g. abusive DM behavior)
@@ -22,7 +26,7 @@ const VALID_REASONS = REPORT_REASON_VALUES
  */
 export async function POST(req: NextRequest) {
   try {
-    const { supabase, user, error: authError } = await requireAuth()
+    const { user, error: authError } = await requireAuth()
     if (authError) return authError
 
     const limited = await checkRateLimit(user.id, "reports:submit", { limit: 10, windowMs: 3600_000 })
@@ -67,52 +71,55 @@ export async function POST(req: NextRequest) {
 
     // Validate reported_message_id if provided — must be a DM the reporter can see
     if (reported_message_id) {
-      const { data: message } = await supabase
-        .from("direct_messages")
-        .select("id, sender_id, dm_channel_id")
-        .eq("id", reported_message_id)
-        .maybeSingle()
+      const [message] = await db
+        .select({ id: directMessages.id, senderId: directMessages.senderId, dmChannelId: directMessages.dmChannelId })
+        .from(directMessages)
+        .where(eq(directMessages.id, reported_message_id))
+        .limit(1)
 
       if (!message) {
         return NextResponse.json({ error: "Reported message not found" }, { status: 404 })
       }
 
-      if (message.sender_id !== reported_user_id) {
+      if (message.senderId !== reported_user_id) {
         return NextResponse.json({ error: "Reported user does not match message author" }, { status: 400 })
       }
 
-      if (!message.dm_channel_id) {
+      if (!message.dmChannelId) {
         return NextResponse.json({ error: "Reported message is not part of a conversation" }, { status: 400 })
       }
 
-      const { data: membership } = await supabase
-        .from("dm_channel_members")
-        .select("user_id")
-        .eq("dm_channel_id", message.dm_channel_id)
-        .eq("user_id", user.id)
-        .maybeSingle()
+      const [membership] = await db
+        .select({ userId: dmChannelMembers.userId })
+        .from(dmChannelMembers)
+        .where(and(eq(dmChannelMembers.dmChannelId, message.dmChannelId), eq(dmChannelMembers.userId, user.id)))
+        .limit(1)
 
       if (!membership) {
         return NextResponse.json({ error: "You are not a member of this conversation" }, { status: 403 })
       }
     }
 
-    const { data: report, error } = await supabase
-      .from("reports")
-      .insert({
-        reporter_id: user.id,
-        reported_user_id,
-        reported_message_id: reported_message_id || null,
-        reason: reason as "spam" | "harassment" | "inappropriate_content" | "other",
-        description: description?.trim() || null,
-        status: "pending" as const,
-      })
-      .select()
-      .single()
+    let report: typeof reports.$inferSelect
+    try {
+      const [row] = await db
+        .insert(reports)
+        .values({
+          reporterId: user.id,
+          reportedUserId: reported_user_id,
+          reportedMessageId: reported_message_id || null,
+          reason: reason as "spam" | "harassment" | "inappropriate_content" | "other",
+          description: description?.trim() || null,
+          status: "pending",
+        })
+        .returning()
+      if (!row) throw new Error("insert returned no row")
+      report = row
+    } catch {
+      return NextResponse.json({ error: "Failed to create report" }, { status: 500 })
+    }
 
-    if (error) return NextResponse.json({ error: "Failed to create report" }, { status: 500 })
-
-    return NextResponse.json(report, { status: 201 })
+    return NextResponse.json(toSnakeCase(report), { status: 201 })
   } catch (err) {
     console.error("[reports POST] error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -124,18 +131,22 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(_req: NextRequest) {
   try {
-    const { supabase, user, error: authError } = await requireAuth()
+    const { user, error: authError } = await requireAuth()
     if (authError) return authError
 
-    const { data: reports, error } = await supabase
-      .from("reports")
-      .select("*")
-      .eq("reporter_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50)
+    let rows: (typeof reports.$inferSelect)[]
+    try {
+      rows = await db
+        .select()
+        .from(reports)
+        .where(eq(reports.reporterId, user.id))
+        .orderBy(desc(reports.createdAt))
+        .limit(50)
+    } catch {
+      return NextResponse.json({ error: "Failed to fetch reports" }, { status: 500 })
+    }
 
-    if (error) return NextResponse.json({ error: "Failed to fetch reports" }, { status: 500 })
-    return NextResponse.json(reports, {
+    return NextResponse.json(toSnakeCase(rows), {
       headers: { "Cache-Control": "private, max-age=30" },
     })
   } catch (err) {

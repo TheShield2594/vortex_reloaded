@@ -3,7 +3,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, lazy, Suspense, type MutableRefObject } from "react"
 import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { Room, RoomEvent, createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, type RemoteParticipant, type RemoteTrack } from "livekit-client"
 import { createEqTrackProcessor, type EqTrackProcessor } from "@/lib/voice/eq-track-processor"
 import { buildSpatialAudioGraph, type SpatialAudioGraph } from "@/lib/voice/spatial-audio-graph"
@@ -40,8 +39,6 @@ import type { IndexedDocument } from "@/lib/local-search-index"
 import { ChannelRowSkeleton, MessageListSkeleton } from "@/components/ui/skeleton"
 import { useMobileLayout } from "@/hooks/use-mobile-layout"
 import { useKeyboardAvoidance } from "@/hooks/use-keyboard-avoidance"
-import { computeDecay } from "@vortex/shared"
-import { untypedFrom } from "@/lib/supabase/untyped-table"
 
 interface User {
   id: string
@@ -409,7 +406,6 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
 
   const prevLastMsgIdRef = useRef<string | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
   const gateway = useGatewayContext()
 
   // Keep refs in sync so the realtime subscription can read latest values
@@ -807,30 +803,12 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
       if (!messageId) return
 
       playNotification("dm")
-      ;(supabase
-        .from("direct_messages")
-        .select("*, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url, status), reply_to_id")
-        .eq("id", messageId)
-        .single() as unknown as Promise<{ data: Record<string, unknown> | null }>)
-        .then(async ({ data }: { data: Record<string, unknown> | null }) => {
+      fetch(`/api/dm/channels/${channelId}/messages/${messageId}`)
+        .then(async (res) => {
+          if (!res.ok) return
+          const data = await res.json() as Record<string, unknown> | null
           if (!data) return
-          // Resolve reply_to if present
-          let replyToMsg = null
-          if (data.reply_to_id) {
-            const { data: replyData } = await supabase
-              .from("direct_messages")
-              .select("id, content, sender_id, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url, status)")
-              .eq("id", data.reply_to_id as string)
-              .eq("dm_channel_id", channelId)
-              .is("deleted_at", null)
-              .single()
-            replyToMsg = replyData ?? null
-          }
-          // Fetch dm_attachments so images render through the proxy
-          const { data: attRows } = await untypedFrom(supabase, "dm_attachments")
-            .select("id, filename, size, content_type")
-            .eq("dm_id", data.id as string)
-          const newMsg: Message = { ...data as unknown as Message, reply_to: replyToMsg, dm_attachments: attRows ?? [], reactions: [] }
+          const newMsg: Message = data as unknown as Message
           setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg])
 
           // Incrementally index the new message if the channel is encrypted
@@ -863,7 +841,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     // don't need to be deps – this prevents tearing down and recreating the
     // gateway listener every time encryption state loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelId, currentUserId, supabase, gateway])
+  }, [channelId, currentUserId, gateway])
 
   // Gateway subscription for DM reactions
   useEffect(() => {
@@ -1027,18 +1005,20 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
           const msg = await sendDmPayload(filePayload)
           if (!msg) throw new Error("Failed to send file")
 
-          const now = new Date()
-          const decay = computeDecay({ sizeBytes: file.size, uploadedAt: now })
-          const { data: insertedAtt, error: attInsertError } = await untypedFrom(supabase, "dm_attachments").insert({
-            dm_id: msg.id,
-            url: uploaded.key,
-            filename: file.name,
-            size: file.size,
-            content_type: file.type || "application/octet-stream",
-            ...(decay ? { expires_at: decay.expiresAt.toISOString(), last_accessed_at: now.toISOString(), lifetime_days: decay.days, decay_cost: decay.cost } : {}),
-          }).select("id, filename, size, content_type").single()
-          if (attInsertError) {
-            console.error("[dm file upload] failed to insert attachment metadata:", attInsertError)
+          const attachRes = await fetch(`/api/dm/channels/${channelId}/attachments`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              dm_id: msg.id,
+              key: uploaded.key,
+              filename: file.name,
+              size: file.size,
+              content_type: file.type || "application/octet-stream",
+            }),
+          })
+          const insertedAtt = attachRes.ok ? await attachRes.json() as { id: string; filename: string; size: number; content_type: string } : null
+          if (!attachRes.ok) {
+            console.error("[dm file upload] failed to save attachment metadata:", await attachRes.text().catch(() => attachRes.statusText))
             cleanupUploadedFile()
           }
           setMessages((prev) => [...prev, {
@@ -1066,7 +1046,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     }
 
     setReplyTo(null)
-  }, [channelId, channel, conversationKey, ensureConversationKey, replyTo, sendDmPayload, supabase])
+  }, [channelId, channel, conversationKey, ensureConversationKey, replyTo, sendDmPayload])
 
   async function handleEditSave(messageId: string) {
     if (!editContent.trim()) return

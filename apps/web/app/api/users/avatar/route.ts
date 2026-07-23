@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
+import { eq } from "drizzle-orm"
+import { createDb, users } from "@vortex/db"
 import { detectMimeFromBytes } from "@/lib/attachment-validation"
 import { requireAuth } from "@/lib/utils/api-helpers"
 import { avatarsDir, removeAvatarVariants, writeUploadFile } from "@/lib/storage/local-storage"
+import { toSnakeCase } from "@/lib/utils/case"
+
+const db = createDb()
 
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
 const ALLOWED_AVATAR_EXTS = ["jpg", "jpeg", "png", "gif", "webp"]
@@ -15,7 +20,7 @@ const MAX_AVATAR_SIZE = 5 * 1024 * 1024 // 5 MB
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const { supabase, user, error: authError } = await requireAuth()
+    const { user, error: authError } = await requireAuth()
     if (authError) return authError
 
     const contentType = req.headers.get("content-type") ?? ""
@@ -102,14 +107,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const avatarUrl = `/api/avatars/${storageKey}?t=${Date.now()}`
 
     // Update the user's avatar_url in the database
-    const { data: updatedUser, error: dbError } = await supabase
-      .from("users")
-      .update({ avatar_url: avatarUrl })
-      .eq("id", user.id)
-      .select()
-      .single()
-
-    if (dbError) {
+    let updatedUser: typeof users.$inferSelect | undefined
+    try {
+      const rows = await db
+        .update(users)
+        .set({ avatarUrl })
+        .where(eq(users.id, user.id))
+        .returning()
+      updatedUser = rows[0]
+    } catch {
       return NextResponse.json(
         { error: "Failed to update avatar URL" },
         { status: 500 },
@@ -123,7 +129,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       )
     }
 
-    return NextResponse.json(updatedUser)
+    return NextResponse.json(toSnakeCase(updatedUser))
   } catch {
     return NextResponse.json(
       { error: "Internal server error" },
