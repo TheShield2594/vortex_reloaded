@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { detectMimeFromBytes } from "@/lib/attachment-validation"
 import { requireAuth } from "@/lib/utils/api-helpers"
+import { avatarsDir, removeAvatarVariants, writeUploadFile } from "@/lib/storage/local-storage"
 
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
 const ALLOWED_AVATAR_EXTS = ["jpg", "jpeg", "png", "gif", "webp"]
@@ -81,24 +82,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       "image/webp": "webp",
     }
     const ext = mimeToExt[detectedMime] ?? "png"
-    const storagePath = `${user.id}/avatar.${ext}`
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(storagePath, avatarFile, { upsert: true })
+    const storageKey = `${user.id}/avatar.${ext}`
 
-    if (uploadError) {
+    try {
+      // Write the new file first, then prune stale variants with other
+      // extensions — if pruning happened first and the write then failed,
+      // the user would be left with no avatar file at all.
+      const bytes = Buffer.from(await avatarFile.arrayBuffer())
+      await writeUploadFile(avatarsDir(), storageKey, bytes)
+      await removeAvatarVariants(user.id, ALLOWED_AVATAR_EXTS.filter((otherExt) => otherExt !== ext))
+    } catch {
       return NextResponse.json(
         { error: "Avatar upload failed" },
         { status: 500 },
       )
     }
 
-    // Get the public URL with cache-busting query param
-    const { data: urlData } = supabase.storage
-      .from("avatars")
-      .getPublicUrl(storagePath)
-
-    const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`
+    // Cache-busting query param since the URL path itself is stable per user
+    const avatarUrl = `/api/avatars/${storageKey}?t=${Date.now()}`
 
     // Update the user's avatar_url in the database
     const { data: updatedUser, error: dbError } = await supabase

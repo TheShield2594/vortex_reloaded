@@ -15,6 +15,7 @@
     }
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
     "better-sqlite3": "^11.3.0",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.13.1"
@@ -39,6 +40,7 @@
     "migrate:verify": "tsx src/migration/verify.ts",
     "migrate:auth-secrets": "tsx src/migration/auth-secrets-export.ts",
     "migrate:import-auth-secrets": "tsx src/migration/import-auth-secrets.ts",
+    "migrate:storage": "tsx src/migration/storage.ts",
     "migrate:run": "tsx src/migration/run.ts",
     "migrate:dry-run": "tsx src/migration/run.ts --dry-run --auth-secrets"
   }

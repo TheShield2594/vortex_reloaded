@@ -20,3 +20,14 @@ export function resolveDbPath(): string {
 
   return path.resolve(url.slice("file:".length))
 }
+
+/**
+ * Local disk storage for avatars/attachments (issue #10) lives under an
+ * `uploads` subdirectory of the same mounted volume as the SQLite file
+ * itself — e.g. `/data/vortex.db` + `/data/uploads` — rather than a second
+ * env var, since it's already the one persistent volume bind-mounted into
+ * `apps/web`'s container.
+ */
+export function resolveUploadsDir(): string {
+  return path.join(path.dirname(resolveDbPath()), "uploads")
+}

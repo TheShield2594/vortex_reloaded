@@ -1,14 +1,22 @@
+import * as Sentry from "@sentry/nextjs"
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { untypedFrom } from "@/lib/supabase/untyped-table"
 import { verifyBearerToken } from "@/lib/utils/timing-safe"
+import { attachmentsDir, deleteUploadFile } from "@/lib/storage/local-storage"
+
+// deleteUploadFile() already treats a missing file as success, so anything
+// landing here is a genuinely unexpected failure (permission/disk issues) —
+// a small threshold avoids paging on a single rare blip while still
+// catching a systemic problem.
+const STORAGE_ERROR_ALERT_THRESHOLD = 5
 
 /**
  * GET /api/cron/attachment-decay
  *
- * Purge worker: deletes expired attachment files from Supabase Storage
- * and marks the database rows as purged. Processes both channel attachments
- * and DM attachments in batches.
+ * Purge worker: deletes expired attachment files from local disk and marks
+ * the database rows as purged. Processes both channel attachments and DM
+ * attachments in batches.
  *
  * Called daily by scheduled-tasks cron dispatcher. Also available for
  * manual invocation. Requires CRON_SECRET.
@@ -42,25 +50,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     let storageErrors = 0
 
     for (const att of expiredAttachments ?? []) {
-      const storagePath = extractStoragePath(att.url)
-      if (!storagePath) {
-        console.warn("[cron/attachment-decay] could not extract storage path, skipping", {
-          attachmentId: att.id,
-          url: att.url,
-        })
-        storageErrors++
-        continue
-      }
-
-      const { error: removeError } = await serviceClient.storage
-        .from("attachments")
-        .remove([storagePath])
-
-      if (removeError) {
+      try {
+        await deleteUploadFile(attachmentsDir(), att.url)
+      } catch (removeError) {
         console.error("[cron/attachment-decay] storage remove failed", {
           attachmentId: att.id,
-          path: storagePath,
-          error: removeError.message,
+          path: att.url,
+          error: removeError instanceof Error ? removeError.message : String(removeError),
         })
         storageErrors++
         // Still mark as purged — the file may already be gone
@@ -92,25 +88,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     let purgedDm = 0
 
     for (const att of expiredDmAttachments ?? []) {
-      const storagePath = extractStoragePath(att.url)
-      if (!storagePath) {
-        console.warn("[cron/attachment-decay] could not extract DM storage path, skipping", {
-          attachmentId: att.id,
-          url: att.url,
-        })
-        storageErrors++
-        continue
-      }
-
-      const { error: removeError } = await serviceClient.storage
-        .from("attachments")
-        .remove([storagePath])
-
-      if (removeError) {
+      try {
+        await deleteUploadFile(attachmentsDir(), att.url)
+      } catch (removeError) {
         console.error("[cron/attachment-decay] dm storage remove failed", {
           attachmentId: att.id,
-          path: storagePath,
-          error: removeError.message,
+          path: att.url,
+          error: removeError instanceof Error ? removeError.message : String(removeError),
         })
         storageErrors++
         // Still mark as purged — the file may already be gone
@@ -136,6 +120,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       runAt: now,
     })
 
+    if (storageErrors >= STORAGE_ERROR_ALERT_THRESHOLD) {
+      Sentry.captureMessage(`attachment-decay: ${storageErrors} storage error(s) during purge run`, {
+        level: "error",
+        extra: { purgedChannel, purgedDm, storageErrors, runAt: now },
+      })
+    }
+
     return NextResponse.json({
       ok: true,
       purgedChannel,
@@ -146,25 +137,5 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   } catch (err) {
     console.error("[cron/attachment-decay] error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-/** Extract the storage path from a Supabase signed/public URL */
-function extractStoragePath(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-    const signMatch = parsed.pathname.match(
-      /\/(?:storage\/v1\/)?object\/sign\/attachments\/(.+)/
-    )
-    if (signMatch?.[1]) return decodeURIComponent(signMatch[1])
-
-    const pubMatch = parsed.pathname.match(
-      /\/(?:storage\/v1\/)?object\/public\/attachments\/(.+)/
-    )
-    if (pubMatch?.[1]) return decodeURIComponent(pubMatch[1])
-
-    return null
-  } catch {
-    return null
   }
 }

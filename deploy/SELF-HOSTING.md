@@ -153,6 +153,17 @@ All configuration is via environment variables in `.env` and
 - Both `web` and `signal` mount the same path — keep this stack on one
   host.
 
+## File Storage (avatars/attachments)
+
+- Uploaded avatars and DM attachments live under `./data/uploads/` on the
+  host — the same bind-mounted volume as the SQLite file, just a different
+  subdirectory (`avatars/` and `attachments/`), so backing up `./data`
+  backs up both.
+- `web` is the only service that touches it — attachments are served
+  through an auth-checked download route, not directly off disk.
+- The `attachment-decay` cron job deletes expired files from here on its
+  own; no manual cleanup needed.
+
 ## Backups (Backblaze B2)
 
 Don't copy `vortex.db` directly while the app is running — in WAL mode, a
@@ -168,6 +179,12 @@ sqlite3 ./data/vortex.db ".backup './data/backups/vortex-${STAMP}.db'"
 
 # Sync to Backblaze B2 (rclone has a native b2 backend: `rclone config`)
 rclone copy ./data/backups/vortex-${STAMP}.db b2:your-bucket/vortex-backups/
+
+# Uploaded avatars/attachments aren't in vortex.db — back them up separately.
+# `copy`, not `sync` — sync would delete remote files the decay cron has
+# since purged locally (or everything, if this ever runs against an empty
+# or mis-mounted ./data/uploads).
+rclone copy ./data/uploads b2:your-bucket/vortex-uploads/
 
 # Optional: prune anything older than 30 days, local and remote
 find ./data/backups -name '*.db' -mtime +30 -delete
