@@ -12,15 +12,8 @@
     {
       "idx": 1,
       "version": "6",
-      "when": 1784839946495,
-      "tag": "0001_special_blazing_skull",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1784841776543,
-      "tag": "0002_familiar_zarda",
+      "when": 1784842608862,
+      "tag": "0001_strong_slayback",
       "breakpoints": true
     }
   ]

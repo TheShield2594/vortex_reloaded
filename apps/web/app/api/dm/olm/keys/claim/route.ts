@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { and, asc, eq } from "drizzle-orm"
-import { createDb, signalDeviceIdentities, signalOneTimeKeys } from "@vortex/db"
+import { createDb, olmDeviceIdentities, olmOneTimeKeys } from "@vortex/db"
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { createLogger } from "@/lib/logger"
-import { isValidDeviceId } from "@/lib/signal-key-validation"
+import { isValidDeviceId } from "@/lib/olm-key-validation"
 
-const log = createLogger("api/dm/signal/keys/claim")
+const log = createLogger("api/dm/olm/keys/claim")
 const db = createDb()
 
 type ClaimBody = { targetUserId?: unknown; targetDeviceId?: unknown }
 
-// POST /api/dm/signal/keys/claim — atomically consume one of a device's
+// POST /api/dm/olm/keys/claim — atomically consume one of a device's
 // published one-time keys to start an Olm session with it (X3DH-style).
 // Falls back to the device's (reusable) fallback key once one-time keys run
 // out, so sessions can still be established rather than failing outright —
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     const { user, error: authError } = await requireAuth()
     if (authError) return authError
 
-    const limited = await checkRateLimit(user.id, "signal:claim-key", { limit: 60, windowMs: 60_000 })
+    const limited = await checkRateLimit(user.id, "olm:claim-key", { limit: 60, windowMs: 60_000 })
     if (limited) return limited
 
     const { data: body, error: parseError } = await parseJsonBody<ClaimBody>(req)
@@ -40,14 +40,14 @@ export async function POST(req: NextRequest) {
     try {
       const rows = await db
         .select({
-          curve25519IdentityKey: signalDeviceIdentities.curve25519IdentityKey,
-          ed25519IdentityKey: signalDeviceIdentities.ed25519IdentityKey,
-          fallbackKeyId: signalDeviceIdentities.fallbackKeyId,
-          fallbackPublicKey: signalDeviceIdentities.fallbackPublicKey,
-          fallbackSignature: signalDeviceIdentities.fallbackSignature,
+          curve25519IdentityKey: olmDeviceIdentities.curve25519IdentityKey,
+          ed25519IdentityKey: olmDeviceIdentities.ed25519IdentityKey,
+          fallbackKeyId: olmDeviceIdentities.fallbackKeyId,
+          fallbackPublicKey: olmDeviceIdentities.fallbackPublicKey,
+          fallbackSignature: olmDeviceIdentities.fallbackSignature,
         })
-        .from(signalDeviceIdentities)
-        .where(and(eq(signalDeviceIdentities.userId, targetUserId), eq(signalDeviceIdentities.deviceId, targetDeviceId)))
+        .from(olmDeviceIdentities)
+        .where(and(eq(olmDeviceIdentities.userId, targetUserId), eq(olmDeviceIdentities.deviceId, targetDeviceId)))
         .limit(1)
       identity = rows[0]
     } catch {
@@ -65,20 +65,20 @@ export async function POST(req: NextRequest) {
       // exists to provide).
       claimed = db.transaction((tx) => {
         const otk = tx
-          .select({ keyId: signalOneTimeKeys.keyId, publicKey: signalOneTimeKeys.publicKey, signature: signalOneTimeKeys.signature })
-          .from(signalOneTimeKeys)
-          .where(and(eq(signalOneTimeKeys.userId, targetUserId), eq(signalOneTimeKeys.deviceId, targetDeviceId)))
-          .orderBy(asc(signalOneTimeKeys.createdAt))
+          .select({ keyId: olmOneTimeKeys.keyId, publicKey: olmOneTimeKeys.publicKey, signature: olmOneTimeKeys.signature })
+          .from(olmOneTimeKeys)
+          .where(and(eq(olmOneTimeKeys.userId, targetUserId), eq(olmOneTimeKeys.deviceId, targetDeviceId)))
+          .orderBy(asc(olmOneTimeKeys.createdAt))
           .limit(1)
           .get()
 
         if (otk) {
-          tx.delete(signalOneTimeKeys)
+          tx.delete(olmOneTimeKeys)
             .where(
               and(
-                eq(signalOneTimeKeys.userId, targetUserId),
-                eq(signalOneTimeKeys.deviceId, targetDeviceId),
-                eq(signalOneTimeKeys.keyId, otk.keyId)
+                eq(olmOneTimeKeys.userId, targetUserId),
+                eq(olmOneTimeKeys.deviceId, targetDeviceId),
+                eq(olmOneTimeKeys.keyId, otk.keyId)
               )
             )
             .run()
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
         }
       })
     } catch (err) {
-      log.error({ route: "/api/dm/signal/keys/claim", action: "POST", userId: user.id, targetUserId, targetDeviceId, error: err instanceof Error ? err.message : String(err) }, "claim failed")
+      log.error({ route: "/api/dm/olm/keys/claim", action: "POST", userId: user.id, targetUserId, targetDeviceId, error: err instanceof Error ? err.message : String(err) }, "claim failed")
       return NextResponse.json({ error: "Failed to claim key" }, { status: 500 })
     }
 
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error"
-    log.error({ route: "/api/dm/signal/keys/claim", action: "POST", error: message }, "POST error")
+    log.error({ route: "/api/dm/olm/keys/claim", action: "POST", error: message }, "POST error")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

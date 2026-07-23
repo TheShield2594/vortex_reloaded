@@ -31,14 +31,14 @@ import { useChatScroll } from "@/components/chat/hooks/use-chat-scroll"
 import { MessageInput } from "@/components/chat/message-input"
 import { useShallow } from "zustand/react/shallow"
 import { decryptDmContent, encryptDmContent, exportPublicKey, fingerprintFromPublicKey, generateConversationKey, generateDeviceKeyPair, importPublicKey, parseEncryptedEnvelope, unwrapConversationKey, wrapConversationKey } from "@/lib/dm-encryption"
-import { isValidSignalCiphertext, parseSignalEnvelope, type SignalKeyBundle } from "@/lib/signal-protocol"
+import { isValidOlmCiphertext, parseOlmEnvelope, type OlmKeyBundle } from "@/lib/olm-protocol"
 import {
   ensureOutboundSession,
-  ensureSignalIdentity,
-  encryptTo as signalEncryptTo,
-  decryptFrom as signalDecryptFrom,
+  ensureOlmIdentity,
+  encryptTo as olmEncryptTo,
+  decryptFrom as olmDecryptFrom,
   hasSessionWith,
-} from "@/lib/signal-protocol-store"
+} from "@/lib/olm-protocol-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useLocalSearch } from "@/hooks/use-local-search"
 const DmLocalSearchModal = lazy(() => import("@/components/modals/dm-local-search-modal").then((m) => ({ default: m.DmLocalSearchModal })))
@@ -98,7 +98,7 @@ interface Channel {
   owner_id: string | null
   is_encrypted?: boolean
   encryption_key_version?: number
-  encryption_scheme?: "legacy-ecdh" | "signal-protocol"
+  encryption_scheme?: "legacy-ecdh" | "olm"
   theme_preset?: string | null
   members: User[]
   partner: User | null
@@ -387,7 +387,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   const [conversationKey, setConversationKey] = useState<Uint8Array | null>(null)
   const [deviceFingerprint, setDeviceFingerprint] = useState<string | null>(null)
   const [deviceId, setDeviceId] = useState<string | null>(null)
-  const [signalDeviceId, setSignalDeviceId] = useState<string | null>(null)
+  const [olmDeviceId, setOlmDeviceId] = useState<string | null>(null)
   const [pendingNewMessageCount, setPendingNewMessageCount] = useState(0)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -561,21 +561,21 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     return nextKey
   }, [currentUserId, ensureDeviceIdentity])
 
-  // Signal Protocol identity setup — independent of the legacy-ecdh device
+  // Olm identity setup — independent of the legacy-ecdh device
   // above (different keypair, different purpose). Registers this device's
   // Olm identity + prekey bundle with the server the first time it's ever
   // seen; a no-op on every later call.
-  const ensureSignalReady = useCallback(async () => {
-    const { identity, publish } = await ensureSignalIdentity(currentUserId)
+  const ensureOlmReady = useCallback(async () => {
+    const { identity, publish } = await ensureOlmIdentity(currentUserId)
     if (publish) {
-      const res = await fetch("/api/dm/signal/keys/device", {
+      const res = await fetch("/api/dm/olm/keys/device", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(publish),
       })
-      if (!res.ok) throw new Error("Failed to register Signal Protocol device")
+      if (!res.ok) throw new Error("Failed to register Olm device")
     }
-    setSignalDeviceId(identity.deviceId)
+    setOlmDeviceId(identity.deviceId)
     return identity
   }, [currentUserId])
 
@@ -584,13 +584,13 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   // stay readable from them) — one pairwise Olm session/ciphertext per
   // device, no group ratchet (see issue #3). Devices with no reachable
   // session are skipped rather than failing the whole send, matching how
-  // multi-device Signal degrades when one of a user's devices is offline.
-  const encryptSignalText = useCallback(async (channelInfo: Channel, plaintext: string): Promise<string> => {
-    const identity = await ensureSignalReady()
+  // multi-device Signal messaging degrades when one of a user's devices is offline.
+  const encryptOlmText = useCallback(async (channelInfo: Channel, plaintext: string): Promise<string> => {
+    const identity = await ensureOlmReady()
 
     const memberIds = channelInfo.members.map((m) => m.id)
     const rosters = await Promise.all(memberIds.map(async (userId) => {
-      const res = await fetch(`/api/dm/signal/keys/devices/${userId}`)
+      const res = await fetch(`/api/dm/olm/keys/devices/${userId}`)
       if (!res.ok) return { userId, devices: [] as Array<{ device_id: string }> }
       const data = await res.json()
       return { userId, devices: (data.devices ?? []) as Array<{ device_id: string }> }
@@ -606,14 +606,14 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     for (const target of targets) {
       try {
         if (!(await hasSessionWith(target))) {
-          const claimRes = await fetch("/api/dm/signal/keys/claim", {
+          const claimRes = await fetch("/api/dm/olm/keys/claim", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ targetUserId: target.userId, targetDeviceId: target.deviceId }),
           })
           if (!claimRes.ok) continue
           const claimed = await claimRes.json()
-          const bundle: SignalKeyBundle = {
+          const bundle: OlmKeyBundle = {
             curve25519IdentityKey: claimed.curve25519_identity_key,
             ed25519IdentityKey: claimed.ed25519_identity_key,
             keyId: claimed.key_id,
@@ -623,12 +623,12 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
           }
           await ensureOutboundSession(target.userId, target.deviceId, bundle)
         }
-        const ciphertext = await signalEncryptTo(target.userId, target.deviceId, plaintext)
+        const ciphertext = await olmEncryptTo(target.userId, target.deviceId, plaintext)
         ciphertexts[`${target.userId}:${target.deviceId}`] = ciphertext
       } catch (err) {
         // Best-effort per device — one unreachable/untrusted device
         // shouldn't block delivery to the rest.
-        console.error(`[signal-protocol] failed to encrypt for ${target.userId}:${target.deviceId}`, err)
+        console.error(`[olm-protocol] failed to encrypt for ${target.userId}:${target.deviceId}`, err)
       }
     }
 
@@ -636,8 +636,8 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
       throw new Error("No reachable devices to encrypt this message for")
     }
 
-    return JSON.stringify({ kind: "dm-signal", v: 1, senderDeviceId: identity.deviceId, ciphertexts })
-  }, [currentUserId, ensureSignalReady])
+    return JSON.stringify({ kind: "dm-olm", v: 1, senderDeviceId: identity.deviceId, ciphertexts })
+  }, [currentUserId, ensureOlmReady])
 
   const { typingUsers, onKeystroke, onSent } = useGatewayTyping(channelId, currentUserId, currentDisplayName)
 
@@ -653,8 +653,8 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
       const data = await res.json()
       setChannel(data.channel)
       if (data.channel?.is_encrypted) {
-        if (data.channel.encryption_scheme === "signal-protocol") {
-          await ensureSignalReady()
+        if (data.channel.encryption_scheme === "olm") {
+          await ensureOlmReady()
         } else {
           await ensureConversationKey(data.channel)
         }
@@ -668,7 +668,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     } catch {
       if (!before) setLoadError(true)
     }
-  }, [channelId, ensureConversationKey, ensureSignalReady])
+  }, [channelId, ensureConversationKey, ensureOlmReady])
 
   useEffect(() => {
     loadMessages()
@@ -808,10 +808,10 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   }, [channel?.id, channel?.is_encrypted])
 
   // Realtime subscription — legacy-ecdh decrypt path (shared per-channel
-  // conversation key; see the signal-protocol effect below for the newer
+  // conversation key; see the Olm effect below for the newer
   // pairwise-per-device scheme).
   useEffect(() => {
-    if (!channel?.is_encrypted || channel.encryption_scheme === "signal-protocol") return
+    if (!channel?.is_encrypted || channel.encryption_scheme === "olm") return
     if (!conversationKey) {
       decryptedRef.current = {}
       setDecryptedContent({})
@@ -855,18 +855,18 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     return () => { cancelled = true }
   }, [channel?.id, channel?.is_encrypted, channel?.encryption_scheme, conversationKey, messages])
 
-  // Signal Protocol decrypt path — one pairwise Olm session per sender
+  // Olm decrypt path — one pairwise Olm session per sender
   // device (see issue #3: no group sender-key ratchet). A message this
   // device itself just sent has no entry for itself in the envelope by
-  // design (see encryptSignalText) — handleDmSend seeds decryptedContent
+  // design (see encryptOlmText) — handleDmSend seeds decryptedContent
   // for those optimistically, so this effect only ever needs to decrypt
   // messages that actually came from someone else's session.
   useEffect(() => {
-    if (!channel?.is_encrypted || channel.encryption_scheme !== "signal-protocol") return
+    if (!channel?.is_encrypted || channel.encryption_scheme !== "olm") return
 
     let cancelled = false
     ;(async () => {
-      const identity = await ensureSignalReady()
+      const identity = await ensureOlmReady()
       const next = { ...decryptedRef.current }
       let changed = false
 
@@ -874,7 +874,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         const cached = next[msg.id]
         if (cached && !cached.failed) continue
 
-        const envelope = parseSignalEnvelope(msg.content)
+        const envelope = parseOlmEnvelope(msg.content)
         if (!envelope) {
           next[msg.id] = { text: "Unable to decrypt this message", failed: true }
           changed = true
@@ -882,14 +882,14 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         }
 
         const mine = envelope.ciphertexts[`${currentUserId}:${identity.deviceId}`]
-        if (!mine || !isValidSignalCiphertext(mine)) {
+        if (!mine || !isValidOlmCiphertext(mine)) {
           next[msg.id] = { text: "Not available on this device", failed: true }
           changed = true
           continue
         }
 
         try {
-          next[msg.id] = { text: await signalDecryptFrom(msg.sender_id, envelope.senderDeviceId, mine), failed: false }
+          next[msg.id] = { text: await olmDecryptFrom(msg.sender_id, envelope.senderDeviceId, mine), failed: false }
         } catch {
           next[msg.id] = { text: "Unable to decrypt this message", failed: true }
         }
@@ -902,7 +902,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     })()
 
     return () => { cancelled = true }
-  }, [channel?.id, channel?.is_encrypted, channel?.encryption_scheme, currentUserId, messages, ensureSignalReady])
+  }, [channel?.id, channel?.is_encrypted, channel?.encryption_scheme, currentUserId, messages, ensureOlmReady])
 
   // Reset the indexed-IDs tracker whenever the active channel changes so that
   // the new channel's messages are fully re-indexed from scratch.
@@ -1123,20 +1123,20 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
 
     const encryptText = async (plaintext: string): Promise<string> => {
       if (!channel?.is_encrypted) return plaintext
-      if (channel.encryption_scheme === "signal-protocol") return encryptSignalText(channel, plaintext)
+      if (channel.encryption_scheme === "olm") return encryptOlmText(channel, plaintext)
       const key = conversationKey ?? await ensureConversationKey(channel)
       if (!key) throw new Error("Missing encryption key")
       return JSON.stringify(await encryptDmContent(plaintext, key, channel.encryption_key_version ?? 1))
     }
 
-    // Signal Protocol has no shared symmetric channel key the sender could
+    // Olm has no shared symmetric channel key the sender could
     // use to decrypt their own just-sent message, and by design the
     // envelope carries no ciphertext entry for the sending device itself
-    // (see encryptSignalText) — seed the local decrypted-content cache
+    // (see encryptOlmText) — seed the local decrypted-content cache
     // directly with the plaintext we already have in hand instead of
     // routing it through the decrypt effect.
     const seedOwnPlaintext = (id: string, plaintext: string) => {
-      if (channel?.is_encrypted && channel.encryption_scheme === "signal-protocol") {
+      if (channel?.is_encrypted && channel.encryption_scheme === "olm") {
         decryptedRef.current = { ...decryptedRef.current, [id]: { text: plaintext, failed: false } }
         setDecryptedContent(decryptedRef.current)
       }
@@ -1225,7 +1225,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     }
 
     setReplyTo(null)
-  }, [channelId, channel, conversationKey, ensureConversationKey, encryptSignalText, replyTo, sendDmPayload])
+  }, [channelId, channel, conversationKey, ensureConversationKey, encryptOlmText, replyTo, sendDmPayload])
 
   async function handleEditSave(messageId: string) {
     if (!editContent.trim()) return
@@ -1435,8 +1435,8 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
           <div className="font-semibold text-sm md:text-base text-white truncate">{displayName}</div>
           {channel.is_encrypted && (
             <div className="text-xs truncate" style={{ color: "var(--theme-text-muted)" }}>
-              {channel.encryption_scheme === "signal-protocol"
-                ? <>End-to-end encrypted (Signal Protocol) • Device {signalDeviceId ? signalDeviceId.slice(0, 8) : "verifying…"}</>
+              {channel.encryption_scheme === "olm"
+                ? <>End-to-end encrypted (Olm) • Device {olmDeviceId ? olmDeviceId.slice(0, 8) : "verifying…"}</>
                 : <>End-to-end encrypted • Device fingerprint: {deviceFingerprint ?? "verifying…"}</>}
             </div>
           )}

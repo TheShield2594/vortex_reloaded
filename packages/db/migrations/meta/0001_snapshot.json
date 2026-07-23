@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fbaff600-c026-4e88-9688-1862896ccec1",
+  "id": "4e3badc3-0dd3-48d0-903d-6539fa385c80",
   "prevId": "ed1dd39c-7ed0-4e7f-9757-02e3e1456b3f",
   "tables": {
     "auth_security_policies": {
@@ -274,6 +274,112 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
+    },
+    "registration_invites": {
+      "name": "registration_invites",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "code": {
+          "name": "code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "max_uses": {
+          "name": "max_uses",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "use_count": {
+          "name": "use_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "registration_invites_code_unique": {
+          "name": "registration_invites_code_unique",
+          "columns": [
+            "code"
+          ],
+          "isUnique": true
+        },
+        "idx_registration_invites_created_by": {
+          "name": "idx_registration_invites_created_by",
+          "columns": [
+            "created_by"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "registration_invites_created_by_users_id_fk": {
+          "name": "registration_invites_created_by_users_id_fk",
+          "tableFrom": "registration_invites",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "registration_invites_max_uses_check": {
+          "name": "registration_invites_max_uses_check",
+          "value": "\"registration_invites\".\"max_uses\" >= 1"
+        },
+        "registration_invites_use_count_check": {
+          "name": "registration_invites_use_count_check",
+          "value": "\"registration_invites\".\"use_count\" >= 0"
+        }
+      }
     },
     "accounts": {
       "name": "accounts",
@@ -1403,7 +1509,7 @@
         },
         "dm_channels_encryption_scheme_check": {
           "name": "dm_channels_encryption_scheme_check",
-          "value": "\"dm_channels\".\"encryption_scheme\" in ('legacy-ecdh', 'signal-protocol')"
+          "value": "\"dm_channels\".\"encryption_scheme\" in ('legacy-ecdh', 'olm')"
         }
       }
     },
@@ -1555,8 +1661,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "signal_device_identities": {
-      "name": "signal_device_identities",
+    "olm_device_identities": {
+      "name": "olm_device_identities",
       "columns": {
         "user_id": {
           "name": "user_id",
@@ -1624,9 +1730,9 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "signal_device_identities_user_id_users_id_fk": {
-          "name": "signal_device_identities_user_id_users_id_fk",
-          "tableFrom": "signal_device_identities",
+        "olm_device_identities_user_id_users_id_fk": {
+          "name": "olm_device_identities_user_id_users_id_fk",
+          "tableFrom": "olm_device_identities",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -1639,19 +1745,19 @@
         }
       },
       "compositePrimaryKeys": {
-        "signal_device_identities_user_id_device_id_pk": {
+        "olm_device_identities_user_id_device_id_pk": {
           "columns": [
             "user_id",
             "device_id"
           ],
-          "name": "signal_device_identities_user_id_device_id_pk"
+          "name": "olm_device_identities_user_id_device_id_pk"
         }
       },
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "signal_one_time_keys": {
-      "name": "signal_one_time_keys",
+    "olm_one_time_keys": {
+      "name": "olm_one_time_keys",
       "columns": {
         "user_id": {
           "name": "user_id",
@@ -1697,8 +1803,8 @@
         }
       },
       "indexes": {
-        "signal_one_time_keys_claim_idx": {
-          "name": "signal_one_time_keys_claim_idx",
+        "olm_one_time_keys_claim_idx": {
+          "name": "olm_one_time_keys_claim_idx",
           "columns": [
             "user_id",
             "device_id",
@@ -1708,9 +1814,9 @@
         }
       },
       "foreignKeys": {
-        "signal_one_time_keys_user_id_users_id_fk": {
-          "name": "signal_one_time_keys_user_id_users_id_fk",
-          "tableFrom": "signal_one_time_keys",
+        "olm_one_time_keys_user_id_users_id_fk": {
+          "name": "olm_one_time_keys_user_id_users_id_fk",
+          "tableFrom": "olm_one_time_keys",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -1723,13 +1829,13 @@
         }
       },
       "compositePrimaryKeys": {
-        "signal_one_time_keys_user_id_device_id_key_id_pk": {
+        "olm_one_time_keys_user_id_device_id_key_id_pk": {
           "columns": [
             "user_id",
             "device_id",
             "key_id"
           ],
-          "name": "signal_one_time_keys_user_id_device_id_key_id_pk"
+          "name": "olm_one_time_keys_user_id_device_id_key_id_pk"
         }
       },
       "uniqueConstraints": {},

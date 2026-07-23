@@ -7,13 +7,13 @@ import {
   encryptMessage,
   generateOneTimeKeyBatch,
   getIdentityKeys,
-  isValidSignalCiphertext,
+  isValidOlmCiphertext,
   loadOlm,
-  parseSignalEnvelope,
+  parseOlmEnvelope,
   verifyKeyBundleSignature,
   type SerializedAccount,
-  type SignalKeyBundle,
-} from "./signal-protocol"
+  type OlmKeyBundle,
+} from "./olm-protocol"
 
 const require = createRequire(import.meta.url)
 const OLM_WASM_PATH = require.resolve("@matrix-org/olm/olm.wasm")
@@ -27,8 +27,8 @@ async function makeDevice(userId: string, deviceId: string) {
   return { userId, deviceId, account, publish }
 }
 
-/** Builds the SignalKeyBundle a claim endpoint would hand out for this device's fallback key. */
-function fallbackBundle(publish: Awaited<ReturnType<typeof makeDevice>>["publish"]): SignalKeyBundle {
+/** Builds the OlmKeyBundle a claim endpoint would hand out for this device's fallback key. */
+function fallbackBundle(publish: Awaited<ReturnType<typeof makeDevice>>["publish"]): OlmKeyBundle {
   return {
     curve25519IdentityKey: publish.curve25519IdentityKey,
     ed25519IdentityKey: publish.ed25519IdentityKey,
@@ -39,7 +39,7 @@ function fallbackBundle(publish: Awaited<ReturnType<typeof makeDevice>>["publish
   }
 }
 
-function oneTimeKeyBundle(publish: Awaited<ReturnType<typeof makeDevice>>["publish"], index = 0): SignalKeyBundle {
+function oneTimeKeyBundle(publish: Awaited<ReturnType<typeof makeDevice>>["publish"], index = 0): OlmKeyBundle {
   const otk = publish.oneTimeKeys[index]
   if (!otk) throw new Error("no one-time key at index")
   return {
@@ -52,7 +52,7 @@ function oneTimeKeyBundle(publish: Awaited<ReturnType<typeof makeDevice>>["publi
   }
 }
 
-describe("signal-protocol: identity", () => {
+describe("olm-protocol: identity", () => {
   it("creates an identity with a fallback key and one-time keys, all self-signed", async () => {
     const alice = await makeDevice("alice", "device-1")
     expect(alice.publish.curve25519IdentityKey).toBeTruthy()
@@ -70,7 +70,7 @@ describe("signal-protocol: identity", () => {
 
     // Swap in mallory's identity keys but keep alice's signed fallback key —
     // signature won't verify against the substituted identity.
-    const forged: SignalKeyBundle = {
+    const forged: OlmKeyBundle = {
       ...fallbackBundle(alice.publish),
       curve25519IdentityKey: mallory.publish.curve25519IdentityKey,
       ed25519IdentityKey: mallory.publish.ed25519IdentityKey,
@@ -100,7 +100,7 @@ describe("signal-protocol: identity", () => {
     const original = new Set(alice.publish.oneTimeKeys.map((k) => k.keyId))
     for (const key of oneTimeKeys) expect(original.has(key.keyId)).toBe(false)
     for (const key of oneTimeKeys) {
-      const bundle: SignalKeyBundle = {
+      const bundle: OlmKeyBundle = {
         curve25519IdentityKey: alice.publish.curve25519IdentityKey,
         ed25519IdentityKey: alice.publish.ed25519IdentityKey,
         keyId: key.keyId,
@@ -114,7 +114,7 @@ describe("signal-protocol: identity", () => {
   })
 })
 
-describe("signal-protocol: pairwise session (1:1)", () => {
+describe("olm-protocol: pairwise session (1:1)", () => {
   it("establishes a session via a one-time-key bundle and exchanges messages both ways", async () => {
     const alice = await makeDevice("alice", "device-1")
     const bob = await makeDevice("bob", "device-1")
@@ -199,7 +199,7 @@ describe("signal-protocol: pairwise session (1:1)", () => {
   })
 })
 
-describe("signal-protocol: group DM (pairwise fan-out, no sender-key ratchet — see issue #3)", () => {
+describe("olm-protocol: group DM (pairwise fan-out, no sender-key ratchet — see issue #3)", () => {
   it("encrypts one ciphertext per member device and each device decrypts independently", async () => {
     const alice = await makeDevice("alice", "device-1")
     const bob = await makeDevice("bob", "device-1")
@@ -227,31 +227,31 @@ describe("signal-protocol: group DM (pairwise fan-out, no sender-key ratchet —
   })
 })
 
-describe("signal-protocol: envelope helpers", () => {
+describe("olm-protocol: envelope helpers", () => {
   it("parses a well-formed envelope", () => {
-    const envelope = { kind: "dm-signal", v: 1, senderDeviceId: "device-1", ciphertexts: { "alice:device-1": { type: 1, body: "abc" } } }
-    expect(parseSignalEnvelope(JSON.stringify(envelope))).toEqual(envelope)
+    const envelope = { kind: "dm-olm", v: 1, senderDeviceId: "device-1", ciphertexts: { "alice:device-1": { type: 1, body: "abc" } } }
+    expect(parseOlmEnvelope(JSON.stringify(envelope))).toEqual(envelope)
   })
 
   it("rejects malformed or non-envelope content", () => {
-    expect(parseSignalEnvelope(null)).toBeNull()
-    expect(parseSignalEnvelope("not json")).toBeNull()
-    expect(parseSignalEnvelope(JSON.stringify({ kind: "dm-e2ee", version: 1 }))).toBeNull()
-    expect(parseSignalEnvelope(JSON.stringify({ kind: "dm-signal", v: 1, senderDeviceId: "device-1", ciphertexts: [] }))).toBeNull()
-    expect(parseSignalEnvelope(JSON.stringify({ kind: "dm-signal", v: 1, ciphertexts: { "a:b": { type: 1, body: "x" } } }))).toBeNull()
+    expect(parseOlmEnvelope(null)).toBeNull()
+    expect(parseOlmEnvelope("not json")).toBeNull()
+    expect(parseOlmEnvelope(JSON.stringify({ kind: "dm-e2ee", version: 1 }))).toBeNull()
+    expect(parseOlmEnvelope(JSON.stringify({ kind: "dm-olm", v: 1, senderDeviceId: "device-1", ciphertexts: [] }))).toBeNull()
+    expect(parseOlmEnvelope(JSON.stringify({ kind: "dm-olm", v: 1, ciphertexts: { "a:b": { type: 1, body: "x" } } }))).toBeNull()
   })
 
   it("validates individual ciphertext shape", () => {
-    expect(isValidSignalCiphertext({ type: 0, body: "abc" })).toBe(true)
-    expect(isValidSignalCiphertext({ type: 1, body: "abc" })).toBe(true)
-    expect(isValidSignalCiphertext({ type: 2, body: "abc" })).toBe(false)
-    expect(isValidSignalCiphertext({ type: 1, body: "" })).toBe(false)
-    expect(isValidSignalCiphertext(null)).toBe(false)
-    expect(isValidSignalCiphertext("abc")).toBe(false)
+    expect(isValidOlmCiphertext({ type: 0, body: "abc" })).toBe(true)
+    expect(isValidOlmCiphertext({ type: 1, body: "abc" })).toBe(true)
+    expect(isValidOlmCiphertext({ type: 2, body: "abc" })).toBe(false)
+    expect(isValidOlmCiphertext({ type: 1, body: "" })).toBe(false)
+    expect(isValidOlmCiphertext(null)).toBe(false)
+    expect(isValidOlmCiphertext("abc")).toBe(false)
   })
 })
 
-describe("signal-protocol: account pickling", () => {
+describe("olm-protocol: account pickling", () => {
   it("round-trips a pickled account through unpickle without losing identity", async () => {
     const alice = await makeDevice("alice", "device-1")
     const identityBefore = await getIdentityKeys(alice.account)

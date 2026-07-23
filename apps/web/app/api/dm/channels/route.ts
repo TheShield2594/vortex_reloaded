@@ -231,10 +231,11 @@ export async function POST(req: NextRequest) {
             isGroup,
             ownerId: user.id,
             isEncrypted: encrypted,
-            // Every newly-created encrypted channel uses Signal Protocol —
+            // Every newly-created encrypted channel uses Olm (Matrix.org's
+            // Double Ratchet implementation, not Signal's own codebase) —
             // "legacy-ecdh" only exists on channels created before this
             // migration and is never assigned going forward (see issue #1).
-            ...(encrypted ? { encryptionScheme: "signal-protocol" as const } : {}),
+            ...(encrypted ? { encryptionScheme: "olm" as const } : {}),
           })
           .returning()
           .get()

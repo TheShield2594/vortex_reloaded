@@ -1,9 +1,10 @@
 /**
- * Server-side shape validation for Signal Protocol (Olm) key material.
- * This is bounds/charset validation only — the server never cryptographically
- * verifies these keys (it can't; it doesn't hold anyone's private key).
- * Authenticity is verified client-side against the device's self-signed
- * ed25519 identity key — see lib/signal-protocol.ts's verifyKeyBundleSignature.
+ * Server-side shape validation for Olm (Matrix.org's Double Ratchet
+ * implementation) key material. This is bounds/charset validation only —
+ * the server never cryptographically verifies these keys (it can't; it
+ * doesn't hold anyone's private key). Authenticity is verified client-side
+ * against the device's self-signed ed25519 identity key — see
+ * lib/olm-protocol.ts's verifyKeyBundleSignature.
  */
 
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/

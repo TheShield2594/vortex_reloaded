@@ -33,13 +33,13 @@ export const dmChannels = sqliteTable(
     encryptionMembershipEpoch: integer("encryption_membership_epoch").notNull().default(0),
     /**
      * Which E2EE scheme this channel's `directMessages.content` envelopes
-     * use. New encrypted channels are always created as "signal-protocol"
-     * (see apps/web/app/api/dm/channels/route.ts) — "legacy-ecdh" (the
-     * static per-device ECDH+AES-GCM wrap in lib/dm-encryption.ts) only
-     * exists on channels created before the Signal Protocol migration and
-     * is never assigned to a new channel going forward.
+     * use. New encrypted channels are always created as "olm" (Matrix.org's
+     * Double Ratchet implementation — see apps/web/app/api/dm/channels/route.ts)
+     * — "legacy-ecdh" (the static per-device ECDH+AES-GCM wrap in
+     * lib/dm-encryption.ts) only exists on channels created before this
+     * migration and is never assigned to a new channel going forward.
      */
-    encryptionScheme: text("encryption_scheme", { enum: ["legacy-ecdh", "signal-protocol"] })
+    encryptionScheme: text("encryption_scheme", { enum: ["legacy-ecdh", "olm"] })
       .notNull()
       .default("legacy-ecdh"),
     themePreset: text("theme_preset", {
@@ -73,7 +73,7 @@ export const dmChannels = sqliteTable(
     ),
     check(
       "dm_channels_encryption_scheme_check",
-      sql`${table.encryptionScheme} in ('legacy-ecdh', 'signal-protocol')`
+      sql`${table.encryptionScheme} in ('legacy-ecdh', 'olm')`
     ),
   ]
 )
@@ -266,19 +266,21 @@ export const userDeviceKeys = sqliteTable(
 )
 
 /**
- * Signal Protocol (Olm) device identity — one row per (user, device),
- * independent of `userDeviceKeys` (the legacy-ecdh scheme's device table).
- * `curve25519IdentityKey`/`ed25519IdentityKey` come straight from
- * `Olm.Account.identity_keys()`; `fallback*` is the device's current Olm
- * fallback key (functions like Signal's signed prekey — a long-lived key
- * used to establish a session once one-time keys are exhausted). Both the
- * fallback key and every one-time key in `signalOneTimeKeys` are signed with
- * the device's ed25519 identity key (`Olm.Account.sign`) so a session
- * initiator can verify authenticity independent of server trust — see
- * apps/web/lib/signal-protocol.ts's `signBundle`/`verifyBundleSignature`.
+ * Olm (Matrix.org's Double Ratchet implementation — not Signal's own
+ * codebase/protocol, see issue #1's discussion) device identity — one row
+ * per (user, device), independent of `userDeviceKeys` (the legacy-ecdh
+ * scheme's device table). `curve25519IdentityKey`/`ed25519IdentityKey` come
+ * straight from `Olm.Account.identity_keys()`; `fallback*` is the device's
+ * current Olm fallback key (functions like Signal's signed prekey — a
+ * long-lived key used to establish a session once one-time keys are
+ * exhausted). Both the fallback key and every one-time key in
+ * `olmOneTimeKeys` are signed with the device's ed25519 identity key
+ * (`Olm.Account.sign`) so a session initiator can verify authenticity
+ * independent of server trust — see apps/web/lib/olm-protocol.ts's
+ * `signBundle`/`verifyBundleSignature`.
  */
-export const signalDeviceIdentities = sqliteTable(
-  "signal_device_identities",
+export const olmDeviceIdentities = sqliteTable(
+  "olm_device_identities",
   {
     userId: text("user_id")
       .notNull()
@@ -298,13 +300,13 @@ export const signalDeviceIdentities = sqliteTable(
 /**
  * One-time prekeys for X3DH-style Olm session establishment. Each row is
  * claimed (and deleted) at most once via
- * apps/web/app/api/dm/signal/keys/claim/route.ts's atomic
+ * apps/web/app/api/dm/olm/keys/claim/route.ts's atomic
  * select-then-delete, so two initiators can never race onto the same OTK —
  * reusing an Olm one-time key breaks the forward-secrecy guarantee it exists
  * to provide.
  */
-export const signalOneTimeKeys = sqliteTable(
-  "signal_one_time_keys",
+export const olmOneTimeKeys = sqliteTable(
+  "olm_one_time_keys",
   {
     userId: text("user_id")
       .notNull()
@@ -317,7 +319,7 @@ export const signalOneTimeKeys = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.userId, table.deviceId, table.keyId] }),
-    index("signal_one_time_keys_claim_idx").on(table.userId, table.deviceId, table.createdAt),
+    index("olm_one_time_keys_claim_idx").on(table.userId, table.deviceId, table.createdAt),
   ]
 )
 

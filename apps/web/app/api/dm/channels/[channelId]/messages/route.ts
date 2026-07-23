@@ -37,27 +37,27 @@ function isValidDmE2eeEnvelope(value: unknown): boolean {
     && envelope.keyVersion >= 0
 }
 
-function isValidSignalCiphertextShape(value: unknown): boolean {
+function isValidOlmCiphertextShape(value: unknown): boolean {
   if (!value || typeof value !== "object") return false
   const v = value as Record<string, unknown>
   return (v.type === 0 || v.type === 1) && typeof v.body === "string" && v.body.length > 0
 }
 
-// Signal Protocol envelopes carry one Olm ciphertext per recipient *device*
-// (see lib/signal-protocol.ts) — used for both 1:1 and group DM channels
+// Olm envelopes carry one ciphertext per recipient *device*
+// (see lib/olm-protocol.ts) — used for both 1:1 and group DM channels
 // alike, no separate group-ratchet envelope (issue #3: pairwise Double
 // Ratchet per conversation, not Megolm). The server only validates shape;
 // it never sees plaintext or holds any private key.
-function isValidDmSignalEnvelope(value: unknown): boolean {
+function isValidDmOlmEnvelope(value: unknown): boolean {
   if (!value || typeof value !== "object") return false
   const envelope = value as Record<string, unknown>
-  if (envelope.kind !== "dm-signal" || envelope.v !== 1) return false
+  if (envelope.kind !== "dm-olm" || envelope.v !== 1) return false
   if (typeof envelope.senderDeviceId !== "string" || envelope.senderDeviceId.length === 0) return false
   const ciphertexts = envelope.ciphertexts
   if (!ciphertexts || typeof ciphertexts !== "object" || Array.isArray(ciphertexts)) return false
   const entries = Object.entries(ciphertexts as Record<string, unknown>)
   if (entries.length === 0) return false
-  return entries.every(([key, ct]) => typeof key === "string" && key.includes(":") && isValidSignalCiphertextShape(ct))
+  return entries.every(([key, ct]) => typeof key === "string" && key.includes(":") && isValidOlmCiphertextShape(ct))
 }
 
 
@@ -142,8 +142,8 @@ export async function POST(
   if (channelInfo?.isEncrypted) {
     try {
       const parsed = JSON.parse(content)
-      if (channelInfo.encryptionScheme === "signal-protocol") {
-        if (!isValidDmSignalEnvelope(parsed)) {
+      if (channelInfo.encryptionScheme === "olm") {
+        if (!isValidDmOlmEnvelope(parsed)) {
           return NextResponse.json({ error: "Encrypted channels require encrypted payload" }, { status: 400 })
         }
       } else {

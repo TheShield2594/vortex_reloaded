@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { desc, eq } from "drizzle-orm"
-import { createDb, signalDeviceIdentities } from "@vortex/db"
+import { createDb, olmDeviceIdentities } from "@vortex/db"
 import { requireAuth } from "@/lib/utils/api-helpers"
 import { toSnakeCase } from "@/lib/utils/case"
 
@@ -10,8 +10,8 @@ const db = createDb()
 // needs to be bounded, not tied to the legacy-ecdh device cap specifically.
 const DEVICE_LIST_LIMIT = 20
 
-// GET /api/dm/signal/keys/devices/[userId] — public device identity list for
-// starting a Signal Protocol session. No membership/relationship check: like
+// GET /api/dm/olm/keys/devices/[userId] — public device identity list for
+// starting an Olm session. No membership/relationship check: like
 // Signal/Matrix key directories, any authenticated user can look up another
 // user's public identity keys — that's what makes first-contact (X3DH)
 // possible before any channel exists between them. Only public key material
@@ -32,14 +32,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
     try {
       rows = await db
         .select({
-          deviceId: signalDeviceIdentities.deviceId,
-          curve25519IdentityKey: signalDeviceIdentities.curve25519IdentityKey,
-          ed25519IdentityKey: signalDeviceIdentities.ed25519IdentityKey,
-          updatedAt: signalDeviceIdentities.updatedAt,
+          deviceId: olmDeviceIdentities.deviceId,
+          curve25519IdentityKey: olmDeviceIdentities.curve25519IdentityKey,
+          ed25519IdentityKey: olmDeviceIdentities.ed25519IdentityKey,
+          updatedAt: olmDeviceIdentities.updatedAt,
         })
-        .from(signalDeviceIdentities)
-        .where(eq(signalDeviceIdentities.userId, userId))
-        .orderBy(desc(signalDeviceIdentities.updatedAt))
+        .from(olmDeviceIdentities)
+        .where(eq(olmDeviceIdentities.userId, userId))
+        .orderBy(desc(olmDeviceIdentities.updatedAt))
         .limit(DEVICE_LIST_LIMIT)
     } catch {
       return NextResponse.json({ error: "Failed to fetch device identities" }, { status: 500 })
@@ -47,7 +47,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ use
 
     return NextResponse.json({ devices: toSnakeCase(rows) })
   } catch (err) {
-    console.error("[dm/signal/keys/devices/[userId] GET] error:", err)
+    console.error("[dm/olm/keys/devices/[userId] GET] error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

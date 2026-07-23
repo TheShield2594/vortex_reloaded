@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { and, eq, sql } from "drizzle-orm"
-import { createDb, signalDeviceIdentities, signalOneTimeKeys } from "@vortex/db"
+import { createDb, olmDeviceIdentities, olmOneTimeKeys } from "@vortex/db"
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { createLogger } from "@/lib/logger"
 import {
@@ -9,9 +9,9 @@ import {
   isValidOlmSignature,
   isValidOlmKeyId,
   validateOneTimeKeyEntry,
-} from "@/lib/signal-key-validation"
+} from "@/lib/olm-key-validation"
 
-const log = createLogger("api/dm/signal/keys/device")
+const log = createLogger("api/dm/olm/keys/device")
 const db = createDb()
 
 // Matches PER_USER_DEVICE_LIMIT elsewhere (legacy-ecdh's user_device_keys cap)
@@ -46,13 +46,13 @@ function validateBody(body: RegisterBody) {
   return null
 }
 
-// POST /api/dm/signal/keys/device — publish (or top up) this device's Signal Protocol identity
+// POST /api/dm/olm/keys/device — publish (or top up) this device's Olm identity
 export async function POST(req: NextRequest) {
   try {
     const { user, error: authError } = await requireAuth()
     if (authError) return authError
 
-    const limited = await checkRateLimit(user.id, "signal:register-device", { limit: 10, windowMs: 60_000 })
+    const limited = await checkRateLimit(user.id, "olm:register-device", { limit: 10, windowMs: 60_000 })
     if (limited) return limited
 
     const { data: body, error: parseError } = await parseJsonBody<RegisterBody>(req)
@@ -75,11 +75,11 @@ export async function POST(req: NextRequest) {
       db.transaction((tx) => {
         const existing = tx
           .select({
-            curve25519IdentityKey: signalDeviceIdentities.curve25519IdentityKey,
-            ed25519IdentityKey: signalDeviceIdentities.ed25519IdentityKey,
+            curve25519IdentityKey: olmDeviceIdentities.curve25519IdentityKey,
+            ed25519IdentityKey: olmDeviceIdentities.ed25519IdentityKey,
           })
-          .from(signalDeviceIdentities)
-          .where(and(eq(signalDeviceIdentities.userId, user.id), eq(signalDeviceIdentities.deviceId, deviceId)))
+          .from(olmDeviceIdentities)
+          .where(and(eq(olmDeviceIdentities.userId, user.id), eq(olmDeviceIdentities.deviceId, deviceId)))
           .get()
 
         // An Olm account's identity keypair is generated once and never
@@ -98,8 +98,8 @@ export async function POST(req: NextRequest) {
         if (!existing) {
           const deviceCount = tx
             .select({ count: sql<number>`count(*)` })
-            .from(signalDeviceIdentities)
-            .where(eq(signalDeviceIdentities.userId, user.id))
+            .from(olmDeviceIdentities)
+            .where(eq(olmDeviceIdentities.userId, user.id))
             .get()
           if ((deviceCount?.count ?? 0) >= DEVICE_LIMIT) {
             throw new Error("device_limit_reached")
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         }
 
         const nowIso = new Date().toISOString()
-        tx.insert(signalDeviceIdentities)
+        tx.insert(olmDeviceIdentities)
           .values({
             userId: user.id,
             deviceId,
@@ -119,13 +119,13 @@ export async function POST(req: NextRequest) {
             updatedAt: nowIso,
           })
           .onConflictDoUpdate({
-            target: [signalDeviceIdentities.userId, signalDeviceIdentities.deviceId],
+            target: [olmDeviceIdentities.userId, olmDeviceIdentities.deviceId],
             set: { fallbackKeyId, fallbackPublicKey, fallbackSignature, updatedAt: nowIso },
           })
           .run()
 
         for (const key of oneTimeKeys) {
-          tx.insert(signalOneTimeKeys)
+          tx.insert(olmOneTimeKeys)
             .values({ userId: user.id, deviceId, keyId: key.keyId, publicKey: key.publicKey, signature: key.signature })
             .onConflictDoNothing()
             .run()
@@ -136,25 +136,25 @@ export async function POST(req: NextRequest) {
         // claiming keys (e.g. a low-traffic device).
         const excess = tx
           .select({ count: sql<number>`count(*)` })
-          .from(signalOneTimeKeys)
-          .where(and(eq(signalOneTimeKeys.userId, user.id), eq(signalOneTimeKeys.deviceId, deviceId)))
+          .from(olmOneTimeKeys)
+          .where(and(eq(olmOneTimeKeys.userId, user.id), eq(olmOneTimeKeys.deviceId, deviceId)))
           .get()
         const overflow = (excess?.count ?? 0) - MAX_STORED_ONE_TIME_KEYS
         if (overflow > 0) {
           const staleIds = tx
-            .select({ keyId: signalOneTimeKeys.keyId })
-            .from(signalOneTimeKeys)
-            .where(and(eq(signalOneTimeKeys.userId, user.id), eq(signalOneTimeKeys.deviceId, deviceId)))
-            .orderBy(signalOneTimeKeys.createdAt)
+            .select({ keyId: olmOneTimeKeys.keyId })
+            .from(olmOneTimeKeys)
+            .where(and(eq(olmOneTimeKeys.userId, user.id), eq(olmOneTimeKeys.deviceId, deviceId)))
+            .orderBy(olmOneTimeKeys.createdAt)
             .limit(overflow)
             .all()
           for (const row of staleIds) {
-            tx.delete(signalOneTimeKeys)
+            tx.delete(olmOneTimeKeys)
               .where(
                 and(
-                  eq(signalOneTimeKeys.userId, user.id),
-                  eq(signalOneTimeKeys.deviceId, deviceId),
-                  eq(signalOneTimeKeys.keyId, row.keyId)
+                  eq(olmOneTimeKeys.userId, user.id),
+                  eq(olmOneTimeKeys.deviceId, deviceId),
+                  eq(olmOneTimeKeys.keyId, row.keyId)
                 )
               )
               .run()
@@ -172,14 +172,14 @@ export async function POST(req: NextRequest) {
       if (message.includes("device_limit_reached")) {
         return NextResponse.json({ error: `Device limit reached (${DEVICE_LIMIT})` }, { status: 409 })
       }
-      log.error({ route: "/api/dm/signal/keys/device", action: "POST", userId: user.id, error: message }, "failed to register device")
+      log.error({ route: "/api/dm/olm/keys/device", action: "POST", userId: user.id, error: message }, "failed to register device")
       return NextResponse.json({ error: "Failed to register device key" }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true })
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error"
-    log.error({ route: "/api/dm/signal/keys/device", action: "POST", error: message }, "POST error")
+    log.error({ route: "/api/dm/olm/keys/device", action: "POST", error: message }, "POST error")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

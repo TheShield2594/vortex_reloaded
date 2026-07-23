@@ -1,7 +1,7 @@
 /**
- * Browser-side persistence shell for signal-protocol.ts's pure crypto core.
+ * Browser-side persistence shell for olm-protocol.ts's pure crypto core.
  * Owns IndexedDB access and the outer at-rest encryption of Olm pickles —
- * deliberately kept separate from signal-protocol.ts so that module stays
+ * deliberately kept separate from olm-protocol.ts so that module stays
  * network/storage-free and unit-testable under plain Node.
  *
  * Every Olm account/session pickle is wrapped with a non-extractable
@@ -9,7 +9,7 @@
  * "IndexedDB + non-extractable CryptoKey" trust model the legacy-ecdh scheme
  * already uses for its device private key (see dm-channel-area.tsx's
  * putDevicePrivateKey). Olm's own pickle passphrase is a fixed, non-secret
- * constant (see signal-protocol.ts) since this outer layer is what actually
+ * constant (see olm-protocol.ts) since this outer layer is what actually
  * protects the data at rest.
  */
 import {
@@ -23,14 +23,14 @@ import {
   verifyKeyBundleSignature,
   type SerializedAccount,
   type SerializedSession,
-  type SignalCiphertext,
-  type SignalKeyBundle,
-  type SignalPublishBundle,
-  type SignalTarget,
-} from "./signal-protocol"
+  type OlmCiphertext,
+  type OlmKeyBundle,
+  type OlmPublishBundle,
+  type OlmTarget,
+} from "./olm-protocol"
 
-const DEVICE_ID_STORAGE_KEY = "dm-signal-device-id-v1"
-const DB_NAME = "vortexchat-signal-v1"
+const DEVICE_ID_STORAGE_KEY = "dm-olm-device-id-v1"
+const DB_NAME = "vortexchat-olm-v1"
 const WRAP_KEY_STORE = "wrap-key"
 const ACCOUNT_STORE = "account"
 const SESSION_STORE = "sessions"
@@ -114,7 +114,7 @@ async function unwrapPickle(blob: WrappedBlob, wrapKey: CryptoKey): Promise<stri
   return new TextDecoder().decode(plain)
 }
 
-export function getOrCreateSignalDeviceId(): string {
+export function getOrCreateOlmDeviceId(): string {
   const existing = localStorage.getItem(DEVICE_ID_STORAGE_KEY)
   if (existing) return existing
   const id = crypto.randomUUID()
@@ -132,17 +132,17 @@ async function saveAccount(account: SerializedAccount, wrapKey: CryptoKey): Prom
   await idbPut(ACCOUNT_STORE, "self", await wrapPickle(account.pickle, wrapKey))
 }
 
-async function loadSession(target: SignalTarget, wrapKey: CryptoKey): Promise<SerializedSession | null> {
+async function loadSession(target: OlmTarget, wrapKey: CryptoKey): Promise<SerializedSession | null> {
   const blob = await idbGet<WrappedBlob>(SESSION_STORE, targetKey(target))
   if (!blob) return null
   return { pickle: await unwrapPickle(blob, wrapKey) }
 }
 
-async function saveSession(target: SignalTarget, session: SerializedSession, wrapKey: CryptoKey): Promise<void> {
+async function saveSession(target: OlmTarget, session: SerializedSession, wrapKey: CryptoKey): Promise<void> {
   await idbPut(SESSION_STORE, targetKey(target), await wrapPickle(session.pickle, wrapKey))
 }
 
-export type SignalIdentity = {
+export type OlmIdentity = {
   deviceId: string
   curve25519IdentityKey: string
   ed25519IdentityKey: string
@@ -151,13 +151,13 @@ export type SignalIdentity = {
 /**
  * Loads this browser's device identity, creating one (and a fresh key
  * bundle to publish) if none exists yet. `publish` is non-null only when
- * the caller needs to POST a new bundle to /api/dm/signal/keys/device —
+ * the caller needs to POST a new bundle to /api/dm/olm/keys/device —
  * i.e. the very first time a device identity is created.
  */
-export async function ensureSignalIdentity(
+export async function ensureOlmIdentity(
   userId: string
-): Promise<{ identity: SignalIdentity; publish: SignalPublishBundle | null }> {
-  const deviceId = getOrCreateSignalDeviceId()
+): Promise<{ identity: OlmIdentity; publish: OlmPublishBundle | null }> {
+  const deviceId = getOrCreateOlmDeviceId()
   const wrapKey = await getOrCreateWrapKey()
   const existing = await loadAccount(wrapKey)
 
@@ -178,14 +178,14 @@ export async function ensureSignalIdentity(
 export async function topUpOneTimeKeys(userId: string, deviceId: string, count = 20) {
   const wrapKey = await getOrCreateWrapKey()
   const account = await loadAccount(wrapKey)
-  if (!account) throw new Error("No local Signal Protocol identity to top up")
+  if (!account) throw new Error("No local Olm identity to top up")
   const { account: updated, oneTimeKeys } = await generateOneTimeKeyBatch(account, userId, deviceId, count)
   await saveAccount(updated, wrapKey)
   return oneTimeKeys
 }
 
 /** True if a pairwise session with this device is already cached locally. */
-export async function hasSessionWith(target: SignalTarget): Promise<boolean> {
+export async function hasSessionWith(target: OlmTarget): Promise<boolean> {
   const wrapKey = await getOrCreateWrapKey()
   return (await loadSession(target, wrapKey)) !== null
 }
@@ -197,9 +197,9 @@ export async function hasSessionWith(target: SignalTarget): Promise<boolean> {
 export async function ensureOutboundSession(
   remoteUserId: string,
   remoteDeviceId: string,
-  bundle: SignalKeyBundle
+  bundle: OlmKeyBundle
 ): Promise<void> {
-  const target: SignalTarget = { userId: remoteUserId, deviceId: remoteDeviceId }
+  const target: OlmTarget = { userId: remoteUserId, deviceId: remoteDeviceId }
   const wrapKey = await getOrCreateWrapKey()
   if (await loadSession(target, wrapKey)) return
 
@@ -207,14 +207,14 @@ export async function ensureOutboundSession(
   if (!verified) throw new Error(`Untrusted key bundle signature for ${remoteUserId}:${remoteDeviceId}`)
 
   const account = await loadAccount(wrapKey)
-  if (!account) throw new Error("No local Signal Protocol identity")
+  if (!account) throw new Error("No local Olm identity")
   const { session } = await createOutboundSession(account, bundle)
   await saveSession(target, session, wrapKey)
 }
 
 /** Encrypts plaintext for a device with an already-established session (call ensureOutboundSession first). */
-export async function encryptTo(remoteUserId: string, remoteDeviceId: string, plaintext: string): Promise<SignalCiphertext> {
-  const target: SignalTarget = { userId: remoteUserId, deviceId: remoteDeviceId }
+export async function encryptTo(remoteUserId: string, remoteDeviceId: string, plaintext: string): Promise<OlmCiphertext> {
+  const target: OlmTarget = { userId: remoteUserId, deviceId: remoteDeviceId }
   const wrapKey = await getOrCreateWrapKey()
   const session = await loadSession(target, wrapKey)
   if (!session) throw new Error(`No session with ${remoteUserId}:${remoteDeviceId}`)
@@ -224,11 +224,11 @@ export async function encryptTo(remoteUserId: string, remoteDeviceId: string, pl
 }
 
 /** Decrypts a ciphertext from a remote device, establishing an inbound session first if needed. */
-export async function decryptFrom(remoteUserId: string, remoteDeviceId: string, ciphertext: SignalCiphertext): Promise<string> {
-  const target: SignalTarget = { userId: remoteUserId, deviceId: remoteDeviceId }
+export async function decryptFrom(remoteUserId: string, remoteDeviceId: string, ciphertext: OlmCiphertext): Promise<string> {
+  const target: OlmTarget = { userId: remoteUserId, deviceId: remoteDeviceId }
   const wrapKey = await getOrCreateWrapKey()
   const account = await loadAccount(wrapKey)
-  if (!account) throw new Error("No local Signal Protocol identity")
+  if (!account) throw new Error("No local Olm identity")
   const session = await loadSession(target, wrapKey)
 
   const result = await decryptMessage(account, session, ciphertext)
@@ -237,8 +237,8 @@ export async function decryptFrom(remoteUserId: string, remoteDeviceId: string, 
   return result.plaintext
 }
 
-/** Wipes all local Signal Protocol state (identity, sessions). Does not affect the server's published keys. */
-export async function resetSignalIdentity(): Promise<void> {
+/** Wipes all local Olm state (identity, sessions). Does not affect the server's published keys. */
+export async function resetOlmIdentity(): Promise<void> {
   localStorage.removeItem(DEVICE_ID_STORAGE_KEY)
   await idbClearAll()
 }

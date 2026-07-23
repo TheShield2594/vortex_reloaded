@@ -58,11 +58,11 @@ export const FIXTURE_TABLES: Record<string, PgRow[]> = {
       is_encrypted: false,
       encryption_key_version: 1,
       encryption_membership_epoch: 0,
-      // No Postgres source column ever existed for this — Signal Protocol
+      // No Postgres source column ever existed for this — Olm-based E2EE
       // (see issue #1) is SQLite-only, added after the Supabase migration
       // this fixture models. Every row this import path ever really sees
       // therefore predates it and must be "legacy-ecdh" by definition,
-      // same as migrations/0001_special_blazing_skull.sql's backfill.
+      // same as migrations/0001_strong_slayback.sql's backfill.
       encryption_scheme: "legacy-ecdh",
       theme_preset: null,
       created_at: new Date("2026-01-02T00:00:00.000Z"),

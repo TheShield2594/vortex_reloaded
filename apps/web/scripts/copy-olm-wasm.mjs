@@ -1,5 +1,5 @@
 // Copies @matrix-org/olm's WASM binary into public/ so the browser can fetch
-// it directly (Olm.init({ locateFile }) — see lib/signal-protocol.ts). This
+// it directly (Olm.init({ locateFile }) — see lib/olm-protocol.ts). This
 // is a plain static-asset copy, not a webpack/wasm-loader integration, since
 // olm.js (the Emscripten glue) fetches the .wasm file itself at runtime
 // rather than being imported as a WASM module.

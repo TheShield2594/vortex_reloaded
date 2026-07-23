@@ -1,41 +1,46 @@
 /**
- * Signal Protocol (Olm) crypto core for DM channels — see issue #1 ("E2E:
- * Signal Protocol") and issue #3, which specifies pairwise Double Ratchet
- * sessions per conversation rather than a group sender-key ratchet (no
- * Megolm): every message, 1:1 or group, is encrypted once per recipient
- * *device* using an Olm session with that device.
+ * Olm crypto core for DM channels — see issue #1 ("E2E: Signal Protocol")
+ * and issue #3, which specifies pairwise Double Ratchet sessions per
+ * conversation rather than a group sender-key ratchet (no Megolm): every
+ * message, 1:1 or group, is encrypted once per recipient *device* using an
+ * Olm session with that device.
+ *
+ * This is Olm — Matrix.org's own Double Ratchet implementation
+ * (@matrix-org/olm, Apache-2.0), not Signal's own codebase or protocol
+ * (which is GPLv3/AGPL-licensed; see the license discussion on issue #1).
+ * Olm implements the same class of protocol Signal popularized (X3DH-style
+ * session setup + Double Ratchet), independently specified and audited —
+ * it is deliberately never called "Signal Protocol" anywhere in this
+ * codebase, DB schema, or UI.
  *
  * This module is the pure crypto core: it takes and returns plain
  * serialized state (pickled Olm accounts/sessions as strings) and has no
- * knowledge of IndexedDB, fetch, or React — see signal-protocol-store.ts for
+ * knowledge of IndexedDB, fetch, or React — see olm-protocol-store.ts for
  * the browser-side persistence shell built on top of it. Keeping this layer
  * side-effect-free (besides the WASM module singleton) is what makes it
- * unit-testable under plain Node (see signal-protocol.test.ts).
- *
- * Uses @matrix-org/olm (Apache-2.0), an implementation of Olm (X3DH-style
- * session setup + Double Ratchet) and Megolm — only Olm is used here.
+ * unit-testable under plain Node (see olm-protocol.test.ts).
  */
 
 export type SerializedAccount = { pickle: string }
 export type SerializedSession = { pickle: string }
 
-export type SignalCiphertext = { type: 0 | 1; body: string }
+export type OlmCiphertext = { type: 0 | 1; body: string }
 
-export type SignalOneTimeKey = { keyId: string; publicKey: string; signature: string }
+export type OlmOneTimeKey = { keyId: string; publicKey: string; signature: string }
 
-/** What a device publishes to the server (see app/api/dm/signal/keys/device). */
-export type SignalPublishBundle = {
+/** What a device publishes to the server (see app/api/dm/olm/keys/device). */
+export type OlmPublishBundle = {
   deviceId: string
   curve25519IdentityKey: string
   ed25519IdentityKey: string
   fallbackKeyId: string
   fallbackPublicKey: string
   fallbackSignature: string
-  oneTimeKeys: SignalOneTimeKey[]
+  oneTimeKeys: OlmOneTimeKey[]
 }
 
 /** What a claiming client fetches to start a session with a remote device. */
-export type SignalKeyBundle = {
+export type OlmKeyBundle = {
   curve25519IdentityKey: string
   ed25519IdentityKey: string
   keyId: string
@@ -44,10 +49,10 @@ export type SignalKeyBundle = {
   isFallback: boolean
 }
 
-export type SignalTarget = { userId: string; deviceId: string }
+export type OlmTarget = { userId: string; deviceId: string }
 
-export type SignalEnvelope = {
-  kind: "dm-signal"
+export type OlmEnvelope = {
+  kind: "dm-olm"
   v: 1
   /**
    * The sending device's own deviceId (sender's userId is the message row's
@@ -57,19 +62,19 @@ export type SignalEnvelope = {
    */
   senderDeviceId: string
   /** Keyed by `${userId}:${deviceId}` — one ciphertext per recipient device. */
-  ciphertexts: Record<string, SignalCiphertext>
+  ciphertexts: Record<string, OlmCiphertext>
 }
 
 // Olm requires a pickle passphrase for its own at-rest encryption of account
-// and session state, but that's redundant here: signal-protocol-store.ts
+// and session state, but that's redundant here: olm-protocol-store.ts
 // wraps every pickle in an outer AES-GCM layer using a non-extractable
 // per-device CryptoKey before it ever touches IndexedDB, which is where the
 // real at-rest confidentiality comes from (same trust model the existing
 // legacy-ecdh scheme uses for its device private key). This constant only
 // needs to be non-empty, not secret.
-const OLM_PICKLE_KEY = "vortexchat-signal-pickle-v1"
+const OLM_PICKLE_KEY = "vortexchat-olm-pickle-v1"
 
-export function targetKey(target: SignalTarget): string {
+export function targetKey(target: OlmTarget): string {
   return `${target.userId}:${target.deviceId}`
 }
 
@@ -123,7 +128,7 @@ export async function createIdentity(
   userId: string,
   deviceId: string,
   oneTimeKeyCount = 20
-): Promise<{ account: SerializedAccount; publish: SignalPublishBundle }> {
+): Promise<{ account: SerializedAccount; publish: OlmPublishBundle }> {
   const Olm = await loadOlm()
   const account = new Olm.Account()
   try {
@@ -179,7 +184,7 @@ function generateOneTimeKeysOnAccount(
   userId: string,
   deviceId: string,
   count: number
-): SignalOneTimeKey[] {
+): OlmOneTimeKey[] {
   account.generate_one_time_keys(count)
   const generated = JSON.parse(account.one_time_keys()).curve25519 as Record<string, string>
   account.mark_keys_as_published()
@@ -196,7 +201,7 @@ export async function generateOneTimeKeyBatch(
   userId: string,
   deviceId: string,
   count = 20
-): Promise<{ account: SerializedAccount; oneTimeKeys: SignalOneTimeKey[] }> {
+): Promise<{ account: SerializedAccount; oneTimeKeys: OlmOneTimeKey[] }> {
   const Olm = await loadOlm()
   const account = new Olm.Account()
   try {
@@ -212,7 +217,7 @@ export async function generateOneTimeKeyBatch(
 export async function verifyKeyBundleSignature(
   remoteUserId: string,
   remoteDeviceId: string,
-  bundle: SignalKeyBundle
+  bundle: OlmKeyBundle
 ): Promise<boolean> {
   const Olm = await loadOlm()
   const utility = new Olm.Utility()
@@ -232,7 +237,7 @@ export async function verifyKeyBundleSignature(
 /** Starts an outbound session with a remote device from a verified key bundle (the X3DH-style handshake). */
 export async function createOutboundSession(
   account: SerializedAccount,
-  bundle: SignalKeyBundle
+  bundle: OlmKeyBundle
 ): Promise<{ session: SerializedSession }> {
   const Olm = await loadOlm()
   const acc = new Olm.Account()
@@ -251,7 +256,7 @@ export async function createOutboundSession(
 export async function encryptMessage(
   session: SerializedSession,
   plaintext: string
-): Promise<{ session: SerializedSession; ciphertext: SignalCiphertext }> {
+): Promise<{ session: SerializedSession; ciphertext: OlmCiphertext }> {
   const Olm = await loadOlm()
   const s = new Olm.Session()
   try {
@@ -275,7 +280,7 @@ export async function encryptMessage(
 export async function decryptMessage(
   account: SerializedAccount,
   session: SerializedSession | null,
-  ciphertext: SignalCiphertext
+  ciphertext: OlmCiphertext
 ): Promise<{ account: SerializedAccount; session: SerializedSession; plaintext: string }> {
   const Olm = await loadOlm()
   const acc = new Olm.Account()
@@ -313,12 +318,12 @@ export async function decryptMessage(
   }
 }
 
-export function parseSignalEnvelope(content: string | null): SignalEnvelope | null {
+export function parseOlmEnvelope(content: string | null): OlmEnvelope | null {
   if (!content) return null
   try {
     const parsed = JSON.parse(content)
     if (
-      parsed?.kind === "dm-signal"
+      parsed?.kind === "dm-olm"
       && parsed?.v === 1
       && typeof parsed?.senderDeviceId === "string"
       && parsed.senderDeviceId.length > 0
@@ -326,7 +331,7 @@ export function parseSignalEnvelope(content: string | null): SignalEnvelope | nu
       && typeof parsed.ciphertexts === "object"
       && !Array.isArray(parsed.ciphertexts)
     ) {
-      return parsed as SignalEnvelope
+      return parsed as OlmEnvelope
     }
   } catch {
     return null
@@ -334,7 +339,7 @@ export function parseSignalEnvelope(content: string | null): SignalEnvelope | nu
   return null
 }
 
-export function isValidSignalCiphertext(value: unknown): value is SignalCiphertext {
+export function isValidOlmCiphertext(value: unknown): value is OlmCiphertext {
   if (!value || typeof value !== "object") return false
   const v = value as Record<string, unknown>
   return (v.type === 0 || v.type === 1) && typeof v.body === "string" && v.body.length > 0
