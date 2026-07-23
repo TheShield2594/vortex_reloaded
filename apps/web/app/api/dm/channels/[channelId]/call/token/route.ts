@@ -22,9 +22,9 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   // Verify membership — same dm_channel_members lookup used by every other
-  // privileged DM route (see call/route.ts). The membership check has to
-  // happen before minting, since the signed JWT grant below is the only
-  // authorization LiveKit itself will ever check.
+  // privileged DM route. The membership check has to happen before minting,
+  // since the signed JWT grant below is the only authorization LiveKit
+  // itself will ever check.
   const { data: members } = await supabase
     .from("dm_channel_members")
     .select("user_id")

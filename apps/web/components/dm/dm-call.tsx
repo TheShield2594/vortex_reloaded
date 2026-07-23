@@ -4,16 +4,16 @@
  * DM Voice/Video Call signaling helpers.
  *
  * Architecture:
- * - Caller clicks Phone/Video button → broadcasts "call-invite" via Supabase Realtime
- * - Callee sees incoming call toast → accepts (broadcasts "call-accepted") or declines
- * - Both sides enter the call screen (see DMCallView in dm-channel-area.tsx — WebRTC
- *   P2P / full-mesh via the shared `dm-call:{channelId}` signaling channel)
- * - Either party can hang up (broadcasts "call-hangup" / leaves the mesh)
+ * - Caller clicks Phone/Video button → sends "invite" via the Socket.IO gateway
+ * - Callee sees incoming call toast → accepts (sends "accept") or declines ("decline")
+ * - Both sides enter the call screen (see DMCallView in dm-channel-area.tsx — LiveKit
+ *   SFU, a single `Room.connect()` to a room scoped to this DM channel)
+ * - Either party can hang up, or the caller can cancel while ringing ("cancel")
  */
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import { Phone, PhoneOff, Video, Loader2 } from "lucide-react"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { useGatewayContext } from "@/hooks/use-gateway-context"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 interface IncomingCall {
@@ -128,13 +128,12 @@ export function CallerRingingOverlay({ partnerName, partnerAvatar, withVideo, on
 // ─── useDMCall hook ─────────────────────────────────────────────────────────────
 // Manages incoming call state for a DM channel
 
-/** Manages incoming/outgoing DM call state and signaling via Supabase Realtime broadcast. */
+/** Manages incoming/outgoing DM call state and signaling via the Socket.IO gateway. */
 export function useDMCall(channelId: string, currentUserId: string, currentUserName: string) {
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
+  const gateway = useGatewayContext()
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null)
   const [activeCall, setActiveCall] = useState<{ withVideo: boolean } | null>(null)
   const [ringing, setRinging] = useState<{ withVideo: boolean } | null>(null)
-  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null)
   const incomingCallRef = useRef(incomingCall)
   incomingCallRef.current = incomingCall
   const ringingRef = useRef(ringing)
@@ -142,71 +141,68 @@ export function useDMCall(channelId: string, currentUserId: string, currentUserN
   const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    const ch = supabase.channel(`dm-call-notify:${channelId}`)
-    channelRef.current = ch
+    const removeListener = gateway.addCallSignalListener(channelId, (data) => {
+      if (data.userId === currentUserId) return
 
-    ch.on("broadcast", { event: "call-invite" }, ({ payload }) => {
-      if (payload.callerId === currentUserId) return
-      setIncomingCall({
-        callerId: payload.callerId,
-        callerName: payload.callerName,
-        callerAvatar: payload.callerAvatar ?? null,
-        channelId,
-        withVideo: payload.withVideo ?? false,
-      })
+      switch (data.type) {
+        case "invite":
+          setIncomingCall({
+            callerId: data.userId,
+            callerName: data.callerName ?? "Unknown",
+            callerAvatar: data.callerAvatar ?? null,
+            channelId,
+            withVideo: data.withVideo ?? false,
+          })
+          break
+        case "cancel":
+          if (incomingCallRef.current?.callerId === data.userId) setIncomingCall(null)
+          break
+        case "accept":
+          if (!ringingRef.current) return
+          if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
+          setRinging(null)
+          setActiveCall({ withVideo: data.withVideo ?? false })
+          break
+        case "decline":
+          if (!ringingRef.current) return
+          if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
+          setRinging(null)
+          break
+      }
     })
-    .on("broadcast", { event: "call-cancelled" }, ({ payload }) => {
-      if (incomingCallRef.current?.callerId === payload.callerId) setIncomingCall(null)
-    })
-    .on("broadcast", { event: "call-accepted" }, ({ payload }) => {
-      if (!ringingRef.current) return
-      if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
-      setRinging(null)
-      setActiveCall({ withVideo: payload.acceptedWithVideo ?? false })
-    })
-    .on("broadcast", { event: "call-declined" }, () => {
-      if (!ringingRef.current) return
-      if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
-      setRinging(null)
-    })
-    .subscribe()
 
     return () => {
       if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
-      supabase.removeChannel(ch)
+      removeListener()
     }
-  }, [channelId, currentUserId])
+  }, [channelId, currentUserId, gateway])
 
   const startCall = useCallback((withVideo: boolean, callerAvatar?: string | null) => {
-    channelRef.current?.send({
-      type: "broadcast",
-      event: "call-invite",
-      payload: { callerId: currentUserId, callerName: currentUserName, callerAvatar: callerAvatar ?? null, withVideo },
-    })
+    gateway.sendCallSignal({ channelId, type: "invite", withVideo, callerName: currentUserName, callerAvatar: callerAvatar ?? null })
     setRinging({ withVideo })
     ringTimeoutRef.current = setTimeout(() => {
       ringTimeoutRef.current = null
-      channelRef.current?.send({ type: "broadcast", event: "call-cancelled", payload: { callerId: currentUserId } })
+      gateway.sendCallSignal({ channelId, type: "cancel" })
       setRinging(null)
     }, 30_000)
-  }, [currentUserId, currentUserName])
+  }, [channelId, currentUserName, gateway])
 
   const cancelCall = useCallback(() => {
     if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
-    channelRef.current?.send({ type: "broadcast", event: "call-cancelled", payload: { callerId: currentUserId } })
+    gateway.sendCallSignal({ channelId, type: "cancel" })
     setRinging(null)
-  }, [currentUserId])
+  }, [channelId, gateway])
 
   const acceptCall = useCallback((withVideo: boolean) => {
-    channelRef.current?.send({ type: "broadcast", event: "call-accepted", payload: { acceptedWithVideo: withVideo } })
+    gateway.sendCallSignal({ channelId, type: "accept", withVideo })
     setIncomingCall(null)
     setActiveCall({ withVideo })
-  }, [])
+  }, [channelId, gateway])
 
   const declineCall = useCallback(() => {
-    channelRef.current?.send({ type: "broadcast", event: "call-declined", payload: {} })
+    gateway.sendCallSignal({ channelId, type: "decline" })
     setIncomingCall(null)
-  }, [])
+  }, [channelId, gateway])
 
   const endCall = useCallback(() => {
     setActiveCall(null)

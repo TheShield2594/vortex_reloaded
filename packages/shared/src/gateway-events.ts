@@ -46,6 +46,15 @@ export interface GatewayClientEvents {
     /** Map of channelId → lastEventId the client received. */
     channels: Record<string, string>
   }
+
+  /** DM/group call ring signaling (invite/cancel/accept/decline handshake). */
+  "gateway:call-signal": {
+    channelId: string
+    type: "invite" | "cancel" | "accept" | "decline"
+    withVideo?: boolean
+    callerName?: string
+    callerAvatar?: string | null
+  }
 }
 
 // ── Server → Client Events ──────────────────────────────────────────────────
@@ -89,6 +98,17 @@ export interface GatewayServerEvents {
     channels: string[]
     /** Channels where the gap was too large (client should full-reload). */
     gapTooLarge: string[]
+  }
+
+  /** DM/group call ring signaling, relayed to the other channel member(s). */
+  "gateway:call-signal": {
+    channelId: string
+    type: "invite" | "cancel" | "accept" | "decline"
+    /** The user who sent this signal. */
+    userId: string
+    withVideo?: boolean
+    callerName?: string
+    callerAvatar?: string | null
   }
 }
 
@@ -147,6 +167,9 @@ export const TYPING_RATE_LIMIT = 30
 
 /** Rate limit for presence updates (events/min). */
 export const PRESENCE_RATE_LIMIT = 12
+
+/** Rate limit for call ring-signal events (events/min). */
+export const CALL_SIGNAL_RATE_LIMIT = 20
 
 /** Well-known event types that should be stored in Redis Streams. */
 export const PERSISTED_EVENT_TYPES: ReadonlySet<VortexEventType> = new Set([
