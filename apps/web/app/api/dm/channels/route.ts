@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
+import { publishGatewayEvent } from "@/lib/gateway-publish"
 
 // GET /api/dm/channels — list all DM channels with unread counts
 export async function GET() {
@@ -202,6 +203,18 @@ export async function POST(req: NextRequest) {
     if (memErr) {
       await supabase.from("dm_channels").delete().eq("id", channel.id)
       return NextResponse.json({ error: "Failed to create DM channel" }, { status: 500 })
+    }
+
+    // Notify the other member(s) so their DM list picks up the new channel —
+    // the creator's own client already has the channel id from this response.
+    for (const memberId of allMembers) {
+      if (memberId === user.id) continue
+      publishGatewayEvent({
+        type: "member.joined",
+        channelId: `user:${memberId}`,
+        actorId: user.id,
+        data: { channelId: channel.id },
+      }, { route: "/api/dm/channels" })
     }
 
     return NextResponse.json({ id: channel.id, existing: false }, { status: 201 })

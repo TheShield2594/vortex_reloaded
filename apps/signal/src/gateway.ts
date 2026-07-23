@@ -547,6 +547,12 @@ async function checkChannelAccess(
   userId: string,
   channelId: string,
 ): Promise<boolean> {
+  // Synthetic per-user channel (e.g. notification.created, cross-channel
+  // member.joined/left notices) — only the user themself may subscribe.
+  if (channelId.startsWith("user:")) {
+    return channelId === `user:${userId}`
+  }
+
   try {
     // DM/group channel — check the caller is a participant
     const { data: participant } = await supabase

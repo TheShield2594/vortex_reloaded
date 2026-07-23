@@ -6,7 +6,7 @@ import { useShallow } from "zustand/react/shallow"
 import { useAppearanceStore } from "@/lib/stores/appearance-store"
 import { useApplyAppearance } from "@/hooks/use-apply-appearance"
 import { useGatewayPresence } from "@/hooks/use-gateway-presence"
-import { GatewayProvider } from "@/hooks/use-gateway-context"
+import { GatewayProvider, useGatewayContext } from "@/hooks/use-gateway-context"
 import { usePushNotifications } from "@/hooks/use-push-notifications"
 import { useTabUnreadTitle } from "@/hooks/use-tab-unread-title"
 import { useGifAutoplay } from "@/hooks/use-gif-autoplay"
@@ -66,6 +66,21 @@ function AppProviderInner({ user, servers, children }: AppProviderProps): React.
 
   // Auto-sync presence: marks user online on mount, offline on tab close
   useGatewayPresence(user?.id ?? null, user?.status ?? "online")
+
+  // Join the per-user gateway channel — carries notification.created and
+  // cross-channel member.joined/left notices (a DM channel the user was
+  // just added to or removed from, before their client has a room to
+  // receive per-channel events on). Individual hooks below listen via
+  // gateway.addEventListener("user:{id}", ...) without managing their own
+  // subscribe/unsubscribe, since only one owner should manage this room's
+  // lifecycle per socket.
+  const gateway = useGatewayContext()
+  useEffect(() => {
+    if (!user?.id) return
+    const userChannel = `user:${user.id}`
+    gateway.subscribe([userChannel])
+    return () => { gateway.unsubscribe([userChannel]) }
+  }, [user?.id, gateway])
 
   // GIF autoplay: freeze/restore GIF images based on user preference
   useGifAutoplay(gifAutoplay)

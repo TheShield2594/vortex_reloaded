@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { sendPushToUser } from "@/lib/push"
 import { requireAuth, checkRateLimit } from "@/lib/utils/api-helpers"
+import { publishGatewayEvent } from "@/lib/gateway-publish"
 
 // GET /api/friends
 // Returns { accepted: FriendWithUser[], pending_received: FriendWithUser[], pending_sent: FriendWithUser[], blocked: FriendWithUser[] }
@@ -155,13 +156,21 @@ export async function POST(req: NextRequest) {
               .eq("user_id", target.id)
               .maybeSingle()
             if (prefs && prefs.friend_request_notifications === false) return
-            await serviceSupabase.from("notifications").insert({
+            const { data: notif } = await serviceSupabase.from("notifications").insert({
               user_id: target.id,
               type: "friend_request",
               title: `${accepterName} accepted your friend request`,
               body: "You can now message each other.",
               icon_url: accepter?.avatar_url ?? null,
-            })
+            }).select().single()
+            if (notif) {
+              publishGatewayEvent({
+                type: "notification.created",
+                channelId: `user:${target.id}`,
+                actorId: user.id,
+                data: notif,
+              }, { route: "/api/friends" })
+            }
             await sendPushToUser(target.id, {
               title: "Friend Request Accepted",
               body: `${accepterName} accepted your friend request`,
@@ -206,13 +215,21 @@ export async function POST(req: NextRequest) {
 
       if (prefs && prefs.friend_request_notifications === false) return
 
-      await serviceSupabase.from("notifications").insert({
+      const { data: notif } = await serviceSupabase.from("notifications").insert({
         user_id: target.id,
         type: "friend_request",
         title: `${senderName} sent you a friend request`,
         body: "Accept or decline in the Friends section.",
         icon_url: sender?.avatar_url ?? null,
-      })
+      }).select().single()
+      if (notif) {
+        publishGatewayEvent({
+          type: "notification.created",
+          channelId: `user:${target.id}`,
+          actorId: user.id,
+          data: notif,
+        }, { route: "/api/friends" })
+      }
 
       await sendPushToUser(target.id, {
         title: "New Friend Request",
@@ -280,13 +297,21 @@ export async function PATCH(req: NextRequest) {
 
         if (prefs && prefs.friend_request_notifications === false) return
 
-        await serviceSupabase.from("notifications").insert({
+        const { data: notif } = await serviceSupabase.from("notifications").insert({
           user_id: requesterId,
           type: "friend_request",
           title: `${accepterName} accepted your friend request`,
           body: "You can now message each other.",
           icon_url: accepter?.avatar_url ?? null,
-        })
+        }).select().single()
+        if (notif) {
+          publishGatewayEvent({
+            type: "notification.created",
+            channelId: `user:${requesterId}`,
+            actorId: user.id,
+            data: notif,
+          }, { route: "/api/friends" })
+        }
 
         await sendPushToUser(requesterId, {
           title: "Friend Request Accepted",

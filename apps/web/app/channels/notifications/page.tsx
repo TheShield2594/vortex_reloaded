@@ -1,12 +1,14 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Bell, Check, CheckCheck, Hash, AtSign, UserPlus, X } from "lucide-react"
 import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences"
+import { useGatewayContext } from "@/hooks/use-gateway-context"
+import type { VortexEvent } from "@vortex/shared"
 import { shouldNotify, showBrowserNotification } from "@/lib/notification-manager"
 import { format } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -46,6 +48,7 @@ function mergeNotifications(existing: Notification[], incoming: Notification[]):
 
 export default function NotificationsPage() {
   const supabase = useMemo(() => createClientSupabaseClient(), [])
+  const gateway = useGatewayContext()
   const router = useRouter()
   const { playNotification } = useNotificationSound()
   const currentUser = useAppStore((s) => s.currentUser)
@@ -53,7 +56,6 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Filter>("all")
-  const subIdRef = useRef(0)
 
   // Local unread count for UI within this page (may be truncated to 50 rows)
   const localUnreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications])
@@ -91,48 +93,41 @@ export default function NotificationsPage() {
     loadNotifications()
   }, [loadNotifications])
 
-  // Real-time subscription
+  // Gateway: listen for newly created notifications on the per-user channel.
   useEffect(() => {
     if (!currentUser) return
-    const subId = ++subIdRef.current
-    const ch = supabase
-      .channel(`notifications-page:${currentUser.id}:${subId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${currentUser.id}` },
-        (payload) => {
-          const n = payload.new as Notification
-          setNotifications((prev) => mergeNotifications(prev, [n]).slice(0, 50))
-          if (!n.read) {
-            setTotalUnreadCount((prev) => prev + 1)
-            useAppStore.getState().setNotificationUnreadCount(
-              (useAppStore.getState().notificationUnreadCount ?? 0) + 1
-            )
-          }
-          const { shouldPlaySound, shouldShowBrowserNotification } = shouldNotify({
-            channelId: n.channel_id,
-            messageId: n.message_id,
-          })
-          if (shouldPlaySound && prefs.sound_enabled) {
-            const soundType = n.type === "mention" ? "mention" as const : "message" as const
-            playNotification(soundType)
-          }
-          if (shouldShowBrowserNotification && n.title) {
-            const url = n.server_id && n.channel_id
-              ? `/channels/${n.server_id}/${n.channel_id}`
-              : undefined
-            showBrowserNotification({
-              title: n.title,
-              body: n.body || "",
-              channelId: n.channel_id || undefined,
-              url,
-            })
-          }
-        }
-      )
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [currentUser, supabase, playNotification, prefs.sound_enabled])
+    const removeListener = gateway.addEventListener(`user:${currentUser.id}`, (event: VortexEvent) => {
+      if (event.type !== "notification.created") return
+      const n = event.data as Notification
+      setNotifications((prev) => mergeNotifications(prev, [n]).slice(0, 50))
+      if (!n.read) {
+        setTotalUnreadCount((prev) => prev + 1)
+        useAppStore.getState().setNotificationUnreadCount(
+          (useAppStore.getState().notificationUnreadCount ?? 0) + 1
+        )
+      }
+      const { shouldPlaySound, shouldShowBrowserNotification } = shouldNotify({
+        channelId: n.channel_id,
+        messageId: n.message_id,
+      })
+      if (shouldPlaySound && prefs.sound_enabled) {
+        const soundType = n.type === "mention" ? "mention" as const : "message" as const
+        playNotification(soundType)
+      }
+      if (shouldShowBrowserNotification && n.title) {
+        const url = n.server_id && n.channel_id
+          ? `/channels/${n.server_id}/${n.channel_id}`
+          : undefined
+        showBrowserNotification({
+          title: n.title,
+          body: n.body || "",
+          channelId: n.channel_id || undefined,
+          url,
+        })
+      }
+    })
+    return () => removeListener()
+  }, [currentUser, gateway, playNotification, prefs.sound_enabled])
 
   async function markAllRead(): Promise<void> {
     if (!currentUser) return

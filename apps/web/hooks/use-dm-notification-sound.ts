@@ -1,74 +1,94 @@
 "use client"
 
-import { useEffect, useMemo, useRef } from "react"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { isSoundEnabled } from "@/hooks/use-notification-preferences"
 import { shouldNotify, showBrowserNotification } from "@/lib/notification-manager"
+import { useGatewayContext } from "./use-gateway-context"
+import type { VortexEvent } from "@vortex/shared"
 
 /**
  * Global DM notification sound hook — mounted in AppProvider so it fires
  * even when the DMList component is not rendered (e.g. user is on a server).
  *
- * Listens for direct_messages INSERTs for the current user's DM channels
- * and plays a notification sound + shows browser notification when appropriate.
+ * Listens for message.created gateway events across all of the user's DM
+ * channels and plays a notification sound + shows browser notification when
+ * appropriate.
  */
 export function useDmNotificationSound(userId: string | null): void {
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
+  const gateway = useGatewayContext()
   const { playNotification } = useNotificationSound()
   const playRef = useRef(playNotification)
   playRef.current = playNotification
-  const subIdRef = useRef(0)
+  const [channelIds, setChannelIds] = useState<string[]>([])
 
+  const refreshChannelIds = useCallback(async () => {
+    if (!userId) {
+      setChannelIds([])
+      return
+    }
+    try {
+      const res = await fetch("/api/dm/channels")
+      if (!res.ok) return
+      const data = (await res.json()) as Array<{ id: string }>
+      setChannelIds(data.map((c) => c.id))
+    } catch {
+      // network failure — next membership change or reconnect will retry
+    }
+  }, [userId])
+
+  useEffect(() => { void refreshChannelIds() }, [refreshChannelIds])
+
+  // Re-fetch the channel list when we're added to or removed from a channel.
   useEffect(() => {
     if (!userId) return
+    const removeListener = gateway.addEventListener(`user:${userId}`, (event: VortexEvent) => {
+      if (event.type === "member.joined" || event.type === "member.left") void refreshChannelIds()
+    })
+    return () => removeListener()
+  }, [userId, gateway, refreshChannelIds])
 
-    // Subscribe to all direct_messages sent TO this user (sender_id != userId)
-    // We filter by the table and check sender_id in the callback since
-    // Supabase realtime doesn't support != filters.
-    const subId = ++subIdRef.current
-    const ch = supabase
-      .channel(`dm-notif-sound:${userId}:${subId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "direct_messages",
-        },
-        (payload) => {
-          const raw = payload.new
-          if (!raw || typeof raw !== "object") return
+  const channelIdsKey = channelIds.join(",")
 
-          const msg = raw as Record<string, unknown>
-          const senderId = typeof msg.sender_id === "string" ? msg.sender_id : undefined
-          const msgId = typeof msg.id === "string" ? msg.id : undefined
-          const dmChannelId = typeof msg.dm_channel_id === "string" ? msg.dm_channel_id : undefined
-          const content = typeof msg.content === "string" ? msg.content : undefined
+  // Sticky subscribe — see the note in dm-list.tsx on why this never
+  // unsubscribes (shared gateway rooms across independent hooks).
+  useEffect(() => {
+    if (channelIds.length === 0) return
+    gateway.subscribe(channelIds)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelIdsKey, gateway])
 
-          if (!senderId || senderId === userId) return
+  useEffect(() => {
+    if (!userId || channelIds.length === 0) return
 
-          const { shouldPlaySound, shouldShowBrowserNotification } = shouldNotify({
-            dmChannelId,
-            messageId: msgId,
-          })
+    const removeListeners = channelIds.map((channelId) =>
+      gateway.addEventListener(channelId, (event: VortexEvent) => {
+        if (event.type !== "message.created") return
+        if (event.actorId === userId) return
 
-          if (shouldPlaySound && isSoundEnabled()) {
-            playRef.current("dm")
-          }
+        const data = event.data as { messageId?: string; content?: string } | undefined
 
-          if (shouldShowBrowserNotification) {
-            showBrowserNotification({
-              title: "New Message",
-              body: content?.slice(0, 100) || "Sent a message",
-              channelId: dmChannelId,
-              url: dmChannelId ? `/channels/me/${dmChannelId}` : "/channels/me",
-            })
-          }
+        const { shouldPlaySound, shouldShowBrowserNotification } = shouldNotify({
+          dmChannelId: channelId,
+          messageId: data?.messageId,
+        })
+
+        if (shouldPlaySound && isSoundEnabled()) {
+          playRef.current("dm")
         }
-      )
-      .subscribe()
 
-    return () => { supabase.removeChannel(ch) }
-  }, [userId, supabase])
+        if (shouldShowBrowserNotification) {
+          showBrowserNotification({
+            title: "New Message",
+            body: data?.content?.slice(0, 100) || "Sent a message",
+            channelId,
+            url: `/channels/me/${channelId}`,
+          })
+        }
+      })
+    )
+
+    return () => { for (const remove of removeListeners) remove() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelIdsKey, userId, gateway])
 }

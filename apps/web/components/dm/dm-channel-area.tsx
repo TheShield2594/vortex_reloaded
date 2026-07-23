@@ -19,6 +19,8 @@ import { ConversationThemePicker } from "@/components/dm/conversation-theme-pick
 import type { DmThemePreset } from "@/lib/dm-theme"
 import { useToast } from "@/components/ui/use-toast"
 import { useGatewayTyping } from "@/hooks/use-gateway-typing"
+import { useGatewayContext } from "@/hooks/use-gateway-context"
+import type { VortexEvent } from "@vortex/shared"
 import { useAppStore } from "@/lib/stores/app-store"
 import { TypingIndicator } from "@/components/chat/typing-indicator"
 import { useChatScroll } from "@/components/chat/hooks/use-chat-scroll"
@@ -367,7 +369,6 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState(false)
-  const dmSubIdRef = useRef(Date.now())
   const channelRef = useRef<Channel | null>(null)
   const conversationKeyRef = useRef<Uint8Array | null>(null)
   const [decryptedContent, setDecryptedContent] = useState<Record<string, { text: string; failed: boolean }>>({})
@@ -404,6 +405,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   const prevLastMsgIdRef = useRef<string | null>(null)
   const topRef = useRef<HTMLDivElement>(null)
   const supabase = useMemo(() => createClientSupabaseClient(), [])
+  const gateway = useGatewayContext()
 
   // Keep refs in sync so the realtime subscription can read latest values
   // without needing them in its dependency array.
@@ -781,128 +783,116 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     }
   }, [channelId, clearLocalChannel])
 
+  // Join the gateway room for this DM channel so message/reaction/typing
+  // events for it are delivered to this socket. Deliberately not
+  // unsubscribed on unmount: dm-list.tsx and useDmNotificationSound may
+  // also be subscribed to this same channel for this socket, and
+  // gateway:unsubscribe leaves the room for the whole socket, not just
+  // this listener — see the sticky-subscription note in dm-list.tsx.
   useEffect(() => {
-    const subId = ++dmSubIdRef.current
-    const ch = supabase
-      .channel(`dm-channel:${channelId}:${subId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "direct_messages",
-          filter: `dm_channel_id=eq.${channelId}`,
-        },
-        (payload) => {
-          const msg = payload.new as Record<string, unknown>
-          // Only add if it's from someone else (we already added our own optimistically)
-          if (msg.sender_id !== currentUserId) {
-            playNotification("dm")
-            ;(supabase
+    gateway.subscribe([channelId])
+  }, [channelId, gateway])
+
+  useEffect(() => {
+    const removeListener = gateway.addEventListener(channelId, (event: VortexEvent) => {
+      if (event.type !== "message.created") return
+      // Only add if it's from someone else (we already added our own optimistically)
+      if (event.actorId === currentUserId) return
+      const messageId = (event.data as { messageId?: string } | undefined)?.messageId
+      if (!messageId) return
+
+      playNotification("dm")
+      ;(supabase
+        .from("direct_messages")
+        .select("*, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url, status), reply_to_id")
+        .eq("id", messageId)
+        .single() as unknown as Promise<{ data: Record<string, unknown> | null }>)
+        .then(async ({ data }: { data: Record<string, unknown> | null }) => {
+          if (!data) return
+          // Resolve reply_to if present
+          let replyToMsg = null
+          if (data.reply_to_id) {
+            const { data: replyData } = await supabase
               .from("direct_messages")
-              .select("*, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url, status), reply_to_id")
-              .eq("id", msg.id as string)
-              .single() as unknown as Promise<{ data: Record<string, unknown> | null }>)
-              .then(async ({ data }: { data: Record<string, unknown> | null }) => {
-                if (!data) return
-                // Resolve reply_to if present
-                let replyToMsg = null
-                if (data.reply_to_id) {
-                  const { data: replyData } = await supabase
-                    .from("direct_messages")
-                    .select("id, content, sender_id, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url, status)")
-                    .eq("id", data.reply_to_id as string)
-                    .eq("dm_channel_id", channelId)
-                    .is("deleted_at", null)
-                    .single()
-                  replyToMsg = replyData ?? null
-                }
-                // Fetch dm_attachments so images render through the proxy
-                const { data: attRows } = await untypedFrom(supabase, "dm_attachments")
-                  .select("id, filename, size, content_type")
-                  .eq("dm_id", data.id as string)
-                const newMsg: Message = { ...data as unknown as Message, reply_to: replyToMsg, dm_attachments: attRows ?? [], reactions: [] }
-                setMessages((prev) => [...prev, newMsg])
-
-                // Incrementally index the new message if the channel is encrypted
-                // and we can decrypt it.
-                if (channelRef.current?.is_encrypted && conversationKeyRef.current) {
-                  const envelope = parseEncryptedEnvelope(newMsg.content)
-                  if (envelope) {
-                    getConversationKey(`dm-conversation-key:${channelId}:${envelope.keyVersion}`)
-                      .then(async (vk) => {
-                        if (!vk) return
-                        const text = await decryptDmContent(envelope, vk)
-                        addMessageToIndex(channelId, {
-                          id: newMsg.id,
-                          channelId,
-                          authorId: newMsg.sender_id,
-                          authorName: newMsg.sender?.display_name || newMsg.sender?.username || "Unknown",
-                          avatarUrl: newMsg.sender?.avatar_url ?? null,
-                          text,
-                          createdAt: newMsg.created_at,
-                        })
-                      })
-                      .catch(() => {/* best-effort */})
-                  }
-                }
-              })
+              .select("id, content, sender_id, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url, status)")
+              .eq("id", data.reply_to_id as string)
+              .eq("dm_channel_id", channelId)
+              .is("deleted_at", null)
+              .single()
+            replyToMsg = replyData ?? null
           }
-        }
-      )
-      .subscribe()
+          // Fetch dm_attachments so images render through the proxy
+          const { data: attRows } = await untypedFrom(supabase, "dm_attachments")
+            .select("id, filename, size, content_type")
+            .eq("dm_id", data.id as string)
+          const newMsg: Message = { ...data as unknown as Message, reply_to: replyToMsg, dm_attachments: attRows ?? [], reactions: [] }
+          setMessages((prev) => [...prev, newMsg])
 
-    return () => { supabase.removeChannel(ch) }
+          // Incrementally index the new message if the channel is encrypted
+          // and we can decrypt it.
+          if (channelRef.current?.is_encrypted && conversationKeyRef.current) {
+            const envelope = parseEncryptedEnvelope(newMsg.content)
+            if (envelope) {
+              getConversationKey(`dm-conversation-key:${channelId}:${envelope.keyVersion}`)
+                .then(async (vk) => {
+                  if (!vk) return
+                  const text = await decryptDmContent(envelope, vk)
+                  addMessageToIndex(channelId, {
+                    id: newMsg.id,
+                    channelId,
+                    authorId: newMsg.sender_id,
+                    authorName: newMsg.sender?.display_name || newMsg.sender?.username || "Unknown",
+                    avatarUrl: newMsg.sender?.avatar_url ?? null,
+                    text,
+                    createdAt: newMsg.created_at,
+                  })
+                })
+                .catch(() => {/* best-effort */})
+            }
+          }
+        })
+    })
+
+    return () => removeListener()
     // channelRef / conversationKeyRef are used inside the callback so they
     // don't need to be deps – this prevents tearing down and recreating the
-    // realtime subscription every time encryption state loads.
+    // gateway listener every time encryption state loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [channelId, currentUserId, supabase])
+  }, [channelId, currentUserId, supabase, gateway])
 
-  // Realtime subscription for DM reactions
+  // Gateway subscription for DM reactions
   useEffect(() => {
-    const subId = ++dmSubIdRef.current
-    const ch = supabase
-      .channel(`dm-reactions:${channelId}:${subId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "dm_reactions" },
-        (payload) => {
-          const r = payload.new as DmReaction
-          // Skip our own reactions (already handled optimistically)
-          if (!r.user_id || r.user_id === currentUserId) return
-          setMessages((prev) => {
-            if (!prev.some((m) => m.id === r.dm_id)) return prev
-            return prev.map((m) => {
-              if (m.id !== r.dm_id) return m
-              if (m.reactions.some((er) => er.dm_id === r.dm_id && er.user_id === r.user_id && er.emoji === r.emoji)) return m
-              return { ...m, reactions: [...m.reactions, r] }
-            })
+    const removeListener = gateway.addEventListener(channelId, (event: VortexEvent) => {
+      if (event.type === "reaction.added") {
+        const r = event.data as DmReaction | undefined
+        // Skip our own reactions (already handled optimistically)
+        if (!r?.user_id || r.user_id === currentUserId) return
+        setMessages((prev) => {
+          if (!prev.some((m) => m.id === r.dm_id)) return prev
+          return prev.map((m) => {
+            if (m.id !== r.dm_id) return m
+            if (m.reactions.some((er) => er.dm_id === r.dm_id && er.user_id === r.user_id && er.emoji === r.emoji)) return m
+            return { ...m, reactions: [...m.reactions, r] }
           })
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "dm_reactions" },
-        (payload) => {
-          const r = payload.old as DmReaction
-          // Always skip own-user DELETE events — own reactions are managed
-          // optimistically by handleDmReaction and must not be reverted by
-          // a stale or duplicate realtime event.
-          if (!r.user_id || r.user_id === currentUserId) return
-          setMessages((prev) => {
-            if (!prev.some((m) => m.id === r.dm_id)) return prev
-            return prev.map((m) => {
-              if (m.id !== r.dm_id) return m
-              return { ...m, reactions: m.reactions.filter((er) => !(er.dm_id === r.dm_id && er.user_id === r.user_id && er.emoji === r.emoji)) }
-            })
+        })
+      } else if (event.type === "reaction.removed") {
+        const r = event.data as DmReaction | undefined
+        // Always skip own-user events — own reactions are managed
+        // optimistically by handleDmReaction and must not be reverted by
+        // a stale or duplicate gateway event.
+        if (!r?.user_id || r.user_id === currentUserId) return
+        setMessages((prev) => {
+          if (!prev.some((m) => m.id === r.dm_id)) return prev
+          return prev.map((m) => {
+            if (m.id !== r.dm_id) return m
+            return { ...m, reactions: m.reactions.filter((er) => !(er.dm_id === r.dm_id && er.user_id === r.user_id && er.emoji === r.emoji)) }
           })
-        }
-      )
-      .subscribe()
+        })
+      }
+    })
 
-    return () => { supabase.removeChannel(ch) }
-  }, [channelId, currentUserId, supabase])
+    return () => removeListener()
+  }, [channelId, currentUserId, gateway])
 
   // Reaction chip pop animation — track count changes per message
   useEffect(() => {

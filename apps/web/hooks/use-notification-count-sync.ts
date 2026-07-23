@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef } from "react"
 import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { useAppStore } from "@/lib/stores/app-store"
+import { useGatewayContext } from "./use-gateway-context"
+import type { VortexEvent } from "@vortex/shared"
 
 /**
  * Syncs the global notification unread count to Zustand on mount and via
@@ -11,6 +13,7 @@ import { useAppStore } from "@/lib/stores/app-store"
  */
 export function useNotificationCountSync(userId: string | null): void {
   const supabase = useMemo(() => createClientSupabaseClient(), [])
+  const gateway = useGatewayContext()
   const seededRef = useRef(false)
   const subIdRef = useRef(0)
 
@@ -45,18 +48,6 @@ export function useNotificationCountSync(userId: string | null): void {
       .channel(`notif-count-sync:${userId}:${subId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload) => {
-          const newRow = payload.new as { read?: boolean }
-          if (newRow.read === true) return
-          seededRef.current = true
-          useAppStore.setState((state) => ({
-            notificationUnreadCount: (state.notificationUnreadCount ?? 0) + 1,
-          }))
-        }
-      )
-      .on(
-        "postgres_changes",
         { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
         (payload) => {
           const oldRow = payload.old as { read?: boolean }
@@ -85,4 +76,19 @@ export function useNotificationCountSync(userId: string | null): void {
 
     return () => { supabase.removeChannel(ch) }
   }, [userId, supabase])
+
+  // Gateway: bump the count when a new notification is created.
+  useEffect(() => {
+    if (!userId) return
+    const removeListener = gateway.addEventListener(`user:${userId}`, (event: VortexEvent) => {
+      if (event.type !== "notification.created") return
+      const n = event.data as { read?: boolean } | undefined
+      if (n?.read === true) return
+      seededRef.current = true
+      useAppStore.setState((state) => ({
+        notificationUnreadCount: (state.notificationUnreadCount ?? 0) + 1,
+      }))
+    })
+    return () => removeListener()
+  }, [userId, gateway])
 }

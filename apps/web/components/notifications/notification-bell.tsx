@@ -7,6 +7,8 @@ import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences"
+import { useGatewayContext } from "@/hooks/use-gateway-context"
+import type { VortexEvent } from "@vortex/shared"
 import { shouldNotify, showBrowserNotification } from "@/lib/notification-manager"
 import { format } from "date-fns"
 
@@ -49,6 +51,7 @@ interface Props {
 
 export function NotificationBell({ userId, variant = "icon" }: Props) {
   const supabase = useMemo(() => createClientSupabaseClient(), [])
+  const gateway = useGatewayContext()
   const router = useRouter()
   const { playNotification } = useNotificationSound()
   const { prefs } = useNotificationPreferences(userId)
@@ -96,47 +99,51 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
 
   useEffect(() => { loadNotifications() }, [loadNotifications])
 
-  // Real-time: listen for new notifications
+  // Gateway: listen for newly created notifications, delivered on the
+  // per-user channel (see apps/web/app/api/friends/route.ts's
+  // publishGatewayEvent("notification.created", ...) calls).
+  useEffect(() => {
+    const removeListener = gateway.addEventListener(`user:${userId}`, (event: VortexEvent) => {
+      if (event.type !== "notification.created") return
+      if (!isNotification(event.data)) return
+      const n = event.data
+      setNotifications((prev) => [n, ...prev.slice(0, 29)])
+      setUnreadCount((c) => c + 1)
+
+      // Focused-window suppression (Fluxer-style):
+      // - Viewing the same channel → no sound, no browser notification
+      // - App focused, different channel → sound only
+      // - App not focused → sound + browser notification
+      const { shouldPlaySound, shouldShowBrowserNotification } = shouldNotify({
+        channelId: n.channel_id,
+        messageId: n.message_id,
+      })
+
+      if (shouldPlaySound && soundEnabledRef.current) {
+        const soundType = n.type === "mention" ? "mention" as const : "message" as const
+        playNotification(soundType)
+      }
+
+      if (shouldShowBrowserNotification && n.title) {
+        const url = n.server_id && n.channel_id
+          ? `/channels/${n.server_id}/${n.channel_id}${n.message_id ? `?message=${n.message_id}` : ""}`
+          : undefined
+        showBrowserNotification({
+          title: n.title,
+          body: n.body || "",
+          channelId: n.channel_id || undefined,
+          url,
+        })
+      }
+    })
+    return () => removeListener()
+  }, [userId, gateway, playNotification])
+
+  // Supabase Realtime: keep read/dismiss state in sync across tabs.
   useEffect(() => {
     const subId = ++subIdRef.current
     const ch = supabase
       .channel(`notifications:${userId}:${subId}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload) => {
-          if (!isNotification(payload.new)) return
-          const n = payload.new
-          setNotifications((prev) => [n, ...prev.slice(0, 29)])
-          setUnreadCount((c) => c + 1)
-
-          // Focused-window suppression (Fluxer-style):
-          // - Viewing the same channel → no sound, no browser notification
-          // - App focused, different channel → sound only
-          // - App not focused → sound + browser notification
-          const { shouldPlaySound, shouldShowBrowserNotification } = shouldNotify({
-            channelId: n.channel_id,
-            messageId: n.message_id,
-          })
-
-          if (shouldPlaySound && soundEnabledRef.current) {
-            const soundType = n.type === "mention" ? "mention" as const : "message" as const
-            playNotification(soundType)
-          }
-
-          if (shouldShowBrowserNotification && n.title) {
-            const url = n.server_id && n.channel_id
-              ? `/channels/${n.server_id}/${n.channel_id}${n.message_id ? `?message=${n.message_id}` : ""}`
-              : undefined
-            showBrowserNotification({
-              title: n.title,
-              body: n.body || "",
-              channelId: n.channel_id || undefined,
-              url,
-            })
-          }
-        }
-      )
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
