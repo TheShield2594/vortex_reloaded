@@ -418,8 +418,8 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   conversationKeyRef.current = conversationKey
 
   const { toast } = useToast()
-  const { currentUser, serverCount } = useAppStore(
-    useShallow((s) => ({ currentUser: s.currentUser, serverCount: s.servers.length }))
+  const { currentUser } = useAppStore(
+    useShallow((s) => ({ currentUser: s.currentUser }))
   )
 
   const { playNotification } = useNotificationSound()

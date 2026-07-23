@@ -1,5 +1,5 @@
 import { create } from "zustand"
-import type { ServerRow, ChannelRow, UserRow, MessageWithAuthor } from "@/types/database"
+import type { UserRow, MessageWithAuthor } from "@/types/database"
 import { loadBooleanStorage, persistBooleanStorage } from "@/lib/utils/storage"
 import type { MobileAction } from "@vortex/shared"
 
@@ -36,38 +36,8 @@ interface AppState {
   currentUser: UserRow | null
   setCurrentUser: (user: UserRow | null) => void
 
-  // Servers
-  servers: ServerRow[]
-  isLoadingServers: boolean
-  setIsLoadingServers: (isLoading: boolean) => void
-  setServers: (servers: ServerRow[]) => void
-  addServer: (server: ServerRow) => void
-  updateServer: (id: string, updates: Partial<ServerRow>) => void
-  removeServer: (id: string) => void
-
-  // Channels
-  channels: Record<string, ChannelRow[]> // serverId -> channels
-  setChannels: (serverId: string, channels: ChannelRow[]) => void
-  addChannel: (channel: ChannelRow) => void
-  updateChannel: (id: string, updates: Partial<ChannelRow>) => void
-  removeChannel: (id: string) => void
-
-  // Members (for mention autocomplete)
-  members: Record<string, MemberForMention[]> // serverId -> members
-  setMembers: (serverId: string, members: MemberForMention[]) => void
-
-  // Roles (for @role mention autocomplete + rendering)
-  serverRoles: Record<string, RoleForMention[]> // serverId -> roles
-  setServerRoles: (serverId: string, roles: RoleForMention[]) => void
-
-  // AI Personas (for @persona mention autocomplete)
-  personas: Record<string, PersonaForMention[]> // serverId -> personas
-  setPersonas: (serverId: string, personas: PersonaForMention[]) => void
-
   // Active state
-  activeServerId: string | null
   activeChannelId: string | null
-  setActiveServer: (serverId: string | null) => void
   setActiveChannel: (channelId: string | null) => void
 
   // UI state
@@ -98,10 +68,6 @@ interface AppState {
   toggleOverflowOpen: () => void
   setOverflowOpen: (open: boolean) => void
 
-  // Per-server unread indicator (true = at least one unread channel in this server)
-  serverHasUnread: Record<string, boolean>
-  setServerHasUnread: (serverId: string, hasUnread: boolean) => void
-
   // Notification + DM unread counts (shared between NotificationBell, DMList, and useTabUnreadTitle)
   notificationUnreadCount: number
   setNotificationUnreadCount: (count: number) => void
@@ -127,93 +93,13 @@ interface AppState {
   // Mobile action dispatch (replaces fragile DOM CustomEvents between ServerMobileLayout → ChatArea)
   mobilePendingAction: MobileAction | null
   setMobilePendingAction: (action: MobileAction | null) => void
-
-  // Voice state
-  voiceChannelId: string | null
-  voiceServerId: string | null
-  voiceChannelName: string | null
-  setVoiceChannel: (channelId: string | null, serverId: string | null, channelName?: string | null) => void
-  voiceMuted: boolean
-  voiceDeafened: boolean
-  voiceReconnectInfo: { state: string; attempt: number; maxAttempts: number } | null
-  voiceJoinedAt: number | null
-  voiceToggleMute: (() => void) | null
-  voiceToggleDeafen: (() => void) | null
-  voiceManualReconnect: (() => void) | null
-  setVoiceControls: (controls: {
-    muted: boolean
-    deafened: boolean
-    reconnectInfo?: { state: string; attempt: number; maxAttempts: number } | null
-    toggleMute?: () => void
-    toggleDeafen?: () => void
-    manualReconnect?: () => void
-  }) => void
 }
 
 export const useAppStore = create<AppState>((set) => ({
   currentUser: null,
   setCurrentUser: (user) => set({ currentUser: user }),
 
-  servers: [],
-  isLoadingServers: true,
-  setIsLoadingServers: (isLoadingServers) => set({ isLoadingServers }),
-  setServers: (servers) => set({ servers }),
-  addServer: (server) => set((state) => ({ servers: [...state.servers, server] })),
-  updateServer: (id, updates) =>
-    set((state) => ({
-      servers: state.servers.map((s) => (s.id === id ? { ...s, ...updates } : s)),
-    })),
-  removeServer: (id) =>
-    set((state) => ({ servers: state.servers.filter((s) => s.id !== id) })),
-
-  channels: {},
-  setChannels: (serverId, channels) =>
-    set((state) => ({ channels: { ...state.channels, [serverId]: channels } })),
-  addChannel: (channel) =>
-    set((state) => {
-      const existing = state.channels[channel.server_id] || []
-      if (existing.some((c) => c.id === channel.id)) return state
-      return {
-        channels: {
-          ...state.channels,
-          [channel.server_id]: [...existing, channel],
-        },
-      }
-    }),
-  updateChannel: (id, updates) =>
-    set((state) => {
-      const newChannels = { ...state.channels }
-      for (const serverId in newChannels) {
-        newChannels[serverId] = newChannels[serverId].map((c) =>
-          c.id === id ? { ...c, ...updates } : c
-        )
-      }
-      return { channels: newChannels }
-    }),
-  removeChannel: (id) =>
-    set((state) => {
-      const newChannels = { ...state.channels }
-      for (const serverId in newChannels) {
-        newChannels[serverId] = newChannels[serverId].filter((c) => c.id !== id)
-      }
-      return { channels: newChannels }
-    }),
-
-  members: {},
-  setMembers: (serverId, members) =>
-    set((state) => ({ members: { ...state.members, [serverId]: members } })),
-
-  serverRoles: {},
-  setServerRoles: (serverId, roles) =>
-    set((state) => ({ serverRoles: { ...state.serverRoles, [serverId]: roles } })),
-
-  personas: {},
-  setPersonas: (serverId, personas) =>
-    set((state) => ({ personas: { ...state.personas, [serverId]: personas } })),
-
-  activeServerId: null,
   activeChannelId: null,
-  setActiveServer: (serverId) => set({ activeServerId: serverId }),
   setActiveChannel: (channelId) => set({ activeChannelId: channelId }),
 
   memberListOpen: loadBooleanStorage(MEMBER_LIST_STORAGE_KEY, true),
@@ -263,13 +149,6 @@ export const useAppStore = create<AppState>((set) => ({
   overflowOpen: false,
   toggleOverflowOpen: () => set((state) => ({ overflowOpen: !state.overflowOpen })),
   setOverflowOpen: (open) => set({ overflowOpen: open }),
-
-  serverHasUnread: {},
-  setServerHasUnread: (serverId, hasUnread) =>
-    set((state) => {
-      if (state.serverHasUnread[serverId] === hasUnread) return state
-      return { serverHasUnread: { ...state.serverHasUnread, [serverId]: hasUnread } }
-    }),
 
   notificationUnreadCount: 0,
   setNotificationUnreadCount: (count) => set({ notificationUnreadCount: count }),
@@ -337,40 +216,4 @@ export const useAppStore = create<AppState>((set) => ({
 
   mobilePendingAction: null,
   setMobilePendingAction: (action) => set({ mobilePendingAction: action }),
-
-  voiceChannelId: null,
-  voiceServerId: null,
-  voiceChannelName: null,
-  setVoiceChannel: (channelId, serverId, channelName = null) =>
-    set({
-      voiceChannelId: channelId,
-      voiceServerId: serverId,
-      voiceChannelName: channelId ? channelName : null,
-      voiceJoinedAt: channelId ? Date.now() : null,
-      // Clear controls when disconnecting
-      ...(channelId ? {} : {
-        voiceMuted: false,
-        voiceDeafened: false,
-        voiceReconnectInfo: null,
-        voiceToggleMute: null,
-        voiceToggleDeafen: null,
-        voiceManualReconnect: null,
-      }),
-    }),
-  voiceMuted: false,
-  voiceDeafened: false,
-  voiceReconnectInfo: null,
-  voiceJoinedAt: null,
-  voiceToggleMute: null,
-  voiceToggleDeafen: null,
-  voiceManualReconnect: null,
-  setVoiceControls: (controls) =>
-    set({
-      voiceMuted: controls.muted,
-      voiceDeafened: controls.deafened,
-      ...(controls.reconnectInfo !== undefined ? { voiceReconnectInfo: controls.reconnectInfo ?? null } : {}),
-      ...(controls.toggleMute ? { voiceToggleMute: controls.toggleMute } : {}),
-      ...(controls.toggleDeafen ? { voiceToggleDeafen: controls.toggleDeafen } : {}),
-      ...(controls.manualReconnect ? { voiceManualReconnect: controls.manualReconnect } : {}),
-    }),
 }))

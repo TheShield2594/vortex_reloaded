@@ -12,30 +12,28 @@ import { useTabUnreadTitle } from "@/hooks/use-tab-unread-title"
 import { useGifAutoplay } from "@/hooks/use-gif-autoplay"
 import { prefetchNotificationPreferences, clearPreferencesCache } from "@/hooks/use-notification-preferences"
 import { useDmNotificationSound } from "@/hooks/use-dm-notification-sound"
-import { useChannelNotificationSound } from "@/hooks/use-channel-notification-sound"
 import { useNotificationCountSync } from "@/hooks/use-notification-count-sync"
 import { useToast } from "@/components/ui/use-toast"
 import { setActiveChannel as setNotifManagerActiveChannel } from "@/lib/notification-manager"
-import type { UserRow, ServerRow } from "@/types/database"
+import type { UserRow } from "@/types/database"
 
 interface AppProviderProps {
   user: UserRow | null
-  servers: ServerRow[]
   children: React.ReactNode
 }
 
 /** Root client-side provider that seeds Zustand stores, syncs presence, applies appearance settings, and registers push notifications. */
-export function AppProvider({ user, servers, children }: AppProviderProps) {
+export function AppProvider({ user, children }: AppProviderProps) {
   return (
     <GatewayProvider>
-      <AppProviderInner user={user} servers={servers}>{children}</AppProviderInner>
+      <AppProviderInner user={user}>{children}</AppProviderInner>
     </GatewayProvider>
   )
 }
 
-function AppProviderInner({ user, servers, children }: AppProviderProps): React.ReactNode {
-  const { setCurrentUser, setServers, setIsLoadingServers, loadNotificationSettings } = useAppStore(
-    useShallow((s) => ({ setCurrentUser: s.setCurrentUser, setServers: s.setServers, setIsLoadingServers: s.setIsLoadingServers, loadNotificationSettings: s.loadNotificationSettings }))
+function AppProviderInner({ user, children }: AppProviderProps): React.ReactNode {
+  const { setCurrentUser, loadNotificationSettings } = useAppStore(
+    useShallow((s) => ({ setCurrentUser: s.setCurrentUser, loadNotificationSettings: s.loadNotificationSettings }))
   )
   const { gifAutoplay, hydrateFromSettings } = useAppearanceStore(
     useShallow((s) => ({
@@ -49,8 +47,6 @@ function AppProviderInner({ user, servers, children }: AppProviderProps): React.
 
   useEffect(() => {
     setCurrentUser(user)
-    setServers(servers)
-    setIsLoadingServers(false)
     hydrateFromSettings(user?.appearance_settings as Parameters<typeof hydrateFromSettings>[0], user?.id ?? null)
     if (user) {
       void loadNotificationSettings()
@@ -62,7 +58,7 @@ function AppProviderInner({ user, servers, children }: AppProviderProps): React.
       // Clear SW API cache to prevent cross-account data leaks
       navigator.serviceWorker?.controller?.postMessage({ type: "CLEAR_API_CACHE" })
     }
-  }, [user, servers, setCurrentUser, setServers, setIsLoadingServers, hydrateFromSettings, loadNotificationSettings])
+  }, [user, setCurrentUser, hydrateFromSettings, loadNotificationSettings])
 
   // Auto-sync presence: marks user online on mount, offline on tab close
   useGatewayPresence(user?.id ?? null, user?.status ?? "online")
@@ -99,11 +95,8 @@ function AppProviderInner({ user, servers, children }: AppProviderProps): React.
     return () => window.removeEventListener("vortex:push-resubscribed", handler)
   }, [toast])
 
-  // Global DM notification sound — always mounted so DM sounds fire even on server pages
+  // Global DM notification sound — always mounted so DM sounds fire from anywhere in the app
   useDmNotificationSound(user?.id ?? null)
-
-  // Global channel message notification sound — fires for servers with "all" notification mode
-  useChannelNotificationSound(user?.id ?? null)
 
   // Global notification count sync — ensures mobile tab bar badge is accurate
   useNotificationCountSync(user?.id ?? null)

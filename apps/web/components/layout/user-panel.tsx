@@ -1,27 +1,23 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Mic, MicOff, Headphones, PhoneOff, Settings } from "lucide-react"
+import { Mic, MicOff, Headphones, Settings } from "lucide-react"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useShallow } from "zustand/react/shallow"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useToast } from "@/components/ui/use-toast"
 import { UserPopover } from "@/components/layout/user-popover"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { getStatusColor } from "@/lib/utils/status-options"
 
-/** Bottom-bar user panel with avatar, status selector, mute/deafen/disconnect controls, and settings shortcut. */
+/** Bottom-bar user panel with avatar, status selector, mute/deafen controls, and settings shortcut. */
 export function UserPanel() {
-  const { currentUser, voiceChannelId, setVoiceChannel } = useAppStore(
-    useShallow((s) => ({ currentUser: s.currentUser, voiceChannelId: s.voiceChannelId, setVoiceChannel: s.setVoiceChannel }))
+  const { currentUser } = useAppStore(
+    useShallow((s) => ({ currentUser: s.currentUser }))
   )
   const router = useRouter()
   const [muted, setMuted] = useState(false)
   const [deafened, setDeafened] = useState(false)
-  const { toast } = useToast()
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
   const [isStatusExpired, setIsStatusExpired] = useState(false)
 
   useEffect(() => {
@@ -114,46 +110,6 @@ export function UserPanel() {
       {/* Controls */}
       <TooltipProvider delayDuration={200}>
       <div className="flex items-center gap-0.5">
-        {voiceChannelId && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={async () => {
-                  try {
-                    const latestUser = useAppStore.getState().currentUser
-                    if (latestUser) {
-                      const { error } = await supabase
-                        .from("voice_states")
-                        .delete()
-                        .eq("user_id", latestUser.id)
-                        .eq("channel_id", voiceChannelId)
-                      if (error) throw error
-                    }
-                    const sid = useAppStore.getState().voiceServerId
-                    setVoiceChannel(null, null)
-                    if (sid) {
-                      const serverChannels = useAppStore.getState().channels[sid] ?? []
-                      const textChannel = serverChannels
-                        .filter((c) => c.type === "text")
-                        .sort((a, b) => a.position - b.position)[0]
-                      router.push(textChannel ? `/channels/${sid}/${textChannel.id}` : `/channels/${sid}`)
-                    }
-                    toast({ title: "Disconnected from voice" })
-                  } catch (error: unknown) {
-                    toast({ variant: "destructive", title: "Failed to disconnect", description: error instanceof Error ? error.message : "Unknown error" })
-                  }
-                }}
-                aria-label="Disconnect from voice"
-                className="w-7 h-7 rounded flex items-center justify-center surface-hover-danger motion-interactive focus-ring"
-                style={{ color: 'var(--theme-danger)' }}
-              >
-                <PhoneOff className="w-4 h-4" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>Disconnect</TooltipContent>
-          </Tooltip>
-        )}
-
         <Tooltip>
           <TooltipTrigger asChild>
             <button
