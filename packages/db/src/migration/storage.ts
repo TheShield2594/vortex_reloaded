@@ -50,6 +50,19 @@ function extractStoragePath(url: string, bucket: string): string | null {
   }
 }
 
+/**
+ * Resolve `storagePath` (decoded from a source row's URL — not to be
+ * trusted blindly) against `subDir` under `uploadsDir`, rejecting anything
+ * that would escape it via `..` segments or an absolute path.
+ */
+function safeDestPath(uploadsDir: string, subDir: string, storagePath: string): string | null {
+  const base = path.join(uploadsDir, subDir)
+  const resolved = path.resolve(base, storagePath)
+  const relative = path.relative(base, resolved)
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return null
+  return resolved
+}
+
 async function migrateAvatars(
   supabase: SupabaseStorageClient,
   db: Database.Database,
@@ -70,18 +83,29 @@ async function migrateAvatars(
       continue
     }
 
-    const { data, error } = await supabase.storage.from("avatars").download(storagePath)
-    if (error || !data) {
-      console.error(`[storage] avatars: download failed for user ${row.id}: ${error?.message ?? "no data"}`)
+    const destPath = safeDestPath(uploadsDir, "avatars", storagePath)
+    if (!destPath) {
+      console.error(`[storage] avatars: storage path escapes uploads dir, skipping user ${row.id}: ${storagePath}`)
       failed++
       continue
     }
 
-    const destPath = path.join(uploadsDir, "avatars", storagePath)
-    mkdirSync(path.dirname(destPath), { recursive: true })
-    writeFileSync(destPath, Buffer.from(await data.arrayBuffer()))
-    update.run(`/api/avatars/${storagePath}`, row.id)
-    migrated++
+    try {
+      const { data, error } = await supabase.storage.from("avatars").download(storagePath)
+      if (error || !data) {
+        console.error(`[storage] avatars: download failed for user ${row.id}: ${error?.message ?? "no data"}`)
+        failed++
+        continue
+      }
+
+      mkdirSync(path.dirname(destPath), { recursive: true })
+      writeFileSync(destPath, Buffer.from(await data.arrayBuffer()))
+      update.run(`/api/avatars/${storagePath}`, row.id)
+      migrated++
+    } catch (err) {
+      console.error(`[storage] avatars: unexpected error for user ${row.id}: ${err instanceof Error ? err.message : String(err)}`)
+      failed++
+    }
   }
 
   return { migrated, failed }
@@ -108,18 +132,29 @@ async function migrateAttachmentTable(
       continue
     }
 
-    const { data, error } = await supabase.storage.from("attachments").download(storagePath)
-    if (error || !data) {
-      console.error(`[storage] ${table}: download failed for row ${row.id}: ${error?.message ?? "no data"}`)
+    const destPath = safeDestPath(uploadsDir, "attachments", storagePath)
+    if (!destPath) {
+      console.error(`[storage] ${table}: storage path escapes uploads dir, skipping row ${row.id}: ${storagePath}`)
       failed++
       continue
     }
 
-    const destPath = path.join(uploadsDir, "attachments", storagePath)
-    mkdirSync(path.dirname(destPath), { recursive: true })
-    writeFileSync(destPath, Buffer.from(await data.arrayBuffer()))
-    update.run(storagePath, row.id)
-    migrated++
+    try {
+      const { data, error } = await supabase.storage.from("attachments").download(storagePath)
+      if (error || !data) {
+        console.error(`[storage] ${table}: download failed for row ${row.id}: ${error?.message ?? "no data"}`)
+        failed++
+        continue
+      }
+
+      mkdirSync(path.dirname(destPath), { recursive: true })
+      writeFileSync(destPath, Buffer.from(await data.arrayBuffer()))
+      update.run(storagePath, row.id)
+      migrated++
+    } catch (err) {
+      console.error(`[storage] ${table}: unexpected error for row ${row.id}: ${err instanceof Error ? err.message : String(err)}`)
+      failed++
+    }
   }
 
   return { migrated, failed }

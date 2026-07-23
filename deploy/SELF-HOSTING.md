@@ -180,8 +180,11 @@ sqlite3 ./data/vortex.db ".backup './data/backups/vortex-${STAMP}.db'"
 # Sync to Backblaze B2 (rclone has a native b2 backend: `rclone config`)
 rclone copy ./data/backups/vortex-${STAMP}.db b2:your-bucket/vortex-backups/
 
-# Uploaded avatars/attachments aren't in vortex.db — sync them separately
-rclone sync ./data/uploads b2:your-bucket/vortex-uploads/
+# Uploaded avatars/attachments aren't in vortex.db — back them up separately.
+# `copy`, not `sync` — sync would delete remote files the decay cron has
+# since purged locally (or everything, if this ever runs against an empty
+# or mis-mounted ./data/uploads).
+rclone copy ./data/uploads b2:your-bucket/vortex-uploads/
 
 # Optional: prune anything older than 30 days, local and remote
 find ./data/backups -name '*.db' -mtime +30 -delete

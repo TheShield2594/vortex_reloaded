@@ -1,8 +1,15 @@
+import * as Sentry from "@sentry/nextjs"
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { untypedFrom } from "@/lib/supabase/untyped-table"
 import { verifyBearerToken } from "@/lib/utils/timing-safe"
 import { attachmentsDir, deleteUploadFile } from "@/lib/storage/local-storage"
+
+// deleteUploadFile() already treats a missing file as success, so anything
+// landing here is a genuinely unexpected failure (permission/disk issues) —
+// a small threshold avoids paging on a single rare blip while still
+// catching a systemic problem.
+const STORAGE_ERROR_ALERT_THRESHOLD = 5
 
 /**
  * GET /api/cron/attachment-decay
@@ -112,6 +119,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       storageErrors,
       runAt: now,
     })
+
+    if (storageErrors >= STORAGE_ERROR_ALERT_THRESHOLD) {
+      Sentry.captureMessage(`attachment-decay: ${storageErrors} storage error(s) during purge run`, {
+        level: "error",
+        extra: { purgedChannel, purgedDm, storageErrors, runAt: now },
+      })
+    }
 
     return NextResponse.json({
       ok: true,

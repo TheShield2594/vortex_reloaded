@@ -6,8 +6,46 @@ import { maybeRenewExpiry } from "@vortex/shared"
 import { untypedFrom } from "@/lib/supabase/untyped-table"
 import { attachmentsDir, statUploadFile } from "@/lib/storage/local-storage"
 
+/** Parsed byte range for a single-range `Range: bytes=...` request. */
+interface ByteRange {
+  start: number
+  end: number
+}
+
+/**
+ * Parses a `Range` header against a known file size.
+ * Returns `undefined` for no/absent header (serve the full file), `null` for
+ * a present-but-unsatisfiable range (caller should respond 416), or the
+ * resolved inclusive [start, end] byte range otherwise. Only single-range
+ * requests are supported (`bytes=start-end`, `bytes=start-`, `bytes=-suffix`) —
+ * multi-range requests fall back to the full file, which is spec-compliant
+ * (a server may ignore Range entirely).
+ */
+function parseRange(rangeHeader: string | null, size: number): ByteRange | null | undefined {
+  if (!rangeHeader) return undefined
+  const match = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim())
+  if (!match || (!match[1] && !match[2])) return undefined
+
+  let start: number
+  let end: number
+  if (match[1]) {
+    start = parseInt(match[1], 10)
+    end = match[2] ? parseInt(match[2], 10) : size - 1
+  } else {
+    const suffixLength = parseInt(match[2], 10)
+    start = Math.max(size - suffixLength, 0)
+    end = size - 1
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start < 0 || start >= size) {
+    return null
+  }
+
+  return { start, end: Math.min(end, size - 1) }
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ attachmentId: string }> }
 ): Promise<NextResponse> {
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -97,15 +135,47 @@ export async function GET(
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    const stream = Readable.toWeb(createReadStream(file.path)) as ReadableStream
+    // Range support: <video>/<audio> elements rely on 206 partial responses
+    // to seek — the old Supabase-signed-URL redirect got this for free from
+    // Supabase's CDN, so serving the bytes directly needs to replicate it.
+    const range = parseRange(request.headers.get("range"), file.size)
+    if (range === null) {
+      return new NextResponse(null, {
+        status: 416,
+        headers: {
+          "Content-Range": `bytes */${file.size}`,
+          "Accept-Ranges": "bytes",
+        },
+      })
+    }
 
+    const baseHeaders: Record<string, string> = {
+      "Content-Type": attachment.content_type || "application/octet-stream",
+      "Content-Disposition": `inline; filename="${encodeURIComponent(attachment.filename)}"`,
+      "Cache-Control": "private, max-age=3600",
+      "Accept-Ranges": "bytes",
+      "X-Content-Type-Options": "nosniff",
+    }
+
+    if (range) {
+      const { start, end } = range
+      const stream = Readable.toWeb(createReadStream(file.path, { start, end })) as ReadableStream
+      return new NextResponse(stream, {
+        status: 206,
+        headers: {
+          ...baseHeaders,
+          "Content-Range": `bytes ${start}-${end}/${file.size}`,
+          "Content-Length": String(end - start + 1),
+        },
+      })
+    }
+
+    const stream = Readable.toWeb(createReadStream(file.path)) as ReadableStream
     return new NextResponse(stream, {
       status: 200,
       headers: {
-        "Content-Type": attachment.content_type || "application/octet-stream",
+        ...baseHeaders,
         "Content-Length": String(file.size),
-        "Content-Disposition": `inline; filename="${encodeURIComponent(attachment.filename)}"`,
-        "Cache-Control": "private, max-age=3600",
       },
     })
   } catch (err) {

@@ -1005,32 +1005,45 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         if (abortSignal?.aborted) throw new Error("Upload cancelled")
         const uploaded = await uploadRes.json() as { key: string; filename: string; size: number; content_type: string }
 
+        // Best-effort cleanup for the file just uploaded above if anything
+        // afterward fails — otherwise it's an orphan nothing ever purges
+        // (the decay cron only ever looks at rows in dm_attachments).
+        const cleanupUploadedFile = () => {
+          fetch(`/api/dm/channels/${channelId}/attachments?key=${encodeURIComponent(uploaded.key)}`, { method: "DELETE" }).catch(() => {})
+        }
+
         onUploadProgress?.(Math.round(((i + 0.5) / totalFiles) * 100))
 
-        const outbound = await encryptText(`📎 ${file.name}`)
-        const filePayload: { content: string; reply_to_id?: string } = { content: outbound }
-        // Attach reply context to the first file message
-        if (i === 0 && replyTo) filePayload.reply_to_id = replyTo.id
-        const msg = await sendDmPayload(filePayload)
-        if (!msg) throw new Error("Failed to send file")
+        try {
+          const outbound = await encryptText(`📎 ${file.name}`)
+          const filePayload: { content: string; reply_to_id?: string } = { content: outbound }
+          // Attach reply context to the first file message
+          if (i === 0 && replyTo) filePayload.reply_to_id = replyTo.id
+          const msg = await sendDmPayload(filePayload)
+          if (!msg) throw new Error("Failed to send file")
 
-        const now = new Date()
-        const decay = computeDecay({ sizeBytes: file.size, uploadedAt: now })
-        const { data: insertedAtt, error: attInsertError } = await untypedFrom(supabase, "dm_attachments").insert({
-          dm_id: msg.id,
-          url: uploaded.key,
-          filename: file.name,
-          size: file.size,
-          content_type: file.type || "application/octet-stream",
-          ...(decay ? { expires_at: decay.expiresAt.toISOString(), last_accessed_at: now.toISOString(), lifetime_days: decay.days, decay_cost: decay.cost } : {}),
-        }).select("id, filename, size, content_type").single()
-        if (attInsertError) {
-          console.error("[dm file upload] failed to insert attachment metadata:", attInsertError)
+          const now = new Date()
+          const decay = computeDecay({ sizeBytes: file.size, uploadedAt: now })
+          const { data: insertedAtt, error: attInsertError } = await untypedFrom(supabase, "dm_attachments").insert({
+            dm_id: msg.id,
+            url: uploaded.key,
+            filename: file.name,
+            size: file.size,
+            content_type: file.type || "application/octet-stream",
+            ...(decay ? { expires_at: decay.expiresAt.toISOString(), last_accessed_at: now.toISOString(), lifetime_days: decay.days, decay_cost: decay.cost } : {}),
+          }).select("id, filename, size, content_type").single()
+          if (attInsertError) {
+            console.error("[dm file upload] failed to insert attachment metadata:", attInsertError)
+            cleanupUploadedFile()
+          }
+          setMessages((prev) => [...prev, {
+            ...msg,
+            dm_attachments: insertedAtt ? [{ id: insertedAtt.id, filename: insertedAtt.filename, size: insertedAtt.size, content_type: insertedAtt.content_type }] : [],
+          }])
+        } catch (err) {
+          cleanupUploadedFile()
+          throw err
         }
-        setMessages((prev) => [...prev, {
-          ...msg,
-          dm_attachments: insertedAtt ? [{ id: insertedAtt.id, filename: insertedAtt.filename, size: insertedAtt.size, content_type: insertedAtt.content_type }] : [],
-        }])
         onUploadProgress?.(Math.round(((i + 1) / totalFiles) * 100))
       }
     }

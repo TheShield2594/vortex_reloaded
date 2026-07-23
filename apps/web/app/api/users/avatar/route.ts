@@ -85,11 +85,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const storageKey = `${user.id}/avatar.${ext}`
 
     try {
-      // Remove any stale variant with a different extension so the served
-      // file always matches the freshly uploaded one.
-      await removeAvatarVariants(user.id, ALLOWED_AVATAR_EXTS)
+      // Write the new file first, then prune stale variants with other
+      // extensions — if pruning happened first and the write then failed,
+      // the user would be left with no avatar file at all.
       const bytes = Buffer.from(await avatarFile.arrayBuffer())
       await writeUploadFile(avatarsDir(), storageKey, bytes)
+      await removeAvatarVariants(user.id, ALLOWED_AVATAR_EXTS.filter((otherExt) => otherExt !== ext))
     } catch {
       return NextResponse.json(
         { error: "Avatar upload failed" },

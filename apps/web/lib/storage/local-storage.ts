@@ -1,4 +1,5 @@
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises"
+import { randomUUID } from "node:crypto"
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { resolveUploadsDir } from "@vortex/db"
 
@@ -31,12 +32,31 @@ export function safeResolve(baseDir: string, key: string): string | null {
   return resolved
 }
 
+/**
+ * Writes via a uniquely-named temp file in the same directory, then renames
+ * it into place — a concurrent reader (e.g. a GET racing an avatar
+ * replacement) never observes a partially-written file, since rename is
+ * atomic on the same filesystem.
+ */
 export async function writeUploadFile(baseDir: string, key: string, data: Buffer): Promise<string> {
   const filePath = safeResolve(baseDir, key)
   if (!filePath) throw new Error(`Refusing to write outside of storage root: ${key}`)
-  await mkdir(path.dirname(filePath), { recursive: true })
-  await writeFile(filePath, data)
+  const dir = path.dirname(filePath)
+  await mkdir(dir, { recursive: true })
+  const tempPath = path.join(dir, `.upload-${randomUUID()}.tmp`)
+  try {
+    await writeFile(tempPath, data)
+    await rename(tempPath, filePath)
+  } catch (err) {
+    await rm(tempPath, { force: true })
+    throw err
+  }
   return filePath
+}
+
+/** True if `err` is a Node filesystem error with the given `code` (e.g. "ENOENT"). */
+function isFsErrorCode(err: unknown, code: string): boolean {
+  return typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === code
 }
 
 export async function readUploadFile(baseDir: string, key: string): Promise<Buffer | null> {
@@ -44,8 +64,9 @@ export async function readUploadFile(baseDir: string, key: string): Promise<Buff
   if (!filePath) return null
   try {
     return await readFile(filePath)
-  } catch {
-    return null
+  } catch (err) {
+    if (isFsErrorCode(err, "ENOENT")) return null
+    throw err
   }
 }
 
@@ -55,8 +76,9 @@ export async function statUploadFile(baseDir: string, key: string): Promise<{ pa
   try {
     const stats = await stat(filePath)
     return { path: filePath, size: stats.size }
-  } catch {
-    return null
+  } catch (err) {
+    if (isFsErrorCode(err, "ENOENT")) return null
+    throw err
   }
 }
 

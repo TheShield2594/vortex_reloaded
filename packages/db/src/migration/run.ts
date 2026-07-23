@@ -35,6 +35,17 @@ async function main() {
   const keep = args.includes("--keep")
   const targetArg = args.includes("--target") ? args[args.indexOf("--target") + 1] : undefined
 
+  if (dryRun && withStorage) {
+    // migrateStorage() resolves its destination via resolveUploadsDir()
+    // (the real deployment's uploads dir), independent of --target — a dry
+    // run against a scratch DB copy would still download real files from
+    // Supabase Storage and write them into the real uploads dir, which is
+    // not "dry" at all.
+    console.error("--dry-run and --storage cannot be combined: storage migration always writes to the real uploads directory, regardless of --target.")
+    process.exitCode = 1
+    return
+  }
+
   let targetPath: string
   let scratchDir: string | undefined
   if (dryRun) {
