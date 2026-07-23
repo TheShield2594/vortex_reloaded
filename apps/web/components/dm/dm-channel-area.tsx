@@ -826,7 +826,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
             .select("id, filename, size, content_type")
             .eq("dm_id", data.id as string)
           const newMsg: Message = { ...data as unknown as Message, reply_to: replyToMsg, dm_attachments: attRows ?? [], reactions: [] }
-          setMessages((prev) => [...prev, newMsg])
+          setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg])
 
           // Incrementally index the new message if the channel is encrypted
           // and we can decrypt it.

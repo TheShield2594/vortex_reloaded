@@ -66,7 +66,7 @@ export function useDmNotificationSound(userId: string | null): void {
         if (event.type !== "message.created") return
         if (event.actorId === userId) return
 
-        const data = event.data as { messageId?: string; content?: string } | undefined
+        const data = event.data as { messageId?: string } | undefined
 
         const { shouldPlaySound, shouldShowBrowserNotification } = shouldNotify({
           dmChannelId: channelId,
@@ -80,7 +80,9 @@ export function useDmNotificationSound(userId: string | null): void {
         if (shouldShowBrowserNotification) {
           showBrowserNotification({
             title: "New Message",
-            body: data?.content?.slice(0, 100) || "Sent a message",
+            // Never preview raw content here: the channel may be E2EE, in
+            // which case this is still the ciphertext envelope, not plaintext.
+            body: "Sent a message",
             channelId,
             url: `/channels/me/${channelId}`,
           })

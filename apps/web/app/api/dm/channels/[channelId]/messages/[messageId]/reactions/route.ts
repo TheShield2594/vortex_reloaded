@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
@@ -82,12 +82,12 @@ export async function POST(
       return NextResponse.json({ error: "Failed to add reaction" }, { status: 500 })
     }
 
-    publishGatewayEvent({
+    after(() => publishGatewayEvent({
       type: "reaction.added",
       channelId,
       actorId: user.id,
       data: { dm_id: messageId, user_id: user.id, emoji, created_at: new Date().toISOString() },
-    }, { route: "/api/dm/channels/[channelId]/messages/[messageId]/reactions" })
+    }, { route: "/api/dm/channels/[channelId]/messages/[messageId]/reactions" }))
 
     return NextResponse.json({ ok: true, emoji, nonce: body.nonce ?? null })
   } catch (err) {
@@ -125,12 +125,12 @@ export async function DELETE(
       return NextResponse.json({ error: "Failed to remove reaction" }, { status: 500 })
     }
 
-    publishGatewayEvent({
+    after(() => publishGatewayEvent({
       type: "reaction.removed",
       channelId,
       actorId: user.id,
       data: { dm_id: messageId, user_id: user.id, emoji, created_at: new Date().toISOString() },
-    }, { route: "/api/dm/channels/[channelId]/messages/[messageId]/reactions" })
+    }, { route: "/api/dm/channels/[channelId]/messages/[messageId]/reactions" }))
 
     return NextResponse.json({ ok: true, emoji, nonce: body.nonce ?? null })
   } catch (err) {

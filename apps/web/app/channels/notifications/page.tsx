@@ -102,9 +102,6 @@ export default function NotificationsPage() {
       setNotifications((prev) => mergeNotifications(prev, [n]).slice(0, 50))
       if (!n.read) {
         setTotalUnreadCount((prev) => prev + 1)
-        useAppStore.getState().setNotificationUnreadCount(
-          (useAppStore.getState().notificationUnreadCount ?? 0) + 1
-        )
       }
       const { shouldPlaySound, shouldShowBrowserNotification } = shouldNotify({
         channelId: n.channel_id,

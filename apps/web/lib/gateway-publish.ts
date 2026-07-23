@@ -59,3 +59,40 @@ export async function publishGatewayEvent(event: GatewayEvent, context?: { route
     log.error({ route: context?.route, userId: event.actorId, action: event.type, channelId: event.channelId, error: err }, "gateway publish error")
   }
 }
+
+/**
+ * Force a user's already-connected socket(s) to leave a DM/group channel's
+ * gateway room — call this when removing them as a member, before
+ * publishing the member.left event, so a still-connected socket can't keep
+ * receiving that channel's message/reaction events after being removed.
+ */
+export async function revokeGatewayChannelAccess(userId: string, channelId: string): Promise<void> {
+  if (!SIGNAL_SECRET) {
+    log.warn({ action: "revoke-channel-access" }, "SIGNAL_REVOKE_SECRET not configured — skipping gateway revoke")
+    return
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), PUBLISH_TIMEOUT_MS)
+
+  try {
+    const res = await fetch(`${SIGNAL_URL}/revoke-channel-access`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${SIGNAL_SECRET}`,
+      },
+      body: JSON.stringify({ userId, channelId }),
+      signal: controller.signal,
+    })
+    clearTimeout(timeout)
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => "(unreadable)")
+      log.error({ userId, channelId, status: res.status, body }, "gateway revoke failed")
+    }
+  } catch (err) {
+    clearTimeout(timeout)
+    log.error({ userId, channelId, error: err }, "gateway revoke error")
+  }
+}

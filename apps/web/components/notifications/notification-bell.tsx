@@ -60,6 +60,8 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
   soundEnabledRef.current = prefs.sound_enabled
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const notificationsRef = useRef<Notification[]>([])
+  notificationsRef.current = notifications
   const [unreadCount, setUnreadCount] = useState(0)
   const [filterTab, setFilterTab] = useState<"all" | "mentions" | "other">("all")
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -107,6 +109,9 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
       if (event.type !== "notification.created") return
       if (!isNotification(event.data)) return
       const n = event.data
+      // Redelivered/duplicate events (reconnect resync racing the initial
+      // load, etc.) must not double-insert or double-count.
+      if (notificationsRef.current.some((existing) => existing.id === n.id)) return
       setNotifications((prev) => [n, ...prev.slice(0, 29)])
       setUnreadCount((c) => c + 1)
 

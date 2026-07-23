@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
-import { publishGatewayEvent } from "@/lib/gateway-publish"
+import { publishGatewayEvent, revokeGatewayChannelAccess } from "@/lib/gateway-publish"
 
 // POST /api/dm/channels/[channelId]/members — add a member to a group DM
 export async function POST(
@@ -50,18 +50,18 @@ export async function POST(
     // Existing members (already subscribed to this channel) see the join;
     // the new member isn't in the channel's gateway room yet, so notify them
     // directly via their per-user channel so their DM list picks it up.
-    publishGatewayEvent({
+    after(() => publishGatewayEvent({
       type: "member.joined",
       channelId,
       actorId: user.id,
       data: { channelId, userId },
-    }, { route: "/api/dm/channels/[channelId]/members" })
-    publishGatewayEvent({
+    }, { route: "/api/dm/channels/[channelId]/members" }))
+    after(() => publishGatewayEvent({
       type: "member.joined",
       channelId: `user:${userId}`,
       actorId: user.id,
       data: { channelId },
-    }, { route: "/api/dm/channels/[channelId]/members" })
+    }, { route: "/api/dm/channels/[channelId]/members" }))
 
     return NextResponse.json({ ok: true })
 
@@ -106,21 +106,29 @@ export async function DELETE(
 
     if (error) return NextResponse.json({ error: "Failed to remove member" }, { status: 500 })
 
+    // Revoke the removed member's live gateway room membership before
+    // announcing the departure — otherwise a still-connected socket (this
+    // channel's DM list / notification-sound subscriptions are sticky, see
+    // dm-list.tsx) would keep receiving this channel's message/reaction
+    // events until it happens to reconnect and gateway:subscribe's
+    // checkChannelAccess re-checks membership.
+    await revokeGatewayChannelAccess(targetUserId, channelId)
+
     // Remaining members (subscribed to this channel) see the departure; the
     // removed member is notified via their per-user channel so their DM
     // list drops the channel.
-    publishGatewayEvent({
+    after(() => publishGatewayEvent({
       type: "member.left",
       channelId,
       actorId: user.id,
       data: { channelId, userId: targetUserId },
-    }, { route: "/api/dm/channels/[channelId]/members" })
-    publishGatewayEvent({
+    }, { route: "/api/dm/channels/[channelId]/members" }))
+    after(() => publishGatewayEvent({
       type: "member.left",
       channelId: `user:${targetUserId}`,
       actorId: user.id,
       data: { channelId },
-    }, { route: "/api/dm/channels/[channelId]/members" })
+    }, { route: "/api/dm/channels/[channelId]/members" }))
 
     return NextResponse.json({ ok: true })
 

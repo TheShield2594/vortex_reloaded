@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { sendPushToUser } from "@/lib/push"
 import { requireAuth, checkRateLimit } from "@/lib/utils/api-helpers"
@@ -164,12 +164,12 @@ export async function POST(req: NextRequest) {
               icon_url: accepter?.avatar_url ?? null,
             }).select().single()
             if (notif) {
-              publishGatewayEvent({
+              after(() => publishGatewayEvent({
                 type: "notification.created",
                 channelId: `user:${target.id}`,
                 actorId: user.id,
                 data: notif,
-              }, { route: "/api/friends" })
+              }, { route: "/api/friends" }))
             }
             await sendPushToUser(target.id, {
               title: "Friend Request Accepted",
@@ -223,12 +223,12 @@ export async function POST(req: NextRequest) {
         icon_url: sender?.avatar_url ?? null,
       }).select().single()
       if (notif) {
-        publishGatewayEvent({
+        after(() => publishGatewayEvent({
           type: "notification.created",
           channelId: `user:${target.id}`,
           actorId: user.id,
           data: notif,
-        }, { route: "/api/friends" })
+        }, { route: "/api/friends" }))
       }
 
       await sendPushToUser(target.id, {
@@ -305,12 +305,12 @@ export async function PATCH(req: NextRequest) {
           icon_url: accepter?.avatar_url ?? null,
         }).select().single()
         if (notif) {
-          publishGatewayEvent({
+          after(() => publishGatewayEvent({
             type: "notification.created",
             channelId: `user:${requesterId}`,
             actorId: user.id,
             data: notif,
-          }, { route: "/api/friends" })
+          }, { route: "/api/friends" }))
         }
 
         await sendPushToUser(requesterId, {

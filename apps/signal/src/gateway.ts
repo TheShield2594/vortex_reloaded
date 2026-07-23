@@ -154,6 +154,10 @@ export function initGateway(options: GatewayOptions): void {
           const serverIds = supabase ? await getUserServerIds(supabase, userId) : []
           state = { userId, subscribedChannels: new Set(), serverIds }
           socketStates.set(socket.id, state)
+          // Exposed cross-replica via the Redis adapter's fetchSockets(), so
+          // revokeChannelAccess() can identify which remote sockets belong to
+          // a given user without a shared socketStates map.
+          socket.data.userId = userId
 
           // Join presence rooms for all user's servers
           for (const serverId of serverIds) {
@@ -437,6 +441,7 @@ export function initGateway(options: GatewayOptions): void {
           serverIds,
         }
         socketStates.set(socket.id, state)
+        socket.data.userId = userId
 
         // Set presence
         await presence.setOnline(userId, socket.id, status, serverIds)
@@ -565,6 +570,43 @@ async function checkChannelAccess(
   } catch (err) {
     log.error({ err, userId, channelId }, "checkChannelAccess error — failing closed")
     return false
+  }
+}
+
+/**
+ * Force a user's socket(s) to leave a channel's gateway room, so a DM
+ * member removal takes effect immediately instead of waiting for the
+ * socket to reconnect (at which point gateway:subscribe's checkChannelAccess
+ * would reject it, but until then a still-connected socket would keep
+ * receiving message/reaction events for a channel it was just removed from).
+ *
+ * Cluster-safe: io.in(room).fetchSockets() enumerates sockets on every
+ * replica via the Redis adapter, and RemoteSocket.leave() works the same
+ * way whether the socket is local or on another replica. socket.data.userId
+ * (set in gateway:subscribe / gateway:init above) is what makes ownership
+ * checkable on sockets this replica doesn't otherwise know about.
+ */
+export async function revokeChannelAccess(
+  io: Server,
+  targetUserId: string,
+  channelId: string,
+): Promise<void> {
+  const room = `gateway:${channelId}`
+  try {
+    const sockets = await io.in(room).fetchSockets()
+    for (const s of sockets) {
+      if (s.data?.userId !== targetUserId) continue
+      s.leave(room)
+    }
+  } catch (err) {
+    log.error({ err, targetUserId, channelId }, "revokeChannelAccess error")
+  }
+
+  // Best-effort local bookkeeping — only reaches sockets on this replica;
+  // harmless no-op for sockets that live elsewhere since room membership
+  // (already revoked above) is what actually gates event delivery.
+  for (const state of socketStates.values()) {
+    if (state.userId === targetUserId) state.subscribedChannels.delete(channelId)
   }
 }
 

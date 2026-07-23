@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
 
@@ -209,12 +209,12 @@ export async function POST(req: NextRequest) {
     // the creator's own client already has the channel id from this response.
     for (const memberId of allMembers) {
       if (memberId === user.id) continue
-      publishGatewayEvent({
+      after(() => publishGatewayEvent({
         type: "member.joined",
         channelId: `user:${memberId}`,
         actorId: user.id,
         data: { channelId: channel.id },
-      }, { route: "/api/dm/channels" })
+      }, { route: "/api/dm/channels" }))
     }
 
     return NextResponse.json({ id: channel.id, existing: false }, { status: 201 })
