@@ -1,8 +1,205 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { Bell, BellOff, Volume2, VolumeX, Moon, Loader2, Send, Monitor, Smartphone, Eye, EyeOff } from "lucide-react"
+import { Bell, BellOff, Volume2, VolumeX, Moon, Loader2, Send, Monitor, Smartphone, Eye, EyeOff, Radio, Copy, RefreshCw } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+
+interface NtfyState {
+  serverConfigured: boolean
+  publicUrl: string | null
+  topic: string | null
+  enabled: boolean
+}
+
+/**
+ * Self-hosted push via ntfy (issue #38) — an alternative to Web Push that
+ * never touches Google FCM / Apple APNs. Hidden entirely when the instance
+ * admin hasn't configured NTFY_SERVER_URL, same as the GIF picker hides
+ * without an API key.
+ */
+function NtfySection(): React.ReactNode {
+  const { toast } = useToast()
+  const [state, setState] = useState<NtfyState | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/user/ntfy")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: NtfyState | null) => setState(data))
+      .catch(() => setState(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const subscribeUrl = state?.topic && state.publicUrl
+    ? `${state.publicUrl.replace(/\/+$/, "")}/${state.topic}`
+    : null
+
+  async function enable() {
+    setBusy(true)
+    try {
+      const res = await fetch("/api/user/ntfy", { method: "POST" })
+      const data = await res.json() as NtfyState & { error?: string }
+      if (!res.ok) {
+        toast({ title: data.error ?? "Failed to enable ntfy push", variant: "destructive" })
+        return
+      }
+      setState((prev) => (prev ? { ...prev, topic: data.topic, enabled: data.enabled } : prev))
+    } catch {
+      toast({ title: "Network error enabling ntfy push", variant: "destructive" })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function toggle(enabled: boolean) {
+    setBusy(true)
+    try {
+      const res = await fetch("/api/user/ntfy", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      })
+      const data = await res.json() as { error?: string }
+      if (!res.ok) {
+        toast({ title: data.error ?? "Failed to update ntfy push", variant: "destructive" })
+        return
+      }
+      setState((prev) => (prev ? { ...prev, enabled } : prev))
+    } catch {
+      toast({ title: "Network error updating ntfy push", variant: "destructive" })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function rotate() {
+    setBusy(true)
+    try {
+      const res = await fetch("/api/user/ntfy", { method: "DELETE" })
+      const data = await res.json() as { topic?: string; enabled?: boolean; error?: string }
+      if (!res.ok) {
+        toast({ title: data.error ?? "Failed to rotate ntfy topic", variant: "destructive" })
+        return
+      }
+      setState((prev) => (prev ? { ...prev, topic: data.topic ?? prev.topic } : prev))
+      toast({ title: "Ntfy topic rotated — update your subscription with the new link" })
+    } catch {
+      toast({ title: "Network error rotating ntfy topic", variant: "destructive" })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copyUrl() {
+    if (!subscribeUrl) return
+    try {
+      await navigator.clipboard.writeText(subscribeUrl)
+      toast({ title: "Subscribe link copied" })
+    } catch {
+      toast({ title: "Couldn't copy — copy the link manually", variant: "destructive" })
+    }
+  }
+
+  if (loading || !state?.serverConfigured) return null
+
+  return (
+    <section className="space-y-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wider" style={{ color: "var(--theme-text-muted)" }}>
+        Self-Hosted Push (ntfy)
+      </h2>
+      <p className="text-xs mb-2" style={{ color: "var(--theme-text-muted)" }}>
+        Get notifications via your own ntfy server instead of Google/Apple's push
+        relay — no third party ever learns that you received a message.
+      </p>
+      <div
+        className="flex items-center justify-between px-4 py-3 rounded-lg"
+        style={{ background: "var(--theme-bg-secondary)", border: "1px solid var(--theme-bg-tertiary)" }}
+      >
+        <div className="flex items-center gap-3">
+          <Radio className="w-4 h-4" style={{ color: state.enabled ? "var(--theme-accent)" : "var(--theme-text-muted)" }} />
+          <div>
+            <p className="text-sm font-medium" style={{ color: "var(--theme-text-primary)" }}>
+              {state.topic ? (state.enabled ? "ntfy push enabled" : "ntfy push disabled") : "Enable ntfy push"}
+            </p>
+            <p className="text-xs" style={{ color: "var(--theme-text-muted)" }}>
+              {state.topic
+                ? "Subscribe to your private topic in the ntfy app to receive notifications."
+                : "Creates a private topic on this server's ntfy instance."}
+            </p>
+          </div>
+        </div>
+        {!state.topic && (
+          <button
+            type="button"
+            onClick={enable}
+            disabled={busy}
+            className="px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+            style={{ background: "var(--theme-accent)", color: "#fff" }}
+          >
+            {busy ? "Enabling…" : "Enable"}
+          </button>
+        )}
+        {state.topic && (
+          <button
+            type="button"
+            onClick={() => toggle(!state.enabled)}
+            disabled={busy}
+            className="relative w-10 h-6 rounded-full transition-all focus-ring disabled:opacity-50"
+            style={{ background: state.enabled ? "var(--theme-accent)" : "var(--theme-bg-tertiary)" }}
+            role="switch"
+            aria-checked={state.enabled}
+            aria-label="Enable ntfy push"
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform"
+              style={{ transform: state.enabled ? "translateX(16px)" : "translateX(0)" }}
+            />
+          </button>
+        )}
+      </div>
+
+      {subscribeUrl && (
+        <div
+          className="space-y-2 px-4 py-3 rounded-lg"
+          style={{ background: "var(--theme-bg-secondary)", border: "1px solid var(--theme-bg-tertiary)" }}
+        >
+          <p className="text-xs font-medium" style={{ color: "var(--theme-text-muted)" }}>
+            Subscribe URL — add this in the ntfy app or web UI
+          </p>
+          <div className="flex items-center gap-2">
+            <code
+              className="flex-1 text-xs px-2 py-1.5 rounded truncate"
+              style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)" }}
+            >
+              {subscribeUrl}
+            </code>
+            <button
+              type="button"
+              onClick={copyUrl}
+              className="p-1.5 rounded-md transition-colors"
+              style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)" }}
+              aria-label="Copy subscribe link"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={rotate}
+              disabled={busy}
+              className="p-1.5 rounded-md transition-colors disabled:opacity-50"
+              style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)" }}
+              aria-label="Rotate topic"
+              title="Generate a new private topic (do this if this link ever leaks)"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
 
 function DesktopNotificationSection(): React.ReactNode {
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default")
@@ -282,6 +479,9 @@ export function NotificationsSettingsPage({ userId }: Props) {
 
       {/* ── Desktop Notifications ────────── */}
       <DesktopNotificationSection />
+
+      {/* ── Self-hosted push via ntfy (issue #38) ────────── */}
+      <NtfySection />
 
       {/* ── Delivery & Display ────────── */}
       <section className="space-y-2">

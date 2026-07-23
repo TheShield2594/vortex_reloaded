@@ -108,3 +108,25 @@ export const pushSubscriptions = sqliteTable(
   },
   (table) => [unique("push_subscriptions_user_endpoint_unique").on(table.userId, table.endpoint)]
 )
+
+/**
+ * Self-hosted push via ntfy (issue #38) — an alternative delivery channel to
+ * Web Push that doesn't route through Google FCM / Apple APNs. One row per
+ * user: a private, unguessable topic name the server publishes to
+ * (lib/push/ntfy.ts) and the user subscribes to directly from an ntfy
+ * client pointed at their own self-hosted NTFY_SERVER_URL — no third party
+ * ever sees that a notification was sent.
+ */
+export const ntfySubscriptions = sqliteTable(
+  "ntfy_subscriptions",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [unique("ntfy_subscriptions_topic_unique").on(table.topic)]
+)

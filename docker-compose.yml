@@ -12,6 +12,9 @@
 #    - cron     — Periodic task runner (replaces Vercel Cron)
 #    - livekit  — Self-hosted LiveKit SFU (voice/video call media)
 #    - coturn   — TURN/STUN server (WebRTC NAT traversal for calls)
+#    - ntfy     — Self-hosted push notifications (issue #38 — no Google FCM
+#                 / Apple APNs relay involved; users subscribe directly to
+#                 their own private topic on this server)
 #
 #  Database: SQLite. The db file is bind-mounted from ./data on the host
 #  into both `web` and `signal` (both need direct read/write access) —
@@ -58,6 +61,10 @@ services:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: file:/data/vortex.db
       LIVEKIT_API_URL: http://livekit:7880
+      # Internal address of the `ntfy` service below — always set since ntfy
+      # ships in this stack by default (like Redis, it costs little to keep
+      # running). Per-user opt-in still happens in Settings → Notifications.
+      NTFY_SERVER_URL: http://ntfy:80
     volumes:
       - ./data:/data
     depends_on:
@@ -174,8 +181,39 @@ services:
     networks:
       - vortex
 
+  # ─── ntfy (self-hosted push notifications) ─────────────────────────────────
+  # Alternative to Web Push (issue #38): the `web` service publishes here
+  # over the internal Docker network, and users subscribe directly to their
+  # own private topic (Settings → Notifications) from the ntfy app/web UI
+  # pointed at NEXT_PUBLIC_NTFY_URL. No Firebase key is configured, so this
+  # container never talks to Google/Apple — delivery relies on the
+  # subscribing client holding its own connection to this server.
+  ntfy:
+    image: binwiederhier/ntfy
+    restart: unless-stopped
+    command: serve
+    environment:
+      NTFY_BASE_URL: ${NEXT_PUBLIC_NTFY_URL:-http://localhost:8080}
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_CACHE_DURATION: 12h
+      NTFY_BEHIND_PROXY: "true"
+      NTFY_ENABLE_LOGIN: "false"
+    volumes:
+      - ntfy_data:/var/lib/ntfy
+    ports:
+      - "${NTFY_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--tries=1", "-O", "-", "http://127.0.0.1:80/v1/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - vortex
+
 volumes:
   redis_data:
+  ntfy_data:
 
 networks:
   vortex:
