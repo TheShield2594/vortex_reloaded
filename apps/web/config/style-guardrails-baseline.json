@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-22T20:01:07.712Z",
+  "generatedAt": "2026-07-23T14:12:17.907Z",
   "rules": [
     {
       "id": "inline-style-color",
@@ -28,22 +28,28 @@
       "line": 20
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:30",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:29",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 30
+      "line": 29
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:340",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:306",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 340
+      "line": 306
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:343",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:309",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 343
+      "line": 309
+    },
+    {
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:325",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/app/(auth)/login/page.tsx",
+      "line": 325
     },
     {
       "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:359",
@@ -52,136 +58,130 @@
       "line": 359
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:393",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:362",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 393
+      "line": 362
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:396",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:372",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 396
+      "line": 372
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:406",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:391",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 406
+      "line": 391
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:425",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:428",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 425
+      "line": 428
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:462",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:431",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 462
+      "line": 431
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:465",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:449",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 465
+      "line": 449
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:483",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:457",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 483
+      "line": 457
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:491",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:473",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 491
+      "line": 473
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:509",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:475",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 509
+      "line": 475
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:511",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:498",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 511
+      "line": 498
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:534",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:500",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 534
+      "line": 500
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:536",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:507",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 536
+      "line": 507
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:543",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:529",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 543
+      "line": 529
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:565",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:538",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 565
+      "line": 538
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:574",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:557",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 574
+      "line": 557
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:593",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:566",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 593
+      "line": 566
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:605",
+      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:568",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 605
+      "line": 568
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:610",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 610
-    },
-    {
-      "key": "inline-style-color:apps/web/app/(auth)/login/page.tsx:612",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/app/(auth)/login/page.tsx",
-      "line": 612
-    },
-    {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:118",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:104",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 118
+      "line": 104
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:119",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:105",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 119
+      "line": 105
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:126",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:112",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 126
+      "line": 112
+    },
+    {
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:113",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/app/(auth)/register/page.tsx",
+      "line": 113
     },
     {
       "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:127",
@@ -190,16 +190,16 @@
       "line": 127
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:141",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:128",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 141
+      "line": 128
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:142",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:143",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 142
+      "line": 143
     },
     {
       "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:157",
@@ -208,10 +208,10 @@
       "line": 157
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:171",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:158",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 171
+      "line": 158
     },
     {
       "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:172",
@@ -220,52 +220,46 @@
       "line": 172
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:186",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:173",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 186
+      "line": 173
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:187",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:190",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 187
+      "line": 190
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:204",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:206",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 204
+      "line": 206
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:220",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:208",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 220
+      "line": 208
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:222",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:213",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 222
+      "line": 213
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:227",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:215",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 227
+      "line": 215
     },
     {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:229",
+      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:217",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 229
-    },
-    {
-      "key": "inline-style-color:apps/web/app/(auth)/register/page.tsx:231",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/app/(auth)/register/page.tsx",
-      "line": 231
+      "line": 217
     },
     {
       "key": "inline-style-color:apps/web/app/channels/friends/loading.tsx:10",
@@ -376,10 +370,16 @@
       "line": 6
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:224",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:216",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 224
+      "line": 216
+    },
+    {
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:220",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/app/channels/notifications/page.tsx",
+      "line": 220
     },
     {
       "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:228",
@@ -388,76 +388,70 @@
       "line": 228
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:236",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:244",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 236
+      "line": 244
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:252",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:253",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 252
+      "line": 253
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:261",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:272",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 261
+      "line": 272
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:280",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:273",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 280
+      "line": 273
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:281",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:282",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 281
+      "line": 282
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:290",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:294",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 290
+      "line": 294
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:302",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:304",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 302
+      "line": 304
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:312",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:309",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 312
+      "line": 309
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:317",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:313",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 317
+      "line": 313
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:321",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:325",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 321
+      "line": 325
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:333",
+      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:336",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 333
-    },
-    {
-      "key": "inline-style-color:apps/web/app/channels/notifications/page.tsx:344",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/app/channels/notifications/page.tsx",
-      "line": 344
+      "line": 336
     },
     {
       "key": "inline-style-color:apps/web/app/channels/profile/loading.tsx:8",
@@ -478,58 +472,64 @@
       "line": 6
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:101",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:100",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 101
+      "line": 100
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:108",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:107",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 108
+      "line": 107
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:118",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:117",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 118
+      "line": 117
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:120",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:119",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 120
+      "line": 119
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:129",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:128",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 129
+      "line": 128
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:141",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:140",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 141
+      "line": 140
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:149",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:148",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 149
+      "line": 148
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:157",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:156",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 157
+      "line": 156
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:160",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:159",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 160
+      "line": 159
+    },
+    {
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:170",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/app/channels/you/page.tsx",
+      "line": 170
     },
     {
       "key": "inline-style-color:apps/web/app/channels/you/page.tsx:171",
@@ -538,16 +538,16 @@
       "line": 171
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:172",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:183",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 172
+      "line": 183
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:184",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:32",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 184
+      "line": 32
     },
     {
       "key": "inline-style-color:apps/web/app/channels/you/page.tsx:33",
@@ -556,22 +556,16 @@
       "line": 33
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:34",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:83",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 34
+      "line": 83
     },
     {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:84",
+      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:88",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/you/page.tsx",
-      "line": 84
-    },
-    {
-      "key": "inline-style-color:apps/web/app/channels/you/page.tsx:89",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/app/channels/you/page.tsx",
-      "line": 89
+      "line": 88
     },
     {
       "key": "inline-style-color:apps/web/app/error.tsx:24",
@@ -706,400 +700,400 @@
       "line": 96
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:131",
+      "key": "inline-style-color:apps/web/app/page.tsx:130",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 131
+      "line": 130
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:136",
+      "key": "inline-style-color:apps/web/app/page.tsx:135",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 136
+      "line": 135
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:142",
+      "key": "inline-style-color:apps/web/app/page.tsx:141",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 142
+      "line": 141
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:150",
+      "key": "inline-style-color:apps/web/app/page.tsx:149",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 150
+      "line": 149
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:157",
+      "key": "inline-style-color:apps/web/app/page.tsx:156",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 157
+      "line": 156
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:168",
+      "key": "inline-style-color:apps/web/app/page.tsx:167",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 168
+      "line": 167
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:174",
+      "key": "inline-style-color:apps/web/app/page.tsx:173",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 174
+      "line": 173
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:185",
+      "key": "inline-style-color:apps/web/app/page.tsx:184",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 185
+      "line": 184
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:197",
+      "key": "inline-style-color:apps/web/app/page.tsx:196",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 197
+      "line": 196
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:200",
+      "key": "inline-style-color:apps/web/app/page.tsx:199",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 200
+      "line": 199
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:205",
+      "key": "inline-style-color:apps/web/app/page.tsx:204",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 205
+      "line": 204
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:212",
+      "key": "inline-style-color:apps/web/app/page.tsx:211",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 212
+      "line": 211
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:219",
+      "key": "inline-style-color:apps/web/app/page.tsx:218",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 219
+      "line": 218
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:229",
+      "key": "inline-style-color:apps/web/app/page.tsx:228",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 229
+      "line": 228
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:238",
+      "key": "inline-style-color:apps/web/app/page.tsx:237",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 238
+      "line": 237
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:255",
+      "key": "inline-style-color:apps/web/app/page.tsx:254",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 255
+      "line": 254
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:266",
+      "key": "inline-style-color:apps/web/app/page.tsx:265",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 266
+      "line": 265
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:273",
+      "key": "inline-style-color:apps/web/app/page.tsx:272",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 273
+      "line": 272
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:280",
+      "key": "inline-style-color:apps/web/app/page.tsx:279",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 280
+      "line": 279
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:290",
+      "key": "inline-style-color:apps/web/app/page.tsx:289",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 290
+      "line": 289
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:298",
+      "key": "inline-style-color:apps/web/app/page.tsx:297",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 298
+      "line": 297
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:308",
+      "key": "inline-style-color:apps/web/app/page.tsx:307",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 308
+      "line": 307
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:312",
+      "key": "inline-style-color:apps/web/app/page.tsx:311",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 312
+      "line": 311
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:324",
+      "key": "inline-style-color:apps/web/app/page.tsx:323",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 324
+      "line": 323
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:335",
+      "key": "inline-style-color:apps/web/app/page.tsx:334",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 335
+      "line": 334
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:344",
+      "key": "inline-style-color:apps/web/app/page.tsx:343",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 344
+      "line": 343
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:351",
+      "key": "inline-style-color:apps/web/app/page.tsx:350",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 351
+      "line": 350
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:355",
+      "key": "inline-style-color:apps/web/app/page.tsx:354",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 355
+      "line": 354
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:367",
+      "key": "inline-style-color:apps/web/app/page.tsx:366",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 367
+      "line": 366
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:375",
+      "key": "inline-style-color:apps/web/app/page.tsx:374",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 375
+      "line": 374
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:382",
+      "key": "inline-style-color:apps/web/app/page.tsx:381",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 382
+      "line": 381
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:406",
+      "key": "inline-style-color:apps/web/app/page.tsx:405",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 406
+      "line": 405
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:413",
+      "key": "inline-style-color:apps/web/app/page.tsx:412",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 413
+      "line": 412
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:425",
+      "key": "inline-style-color:apps/web/app/page.tsx:424",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 425
+      "line": 424
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:432",
+      "key": "inline-style-color:apps/web/app/page.tsx:431",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 432
+      "line": 431
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:434",
+      "key": "inline-style-color:apps/web/app/page.tsx:433",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 434
+      "line": 433
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:436",
+      "key": "inline-style-color:apps/web/app/page.tsx:435",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 436
+      "line": 435
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:439",
+      "key": "inline-style-color:apps/web/app/page.tsx:438",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 439
+      "line": 438
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:451",
+      "key": "inline-style-color:apps/web/app/page.tsx:450",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 451
+      "line": 450
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:459",
+      "key": "inline-style-color:apps/web/app/page.tsx:458",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 459
+      "line": 458
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:466",
+      "key": "inline-style-color:apps/web/app/page.tsx:465",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 466
+      "line": 465
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:497",
+      "key": "inline-style-color:apps/web/app/page.tsx:496",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 497
+      "line": 496
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:504",
+      "key": "inline-style-color:apps/web/app/page.tsx:503",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 504
+      "line": 503
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:506",
+      "key": "inline-style-color:apps/web/app/page.tsx:505",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 506
+      "line": 505
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:508",
+      "key": "inline-style-color:apps/web/app/page.tsx:507",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 508
+      "line": 507
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:511",
+      "key": "inline-style-color:apps/web/app/page.tsx:510",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 511
+      "line": 510
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:524",
+      "key": "inline-style-color:apps/web/app/page.tsx:523",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 524
+      "line": 523
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:540",
+      "key": "inline-style-color:apps/web/app/page.tsx:539",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 540
+      "line": 539
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:546",
+      "key": "inline-style-color:apps/web/app/page.tsx:545",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 546
+      "line": 545
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:552",
+      "key": "inline-style-color:apps/web/app/page.tsx:551",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 552
+      "line": 551
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:571",
+      "key": "inline-style-color:apps/web/app/page.tsx:570",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 571
+      "line": 570
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:579",
+      "key": "inline-style-color:apps/web/app/page.tsx:578",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 579
+      "line": 578
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:583",
+      "key": "inline-style-color:apps/web/app/page.tsx:582",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 583
+      "line": 582
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:591",
+      "key": "inline-style-color:apps/web/app/page.tsx:590",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 591
+      "line": 590
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:602",
+      "key": "inline-style-color:apps/web/app/page.tsx:601",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 602
+      "line": 601
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:611",
+      "key": "inline-style-color:apps/web/app/page.tsx:610",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 611
+      "line": 610
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:615",
+      "key": "inline-style-color:apps/web/app/page.tsx:614",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 615
+      "line": 614
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:624",
+      "key": "inline-style-color:apps/web/app/page.tsx:623",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 624
+      "line": 623
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:638",
+      "key": "inline-style-color:apps/web/app/page.tsx:637",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 638
+      "line": 637
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:648",
+      "key": "inline-style-color:apps/web/app/page.tsx:647",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 648
+      "line": 647
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:666",
+      "key": "inline-style-color:apps/web/app/page.tsx:665",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 666
+      "line": 665
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:677",
+      "key": "inline-style-color:apps/web/app/page.tsx:676",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 677
+      "line": 676
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:693",
+      "key": "inline-style-color:apps/web/app/page.tsx:692",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 693
+      "line": 692
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:702",
+      "key": "inline-style-color:apps/web/app/page.tsx:701",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 702
+      "line": 701
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:716",
+      "key": "inline-style-color:apps/web/app/page.tsx:715",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 716
+      "line": 715
     },
     {
-      "key": "inline-style-color:apps/web/app/page.tsx:721",
+      "key": "inline-style-color:apps/web/app/page.tsx:720",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/page.tsx",
-      "line": 721
+      "line": 720
     },
     {
       "key": "inline-style-color:apps/web/app/privacy/page.tsx:106",
@@ -1312,52 +1306,52 @@
       "line": 85
     },
     {
-      "key": "inline-style-color:apps/web/app/update-password/page.tsx:101",
+      "key": "inline-style-color:apps/web/app/update-password/page.tsx:116",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/update-password/page.tsx",
-      "line": 101
+      "line": 116
     },
     {
-      "key": "inline-style-color:apps/web/app/update-password/page.tsx:111",
+      "key": "inline-style-color:apps/web/app/update-password/page.tsx:118",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/update-password/page.tsx",
-      "line": 111
+      "line": 118
     },
     {
-      "key": "inline-style-color:apps/web/app/update-password/page.tsx:113",
+      "key": "inline-style-color:apps/web/app/update-password/page.tsx:57",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/update-password/page.tsx",
-      "line": 113
+      "line": 57
     },
     {
-      "key": "inline-style-color:apps/web/app/update-password/page.tsx:131",
+      "key": "inline-style-color:apps/web/app/update-password/page.tsx:63",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/update-password/page.tsx",
-      "line": 131
+      "line": 63
     },
     {
-      "key": "inline-style-color:apps/web/app/update-password/page.tsx:133",
+      "key": "inline-style-color:apps/web/app/update-password/page.tsx:74",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/update-password/page.tsx",
-      "line": 133
+      "line": 74
     },
     {
-      "key": "inline-style-color:apps/web/app/update-password/page.tsx:72",
+      "key": "inline-style-color:apps/web/app/update-password/page.tsx:83",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/update-password/page.tsx",
-      "line": 72
+      "line": 83
     },
     {
-      "key": "inline-style-color:apps/web/app/update-password/page.tsx:78",
+      "key": "inline-style-color:apps/web/app/update-password/page.tsx:86",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/update-password/page.tsx",
-      "line": 78
+      "line": 86
     },
     {
-      "key": "inline-style-color:apps/web/app/update-password/page.tsx:89",
+      "key": "inline-style-color:apps/web/app/update-password/page.tsx:96",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/update-password/page.tsx",
-      "line": 89
+      "line": 96
     },
     {
       "key": "inline-style-color:apps/web/app/update-password/page.tsx:98",
@@ -1366,70 +1360,70 @@
       "line": 98
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:101",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:100",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 101
+      "line": 100
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:112",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:111",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 112
+      "line": 111
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:118",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:117",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 118
+      "line": 117
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:137",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:136",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 137
+      "line": 136
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:156",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:155",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 156
+      "line": 155
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:158",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:157",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 158
+      "line": 157
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:76",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:75",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 76
+      "line": 75
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:83",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:82",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 83
+      "line": 82
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:92",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:91",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 92
+      "line": 91
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:94",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:93",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 94
+      "line": 93
     },
     {
-      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:97",
+      "key": "inline-style-color:apps/web/app/verify-email/page.tsx:96",
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
-      "line": 97
+      "line": 96
     },
     {
       "key": "inline-style-color:apps/web/components/chat/custom-emoji-grid.tsx:117",
@@ -2182,16 +2176,10 @@
       "line": 79
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1209",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1213",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1209
-    },
-    {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1210",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1210
+      "line": 1213
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1214",
@@ -2200,22 +2188,22 @@
       "line": 1214
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1224",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1218",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1224
+      "line": 1218
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1226",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1228",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1226
+      "line": 1228
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1243",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1230",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1243
+      "line": 1230
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1247",
@@ -2224,154 +2212,148 @@
       "line": 1247
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1252",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1251",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1252
+      "line": 1251
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1259",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1256",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1259
+      "line": 1256
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1265",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1263",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1265
+      "line": 1263
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1273",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1269",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1273
+      "line": 1269
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1281",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1277",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1281
+      "line": 1277
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1291",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1285",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1291
+      "line": 1285
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1309",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1295",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1309
+      "line": 1295
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1319",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1313",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1319
+      "line": 1313
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1370",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1323",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1370
+      "line": 1323
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1382",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1374",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1382
+      "line": 1374
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1388",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1386",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1388
+      "line": 1386
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1394",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1392",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1394
+      "line": 1392
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1451",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1398",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1451
+      "line": 1398
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1454",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1455",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1454
+      "line": 1455
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1469",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1458",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1469
+      "line": 1458
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1477",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1473",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1477
+      "line": 1473
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1480",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1481",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1480
+      "line": 1481
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1498",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1484",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1498
+      "line": 1484
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:150",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1502",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 150
+      "line": 1502
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1500",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1504",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1500
+      "line": 1504
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1501",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1505",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1501
+      "line": 1505
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1520",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1524",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1520
+      "line": 1524
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1531",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1535",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1531
+      "line": 1535
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1537",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1541",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1537
-    },
-    {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1547",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1547
+      "line": 1541
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1551",
@@ -2380,28 +2362,34 @@
       "line": 1551
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1552",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1555",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1552
+      "line": 1555
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1560",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1556",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1560
+      "line": 1556
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1562",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:156",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1562
+      "line": 156
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1563",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1564",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1563
+      "line": 1564
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1566",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 1566
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1567",
@@ -2410,52 +2398,52 @@
       "line": 1567
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1568",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1571",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1568
+      "line": 1571
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1583",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1572",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1583
+      "line": 1572
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1585",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1587",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1585
+      "line": 1587
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1586",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1589",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1586
+      "line": 1589
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1591",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1590",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1591
+      "line": 1590
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1592",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1595",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1592
+      "line": 1595
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1618",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1596",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1618
+      "line": 1596
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1634",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1622",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1634
+      "line": 1622
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1638",
@@ -2464,124 +2452,154 @@
       "line": 1638
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1640",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1642",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1640
+      "line": 1642
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1646",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1644",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1646
+      "line": 1644
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1657",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1650",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1657
+      "line": 1650
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1662",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1661",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1662
+      "line": 1661
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1667",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1666",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1667
+      "line": 1666
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:170",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1671",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 170
+      "line": 1671
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1701",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1705",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1701
+      "line": 1705
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1712",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1716",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1712
+      "line": 1716
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1724",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1728",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1724
+      "line": 1728
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1734",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1738",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1734
+      "line": 1738
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1755",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1759",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1755
+      "line": 1759
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1776",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:176",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1776
+      "line": 176
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1785",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1780",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1785
+      "line": 1780
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1803",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1789",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1803
+      "line": 1789
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1812",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1807",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1812
+      "line": 1807
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1822",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1816",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1822
+      "line": 1816
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1837",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1826",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1837
+      "line": 1826
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1856",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1841",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1856
+      "line": 1841
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:188",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1860",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 188
+      "line": 1860
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:208",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:194",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 208
+      "line": 194
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2105",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 2105
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2124",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 2124
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2127",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 2127
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2133",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 2133
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2135",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 2135
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:214",
@@ -2590,82 +2608,76 @@
       "line": 214
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2154",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2146",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2154
+      "line": 2146
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2173",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2155",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2173
+      "line": 2155
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2176",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2157",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2176
+      "line": 2157
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:218",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2160",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 218
+      "line": 2160
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2182",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2171",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2182
+      "line": 2171
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2184",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2191",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2184
+      "line": 2191
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2195",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:220",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2195
+      "line": 220
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2204",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2202",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2204
+      "line": 2202
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2206",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2213",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2206
+      "line": 2213
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2209",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2232",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2209
+      "line": 2232
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2220",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:224",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2220
+      "line": 224
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2240",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2242",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2240
-    },
-    {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2251",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2251
+      "line": 2242
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2261",
@@ -2674,118 +2686,178 @@
       "line": 2261
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2271",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2276",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2271
+      "line": 2276
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:228",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2283",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 228
+      "line": 2283
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2290",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2285",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2290
+      "line": 2285
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2305",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:234",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2305
+      "line": 234
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2312",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:253",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2312
+      "line": 253
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2314",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:275",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2314
+      "line": 275
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:247",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 247
-    },
-    {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:269",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 269
-    },
-    {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:302",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:303",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 302
+      "line": 303
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:325",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:326",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 325
+      "line": 326
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:339",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:340",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 339
+      "line": 340
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:374",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:375",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 374
+      "line": 375
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:383",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:384",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 383
+      "line": 384
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:415",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:416",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 415
+      "line": 416
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:422",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:423",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 422
+      "line": 423
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:441",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:442",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 441
+      "line": 442
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:447",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:448",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 447
+      "line": 448
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:456",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:457",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 456
+      "line": 457
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:58",
+      "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:59",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-list.tsx",
-      "line": 58
+      "line": 59
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:105",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 105
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:121",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 121
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:137",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 137
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:143",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 143
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:162",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 162
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:170",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 170
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:180",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 180
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:71",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 71
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:74",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 74
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:80",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 80
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:87",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 87
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:94",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 94
     },
     {
       "key": "inline-style-color:apps/web/components/dm/friends-sidebar.tsx:106",
@@ -3196,52 +3268,58 @@
       "line": 187
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1003",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1002",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1003
+      "line": 1002
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1012",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1011",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1012
+      "line": 1011
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1021",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1020",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1021
+      "line": 1020
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1023",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1022",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1023
+      "line": 1022
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1028",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1027",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1028
+      "line": 1027
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1031",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1030",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1031
+      "line": 1030
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1037",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1036",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1037
+      "line": 1036
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1051",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1050",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1051
+      "line": 1050
+    },
+    {
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1053",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/modals/profile-settings-modal.tsx",
+      "line": 1053
     },
     {
       "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1054",
@@ -3250,16 +3328,16 @@
       "line": 1054
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1055",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1057",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1055
+      "line": 1057
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1058",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1062",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1058
+      "line": 1062
     },
     {
       "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1063",
@@ -3280,34 +3358,34 @@
       "line": 1065
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1066",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1075",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1066
+      "line": 1075
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1076",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1078",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1076
+      "line": 1078
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1079",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1087",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1079
+      "line": 1087
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1088",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1096",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1088
+      "line": 1096
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1097",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1098",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1097
+      "line": 1098
     },
     {
       "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1099",
@@ -3316,16 +3394,10 @@
       "line": 1099
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1100",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1105",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1100
-    },
-    {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1106",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1106
+      "line": 1105
     },
     {
       "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:111",
@@ -3334,16 +3406,16 @@
       "line": 111
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1113",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1112",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1113
+      "line": 1112
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1117",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:1116",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 1117
+      "line": 1116
     },
     {
       "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:114",
@@ -3370,28 +3442,34 @@
       "line": 118
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:510",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:509",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 510
+      "line": 509
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:517",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:516",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 517
+      "line": 516
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:523",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:522",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 523
+      "line": 522
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:528",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:527",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 528
+      "line": 527
+    },
+    {
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:536",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/modals/profile-settings-modal.tsx",
+      "line": 536
     },
     {
       "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:537",
@@ -3400,328 +3478,322 @@
       "line": 537
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:538",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:542",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 538
+      "line": 542
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:543",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:545",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 543
+      "line": 545
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:546",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:548",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 546
+      "line": 548
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:549",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:551",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 549
+      "line": 551
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:552",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:560",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 552
+      "line": 560
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:561",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:562",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 561
+      "line": 562
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:563",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:565",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 563
+      "line": 565
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:566",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:568",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 566
+      "line": 568
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:569",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:571",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 569
+      "line": 571
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:572",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:583",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 572
+      "line": 583
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:584",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:592",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 584
+      "line": 592
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:593",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:596",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 593
+      "line": 596
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:597",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:611",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 597
+      "line": 611
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:612",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:632",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 612
+      "line": 632
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:633",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:634",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 633
+      "line": 634
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:635",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:642",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 635
+      "line": 642
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:643",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:650",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 643
+      "line": 650
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:651",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:655",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 651
+      "line": 655
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:656",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:662",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 656
+      "line": 662
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:663",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:667",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 663
+      "line": 667
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:668",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:675",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 668
+      "line": 675
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:676",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:680",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 676
+      "line": 680
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:681",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:691",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 681
+      "line": 691
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:692",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:693",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 692
+      "line": 693
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:694",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:699",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 694
+      "line": 699
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:700",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:708",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 700
+      "line": 708
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:709",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:714",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 709
+      "line": 714
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:715",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:722",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 715
+      "line": 722
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:723",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:734",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 723
+      "line": 734
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:735",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:743",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 735
+      "line": 743
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:744",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:764",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 744
+      "line": 764
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:765",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:781",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 765
+      "line": 781
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:782",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:785",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 782
+      "line": 785
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:786",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:795",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 786
+      "line": 795
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:796",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:814",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 796
+      "line": 814
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:815",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:836",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 815
+      "line": 836
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:837",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:858",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 837
+      "line": 858
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:859",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:866",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 859
+      "line": 866
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:867",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:881",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 867
+      "line": 881
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:882",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:884",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 882
+      "line": 884
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:885",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:892",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 885
+      "line": 892
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:893",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:895",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 893
+      "line": 895
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:896",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:903",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 896
+      "line": 903
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:904",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:912",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 904
+      "line": 912
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:913",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:921",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 913
+      "line": 921
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:922",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:940",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 922
+      "line": 940
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:941",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:946",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 941
+      "line": 946
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:947",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:963",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 947
+      "line": 963
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:964",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:971",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 964
+      "line": 971
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:972",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:977",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 972
+      "line": 977
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:978",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:979",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 978
+      "line": 979
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:980",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:983",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 980
+      "line": 983
     },
     {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:984",
+      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:993",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 984
-    },
-    {
-      "key": "inline-style-color:apps/web/components/modals/profile-settings-modal.tsx:994",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 994
+      "line": 993
     },
     {
       "key": "inline-style-color:apps/web/components/modals/search-modal.tsx:165",
@@ -3880,40 +3952,34 @@
       "line": 402
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:382",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:394",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 382
+      "line": 394
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:393",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:405",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 393
+      "line": 405
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:403",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:415",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 403
+      "line": 415
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:420",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:432",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 420
+      "line": 432
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:423",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:435",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 423
-    },
-    {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:430",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 430
+      "line": 435
     },
     {
       "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:442",
@@ -3922,46 +3988,52 @@
       "line": 442
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:462",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:454",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 462
+      "line": 454
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:476",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:474",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 476
+      "line": 474
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:485",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:488",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 485
+      "line": 488
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:507",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:497",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 507
+      "line": 497
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:520",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:519",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 520
+      "line": 519
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:526",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:532",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 526
+      "line": 532
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:541",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:538",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 541
+      "line": 538
+    },
+    {
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:553",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/notifications/notification-bell.tsx",
+      "line": 553
     },
     {
       "key": "inline-style-color:apps/web/components/onboarding/onboarding-flow.tsx:50",
@@ -5440,184 +5512,196 @@
       "line": 84
     },
     {
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:297",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/profile-settings-page.tsx",
+      "line": 297
+    },
+    {
       "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:300",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
       "line": 300
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:303",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:307",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 303
+      "line": 307
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:310",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:318",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 310
+      "line": 318
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:321",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:327",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 321
+      "line": 327
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:330",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:338",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 330
+      "line": 338
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:341",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:343",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 341
+      "line": 343
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:346",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:357",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 346
+      "line": 357
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:360",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:362",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 360
+      "line": 362
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:365",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:372",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 365
+      "line": 372
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:375",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:379",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 375
+      "line": 379
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:382",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:385",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 382
+      "line": 385
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:388",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:395",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 388
+      "line": 395
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:398",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:405",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 398
+      "line": 405
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:408",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:415",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 408
+      "line": 415
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:418",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:422",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 418
+      "line": 422
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:425",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:428",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 425
+      "line": 428
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:431",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:438",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 431
+      "line": 438
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:441",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:455",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 441
+      "line": 455
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:458",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:462",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 458
+      "line": 462
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:465",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:472",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 465
+      "line": 472
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:475",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:479",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 475
+      "line": 479
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:482",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:486",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 482
+      "line": 486
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:489",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:496",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 489
+      "line": 496
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:499",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:508",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 499
+      "line": 508
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:511",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:512",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 511
+      "line": 512
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:515",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:521",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 515
+      "line": 521
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:524",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:530",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 524
+      "line": 530
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:533",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:540",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 533
+      "line": 540
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:543",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:549",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 543
+      "line": 549
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:552",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:557",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 552
+      "line": 557
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:559",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/profile-settings-page.tsx",
+      "line": 559
     },
     {
       "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:560",
@@ -5638,22 +5722,22 @@
       "line": 563
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:565",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:564",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 565
+      "line": 564
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:566",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:571",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 566
+      "line": 571
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:567",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:573",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 567
+      "line": 573
     },
     {
       "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:574",
@@ -5674,22 +5758,22 @@
       "line": 577
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:579",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:578",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 579
+      "line": 578
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:580",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:586",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 580
+      "line": 586
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:581",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:588",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 581
+      "line": 588
     },
     {
       "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:589",
@@ -5698,94 +5782,88 @@
       "line": 589
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:591",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:593",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 591
+      "line": 593
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:592",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:597",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 592
+      "line": 597
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:596",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:601",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 596
+      "line": 601
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:600",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:608",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 600
+      "line": 608
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:604",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:616",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 604
+      "line": 616
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:611",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:623",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 611
+      "line": 623
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:619",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:625",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 619
+      "line": 625
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:626",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:633",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 626
+      "line": 633
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:628",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:650",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 628
+      "line": 650
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:636",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:663",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 636
+      "line": 663
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:653",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:679",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 653
+      "line": 679
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:666",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:697",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 666
+      "line": 697
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:682",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:699",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 682
+      "line": 699
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:700",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:704",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 700
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:702",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 702
+      "line": 704
     },
     {
       "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:707",
@@ -5794,22 +5872,28 @@
       "line": 707
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:710",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:715",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 710
+      "line": 715
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:718",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:725",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 718
+      "line": 725
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:728",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:727",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 728
+      "line": 727
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:729",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/profile-settings-page.tsx",
+      "line": 729
     },
     {
       "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:730",
@@ -5824,70 +5908,64 @@
       "line": 732
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:733",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:739",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 733
+      "line": 739
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:735",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:748",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 735
+      "line": 748
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:742",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:753",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 742
+      "line": 753
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:751",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:754",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 751
+      "line": 754
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:756",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:763",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 756
+      "line": 763
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:757",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:781",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 757
+      "line": 781
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:766",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:790",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 766
+      "line": 790
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:784",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:799",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 784
+      "line": 799
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:793",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:807",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 793
+      "line": 807
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:802",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:819",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 802
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:810",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 810
+      "line": 819
     },
     {
       "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:822",
@@ -5896,76 +5974,76 @@
       "line": 822
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:825",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:838",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 825
+      "line": 838
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:841",
+      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:862",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 841
+      "line": 862
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/profile-settings-page.tsx:865",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/profile-settings-page.tsx",
-      "line": 865
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:101",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:100",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 101
+      "line": 100
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:104",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:103",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 104
+      "line": 103
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:133",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:132",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 133
+      "line": 132
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:139",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:138",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 139
+      "line": 138
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:45",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:44",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 45
+      "line": 44
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:48",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:47",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 48
+      "line": 47
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:73",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:72",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 73
+      "line": 72
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:78",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:77",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 78
+      "line": 77
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:80",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:79",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 80
+      "line": 79
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:81",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security-settings-page.tsx",
+      "line": 81
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:82",
@@ -5974,106 +6052,118 @@
       "line": 82
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:83",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:91",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 83
+      "line": 91
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:92",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:96",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 92
+      "line": 96
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:97",
+      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:98",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 97
+      "line": 98
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security-settings-page.tsx:99",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security-settings-page.tsx",
-      "line": 99
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:100",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:102",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 100
+      "line": 102
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:104",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:109",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 104
+      "line": 109
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:108",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:111",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 108
+      "line": 111
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:112",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:113",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 112
+      "line": 113
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:69",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:117",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 69
+      "line": 117
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:71",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:122",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 71
+      "line": 122
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:73",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:124",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 73
+      "line": 124
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:77",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:126",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 77
+      "line": 126
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:82",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:130",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 82
+      "line": 130
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:84",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:137",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 84
+      "line": 137
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:86",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:140",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 86
+      "line": 140
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:90",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:144",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 90
+      "line": 144
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:97",
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:148",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/connections-section.tsx",
-      "line": 97
+      "line": 148
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:152",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/connections-section.tsx",
+      "line": 152
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:95",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/connections-section.tsx",
+      "line": 95
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/connections-section.tsx:98",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/connections-section.tsx",
+      "line": 98
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:101",
@@ -6082,16 +6172,16 @@
       "line": 101
     },
     {
+      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:103",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/passkeys-section.tsx",
+      "line": 103
+    },
+    {
       "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:104",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/passkeys-section.tsx",
       "line": 104
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:106",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/passkeys-section.tsx",
-      "line": 106
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:107",
@@ -6100,46 +6190,46 @@
       "line": 107
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:110",
+      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:112",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/passkeys-section.tsx",
-      "line": 110
+      "line": 112
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:115",
+      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:118",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/passkeys-section.tsx",
-      "line": 115
+      "line": 118
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:121",
+      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:124",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/passkeys-section.tsx",
-      "line": 121
+      "line": 124
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:127",
+      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:129",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/passkeys-section.tsx",
-      "line": 127
+      "line": 129
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:132",
+      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:91",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/passkeys-section.tsx",
-      "line": 132
+      "line": 91
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:94",
+      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:93",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/passkeys-section.tsx",
-      "line": 94
+      "line": 93
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:96",
+      "key": "inline-style-color:apps/web/components/settings/security/passkeys-section.tsx:98",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/passkeys-section.tsx",
-      "line": 96
+      "line": 98
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:100",
@@ -6148,46 +6238,52 @@
       "line": 100
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:108",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:103",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 108
+      "line": 103
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:111",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:106",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 111
+      "line": 106
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:114",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:115",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 114
+      "line": 115
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:123",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:50",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 123
+      "line": 50
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:58",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:52",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 58
+      "line": 52
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:60",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:54",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 60
+      "line": 54
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:62",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:63",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 62
+      "line": 63
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:65",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/password-change-section.tsx",
+      "line": 65
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:71",
@@ -6196,124 +6292,118 @@
       "line": 71
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:73",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:81",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 73
+      "line": 81
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:79",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:83",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 79
+      "line": 83
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:89",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:88",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 89
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:91",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 91
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:96",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/password-change-section.tsx",
-      "line": 96
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:102",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 102
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:103",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 103
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:107",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 107
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:115",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 115
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:124",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 124
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:125",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 125
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:130",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 130
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:138",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 138
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:147",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 147
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:148",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 148
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:73",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 73
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:80",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 80
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:87",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 87
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:88",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
       "line": 88
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:89",
+      "key": "inline-style-color:apps/web/components/settings/security/password-change-section.tsx:92",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/password-change-section.tsx",
+      "line": 92
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:104",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 89
+      "line": 104
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:109",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 109
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:118",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 118
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:119",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 119
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:120",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 120
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:126",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 126
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:131",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 131
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:132",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 132
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:135",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 135
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:143",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 143
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:68",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 68
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:74",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 74
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:75",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 75
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:78",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 78
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:83",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
+      "line": 83
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:90",
@@ -6322,10 +6412,10 @@
       "line": 90
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:96",
+      "key": "inline-style-color:apps/web/components/settings/security/recovery-codes-section.tsx:98",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/recovery-codes-section.tsx",
-      "line": 96
+      "line": 98
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/security-policy-section.tsx:82",
@@ -6370,40 +6460,34 @@
       "line": 90
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:100",
+      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:71",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/session-management-section.tsx",
-      "line": 100
+      "line": 71
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:101",
+      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:73",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/session-management-section.tsx",
-      "line": 101
+      "line": 73
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:102",
+      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:74",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/session-management-section.tsx",
-      "line": 102
+      "line": 74
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:85",
+      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:75",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/session-management-section.tsx",
-      "line": 85
+      "line": 75
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:87",
+      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:82",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/session-management-section.tsx",
-      "line": 87
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:88",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/session-management-section.tsx",
-      "line": 88
+      "line": 82
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:89",
@@ -6412,28 +6496,88 @@
       "line": 89
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:94",
+      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:90",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/session-management-section.tsx",
-      "line": 94
+      "line": 90
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:161",
+      "key": "inline-style-color:apps/web/components/settings/security/session-management-section.tsx:91",
       "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 161
+      "file": "apps/web/components/settings/security/session-management-section.tsx",
+      "line": 91
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:168",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:119",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 168
+      "line": 119
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:174",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:126",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 174
+      "line": 126
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:131",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 131
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:133",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 133
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:134",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 134
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:137",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 137
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:143",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 143
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:148",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 148
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:156",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 156
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:163",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 163
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:165",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 165
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:171",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/security/two-factor-section.tsx",
+      "line": 171
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:176",
@@ -6442,34 +6586,16 @@
       "line": 176
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:177",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:192",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 177
+      "line": 192
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:180",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:195",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 180
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:186",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 186
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:191",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 191
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:199",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 199
+      "line": 195
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:205",
@@ -6478,40 +6604,34 @@
       "line": 205
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:206",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 206
-    },
-    {
       "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:207",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
       "line": 207
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:212",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:213",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 212
+      "line": 213
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:222",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:214",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 222
+      "line": 214
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:224",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:215",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 224
+      "line": 215
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:227",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:221",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 227
+      "line": 221
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:235",
@@ -6520,28 +6640,22 @@
       "line": 235
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:236",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 236
-    },
-    {
       "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:237",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
       "line": 237
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:238",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:240",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 238
+      "line": 240
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:244",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:248",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 244
+      "line": 248
     },
     {
       "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:259",
@@ -6550,52 +6664,28 @@
       "line": 259
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:261",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:264",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 261
+      "line": 264
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:265",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:268",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 265
+      "line": 268
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:273",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:275",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 273
+      "line": 275
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:282",
+      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:283",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 282
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:287",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 287
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:291",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 291
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:298",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 298
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/security/two-factor-section.tsx:306",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/security/two-factor-section.tsx",
-      "line": 306
+      "line": 283
     },
     {
       "key": "inline-style-color:apps/web/components/settings/settings-mobile-wrapper.tsx:30",
@@ -6622,100 +6712,106 @@
       "line": 36
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:111",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:110",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 111
+      "line": 110
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:122",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:121",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 122
+      "line": 121
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:143",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:142",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 143
+      "line": 142
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:63",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:62",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 63
+      "line": 62
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:73",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:72",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 73
+      "line": 72
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:83",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:82",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 83
+      "line": 82
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:89",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:88",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 89
+      "line": 88
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:95",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:94",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 95
+      "line": 94
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:99",
+      "key": "inline-style-color:apps/web/components/settings/settings-sidebar.tsx:98",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/settings-sidebar.tsx",
-      "line": 99
+      "line": 98
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:11",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:12",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 11
+      "line": 12
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:14",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:19",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 14
+      "line": 19
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:21",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:24",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 21
+      "line": 24
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:26",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:27",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 26
+      "line": 27
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:29",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:28",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 29
+      "line": 28
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:30",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:32",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 30
+      "line": 32
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:34",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:47",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 34
+      "line": 47
+    },
+    {
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:50",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/settings/voice-settings-page.tsx",
+      "line": 50
     },
     {
       "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:51",
@@ -6724,28 +6820,22 @@
       "line": 51
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:54",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:53",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 54
+      "line": 53
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:55",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:58",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 55
+      "line": 58
     },
     {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:57",
+      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:9",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 57
-    },
-    {
-      "key": "inline-style-color:apps/web/components/settings/voice-settings-page.tsx:62",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/settings/voice-settings-page.tsx",
-      "line": 62
+      "line": 9
     },
     {
       "key": "inline-style-color:apps/web/components/splash-screen.tsx:35",
@@ -7054,10 +7144,10 @@
       "line": 41
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/app/page.tsx:375",
+      "key": "inline-style-radius-shadow:apps/web/app/page.tsx:374",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/app/page.tsx",
-      "line": 375
+      "line": 374
     },
     {
       "key": "inline-style-radius-shadow:apps/web/components/chat/custom-emoji-grid.tsx:117",
@@ -7090,28 +7180,28 @@
       "line": 828
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:150",
+      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:156",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 150
+      "line": 156
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:188",
+      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:194",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 188
+      "line": 194
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:247",
+      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:253",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 247
+      "line": 253
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:269",
+      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:275",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 269
+      "line": 275
     },
     {
       "key": "inline-style-radius-shadow:apps/web/components/layout/mobile-bottom-tab-bar.tsx:45",
@@ -7126,22 +7216,22 @@
       "line": 74
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/modals/profile-settings-modal.tsx:765",
+      "key": "inline-style-radius-shadow:apps/web/components/modals/profile-settings-modal.tsx:764",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 765
+      "line": 764
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/modals/profile-settings-modal.tsx:815",
+      "key": "inline-style-radius-shadow:apps/web/components/modals/profile-settings-modal.tsx:814",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 815
+      "line": 814
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/modals/profile-settings-modal.tsx:837",
+      "key": "inline-style-radius-shadow:apps/web/components/modals/profile-settings-modal.tsx:836",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "line": 837
+      "line": 836
     },
     {
       "key": "inline-style-radius-shadow:apps/web/components/settings/appearance-settings-page.tsx:303",

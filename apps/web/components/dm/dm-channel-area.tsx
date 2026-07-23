@@ -5,11 +5,12 @@ import { createPortal } from "react-dom"
 import { useRouter } from "next/navigation"
 import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { Room, RoomEvent, createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, type RemoteParticipant, type RemoteTrack } from "livekit-client"
-import { createEqTrackProcessor } from "@/lib/voice/eq-track-processor"
+import { createEqTrackProcessor, type EqTrackProcessor } from "@/lib/voice/eq-track-processor"
 import { useVoiceAudioStore } from "@/lib/stores/voice-audio-store"
+import { EqSettingsPanel } from "@/components/dm/eq-settings-panel"
 import { setActiveDmChannel } from "@/lib/notification-manager"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Phone, Video, Users, Paperclip, Pencil, Trash2, PhoneOff, Mic, MicOff, VideoOff, Search, Pin, Smile, Reply, X, ArrowLeft } from "lucide-react"
+import { Phone, Video, Users, Paperclip, Pencil, Trash2, PhoneOff, Mic, MicOff, VideoOff, Search, Pin, Smile, Reply, X, ArrowLeft, Settings } from "lucide-react"
 import { useLazyEmojiPicker } from "@/hooks/use-lazy-emoji-picker"
 import { CustomEmojiGrid } from "@/components/chat/custom-emoji-grid"
 import { format } from "date-fns"
@@ -1939,9 +1940,12 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
   const localAudioTrackRef = useRef<LocalAudioTrack | null>(null)
   const localVideoTrackRef = useRef<LocalVideoTrack | null>(null)
   const intentionalDisconnectRef = useRef(false)
+  const eqProcessorRef = useRef<EqTrackProcessor | null>(null)
+  const eqButtonRef = useRef<HTMLButtonElement>(null)
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
   const [status, setStatus] = useState<"connecting" | "connected" | "failed">("connecting")
   const [failReason, setFailReason] = useState("")
+  const [showEqPanel, setShowEqPanel] = useState(false)
   const isGroupCall = participants.length > 1
 
   const statusMeta: Record<typeof status, { label: string; detail: string; tone: string; bg: string }> = {
@@ -2030,7 +2034,9 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
         await room.localParticipant.publishTrack(audioTrack)
 
         const audioSettings = useVoiceAudioStore.getState().getEffectiveSettings(currentUserId)
-        await audioTrack.setProcessor(createEqTrackProcessor(audioSettings))
+        const eqProcessor = createEqTrackProcessor(audioSettings)
+        eqProcessorRef.current = eqProcessor
+        await audioTrack.setProcessor(eqProcessor)
 
         if (withVideo) {
           const videoTrack = await createLocalVideoTrack()
@@ -2061,6 +2067,7 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
       localVideoTrackRef.current?.stop()
       localAudioTrackRef.current = null
       localVideoTrackRef.current = null
+      eqProcessorRef.current = null
       room.disconnect()
       roomRef.current = null
     }
@@ -2198,6 +2205,26 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
         >
           {muted ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5 text-white" />}
         </button>
+        <div className="relative">
+          <button
+            ref={eqButtonRef}
+            onClick={() => setShowEqPanel((prev) => !prev)}
+            className="w-12 h-12 rounded-full flex items-center justify-center transition-colors"
+            style={{ background: showEqPanel ? "var(--theme-accent)" : "var(--theme-text-faint)" }}
+            title="Voice settings"
+            aria-label="Voice settings"
+          >
+            <Settings className="w-5 h-5 text-white" />
+          </button>
+          {showEqPanel && (
+            <EqSettingsPanel
+              userId={currentUserId}
+              onClose={() => setShowEqPanel(false)}
+              anchorRef={eqButtonRef}
+              processorRef={eqProcessorRef}
+            />
+          )}
+        </div>
         {withVideo && (
           <button
             onClick={toggleVideo}
