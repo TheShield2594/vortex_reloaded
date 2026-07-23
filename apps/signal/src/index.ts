@@ -6,29 +6,11 @@ import { createRemoteJWKSet, jwtVerify } from "jose"
 import Redis from "ioredis"
 import dotenv from "dotenv"
 import pino from "pino"
-import { InMemoryRoomManager, type IRoomManager } from "./rooms"
-import { RedisRoomManager } from "./redis-rooms"
 import { RedisEventBus } from "./event-bus"
 import { PresenceManager } from "./presence"
 import { initGateway, stopGatewayCleanup, revokeChannelAccess } from "./gateway"
-import { SocketRateLimiter } from "./rate-limiter"
 
 dotenv.config()
-
-// ─── Per-socket rate limiter ─────────────────────────────────────────────────
-
-const socketLimiter = new SocketRateLimiter().startCleanup()
-
-// Rate limit presets (limit, windowMs)
-const RATE_LIMITS = {
-  joinRoom:      { limit: 10, windowMs: 60_000 },   // 10 joins/min
-  voiceState:    { limit: 60, windowMs: 60_000 },    // 60 state changes/min
-} as const
-
-function checkSocketRate(socketId: string, action: keyof typeof RATE_LIMITS): boolean {
-  const { limit, windowMs } = RATE_LIMITS[action]
-  return socketLimiter.check(socketId, action, limit, windowMs)
-}
 
 // ─── Structured logger ───────────────────────────────────────────────────────
 
@@ -366,16 +348,6 @@ if (REDIS_URL) {
   logger.info("Socket.IO using in-memory adapter (single-instance mode)")
 }
 
-const rooms: IRoomManager = REDIS_URL
-  ? new RedisRoomManager(REDIS_URL)
-  : new InMemoryRoomManager()
-
-if (REDIS_URL) {
-  logger.info("room state backed by Redis")
-} else {
-  logger.info("room state backed by in-memory Map (set REDIS_URL to enable Redis)")
-}
-
 // ─── Gateway: Event Bus + Presence Manager ───────────────────────────────────
 // When REDIS_URL is set, initialize the unified real-time gateway that handles
 // message delivery, typing indicators, presence, and reconnection catch-up
@@ -537,243 +509,14 @@ if (eventBus && presenceManager) {
 io.on("connection", (socket: Socket) => {
   logger.info({ socketId: socket.id }, "client connected")
 
-  // ─── Join a voice room ──────────────────────────────────────────────────────
-  socket.on("join-room", async (data: unknown) => {
-    try {
-      if (typeof data !== "object" || data === null) {
-        socket.emit("error", { message: "Invalid join-room payload" })
-        return
-      }
-
-      const payload = data as Record<string, unknown>
-      const channelId = payload.channelId
-      const clientUserId = payload.userId
-      let displayName = payload.displayName
-      let avatarUrl = payload.avatarUrl
-
-      if (typeof channelId !== "string" || !channelId || typeof clientUserId !== "string" || !clientUserId) {
-        socket.emit("error", { message: "channelId and userId are required" })
-        return
-      }
-
-      if (!checkSocketRate(socket.id, "joinRoom")) {
-        socket.emit("error", { message: "Rate limited — too many join requests" })
-        return
-      }
-
-      // Type guard and length validation for displayName / avatarUrl
-      if (displayName !== undefined && typeof displayName !== "string") {
-        socket.emit("error", { message: "displayName must be a string" })
-        return
-      }
-      if (avatarUrl !== undefined && typeof avatarUrl !== "string") {
-        socket.emit("error", { message: "avatarUrl must be a string" })
-        return
-      }
-      if (displayName && displayName.length > 100) {
-        socket.emit("error", { message: "displayName must not exceed 100 characters" })
-        return
-      }
-      if (avatarUrl && avatarUrl.length > 2048) {
-        socket.emit("error", { message: "avatarUrl must not exceed 2048 characters" })
-        return
-      }
-
-      if (!(await validateSession(socket))) {
-        socket.emit("error", { message: "Unauthorized" })
-        return
-      }
-
-      // Prefer the Better Auth-verified session userId over the
-      // client-supplied one — never trust client-provided identity when a
-      // verified session is available (see #45 review).
-      const userId = sessionValidationCache.get(socket.id)?.userId ?? clientUserId
-
-      // Join socket.io room
-      socket.join(channelId)
-
-      // Register peer in room manager
-      const existingPeers = await rooms.join(channelId, {
-        socketId: socket.id,
-        userId,
-        displayName,
-        avatarUrl,
-        muted: false,
-        deafened: false,
-        speaking: false,
-        screenSharing: false,
-        joinedAt: new Date(),
-      })
-
-      // Send existing peers to new joiner
-      socket.emit("room-peers", existingPeers.map((p) => ({
-        peerId: p.socketId,
-        userId: p.userId,
-        displayName: p.displayName,
-        avatarUrl: p.avatarUrl,
-        muted: p.muted,
-        deafened: p.deafened,
-        screenSharing: p.screenSharing,
-      })))
-
-      // Notify existing peers about new joiner
-      socket.to(channelId).emit("peer-joined", {
-        peerId: socket.id,
-        userId,
-        displayName,
-        avatarUrl,
-      })
-
-      logger.info({ userId, channelId, peers: await rooms.getRoomSize(channelId) }, "user joined room")
-    } catch (err) {
-      logger.error({ socketId: socket.id, err }, "join-room handler error")
-      socket.emit("error", { message: "Internal server error" })
-    }
-  })
-
-  // ─── Voice state events ─────────────────────────────────────────────────────
-
-  socket.on("speaking", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { speaking } = payload as { speaking?: unknown }
-      if (typeof speaking !== "boolean") return
-      if (!checkSocketRate(socket.id, "voiceState")) return
-      if (!(await validateSession(socket))) return
-      const peer = await findPeerRoom(socket.id)
-      if (!peer) return
-
-      await rooms.updatePeer(peer.channelId, socket.id, { speaking })
-      socket.to(peer.channelId).emit("peer-speaking", { peerId: socket.id, speaking })
-    } catch (err) {
-      logger.error({ socketId: socket.id, event: "speaking", err }, "voice state handler error")
-    }
-  })
-
-  socket.on("toggle-mute", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { muted } = payload as { muted?: unknown }
-      if (typeof muted !== "boolean") return
-      if (!checkSocketRate(socket.id, "voiceState")) return
-      if (!(await validateSession(socket))) return
-      const peer = await findPeerRoom(socket.id)
-      if (!peer) return
-
-      await rooms.updatePeer(peer.channelId, socket.id, { muted })
-      socket.to(peer.channelId).emit("peer-muted", { peerId: socket.id, muted })
-    } catch (err) {
-      logger.error({ socketId: socket.id, event: "toggle-mute", err }, "voice state handler error")
-    }
-  })
-
-  socket.on("toggle-deafen", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { deafened } = payload as { deafened?: unknown }
-      if (typeof deafened !== "boolean") return
-      if (!checkSocketRate(socket.id, "voiceState")) return
-      if (!(await validateSession(socket))) return
-      const peer = await findPeerRoom(socket.id)
-      if (!peer) return
-
-      await rooms.updatePeer(peer.channelId, socket.id, { deafened })
-      socket.to(peer.channelId).emit("peer-deafened", { peerId: socket.id, deafened })
-    } catch (err) {
-      logger.error({ socketId: socket.id, event: "toggle-deafen", err }, "voice state handler error")
-    }
-  })
-
-  socket.on("screen-share", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { sharing } = payload as { sharing?: unknown }
-      if (typeof sharing !== "boolean") return
-      if (!checkSocketRate(socket.id, "voiceState")) return
-      if (!(await validateSession(socket))) return
-      const peer = await findPeerRoom(socket.id)
-      if (!peer) return
-
-      await rooms.updatePeer(peer.channelId, socket.id, { screenSharing: sharing })
-      socket.to(peer.channelId).emit("peer-screen-share", { peerId: socket.id, sharing })
-    } catch (err) {
-      logger.error({ socketId: socket.id, event: "screen-share", err }, "voice state handler error")
-    }
-  })
-
-  // ─── Leave room explicitly ──────────────────────────────────────────────────
-  socket.on("leave-room", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { channelId } = payload as { channelId?: unknown }
-      if (typeof channelId !== "string" || !channelId) return
-      await handleLeave(socket, channelId)
-    } catch (err) {
-      logger.error({ socketId: socket.id, err }, "leave-room handler error")
-    }
-  })
-
-  // ─── Room TTL refresh ────────────────────────────────────────────────────────
-  // Periodically refresh Redis key TTLs so active sessions don't expire while
-  // stale keys from crashed processes auto-evict after the TTL window.
-  const ttlRefreshInterval = rooms.refreshTtl
-    ? setInterval(() => {
-        rooms.refreshTtl!(socket.id).catch((err) => {
-          logger.warn({ socketId: socket.id, err }, "room TTL refresh failed")
-        })
-      }, 120_000) // every 2 minutes (well within the 5-minute default TTL)
-    : null
-
-  // ─── Disconnect ─────────────────────────────────────────────────────────────
-  socket.on("disconnect", async (reason: string) => {
+  socket.on("disconnect", (reason: string) => {
     logger.info({ socketId: socket.id, reason }, "client disconnected")
-    if (ttlRefreshInterval) clearInterval(ttlRefreshInterval)
-    socketLimiter.remove(socket.id)
     sessionValidationCache.delete(socket.id)
-    try {
-      const left = await rooms.leaveAll(socket.id)
-
-      for (const { channelId, userId } of left) {
-        socket.to(channelId).emit("peer-left", { peerId: socket.id, userId })
-      }
-    } catch (err) {
-      logger.error({ socketId: socket.id, reason, err }, "disconnect cleanup error")
-    }
   })
-
-  // ─── Helper ─────────────────────────────────────────────────────────────────
-  async function findPeerRoom(socketId: string): Promise<{ channelId: string; userId: string } | null> {
-    try {
-      const socketRooms = Array.from(socket.rooms).filter((r) => r !== socket.id)
-      for (const channelId of socketRooms) {
-        const peer = await rooms.getPeer(channelId, socketId)
-        if (peer) return { channelId, userId: peer.userId }
-      }
-      return null
-    } catch (err) {
-      logger.error({ socketId, err }, "findPeerRoom error")
-      return null
-    }
-  }
-
-  async function handleLeave(socket: Socket, channelId: string): Promise<void> {
-    try {
-      const peer = await rooms.getPeer(channelId, socket.id)
-      if (!peer) return
-
-      await rooms.leave(channelId, socket.id)
-      socket.leave(channelId)
-      socket.to(channelId).emit("peer-left", { peerId: socket.id, userId: peer.userId })
-
-      logger.info({ userId: peer.userId, channelId }, "user left room")
-    } catch (err) {
-      logger.error({ socketId: socket.id, channelId, err }, "handleLeave error")
-    }
-  }
 })
 
 httpServer.listen(PORT, () => {
-  logger.info({ port: PORT }, "Vortex WebRTC signaling server listening")
+  logger.info({ port: PORT }, "Vortex signal server listening")
 })
 
 // ─── Graceful shutdown with connection draining ────────────────────────────
@@ -787,7 +530,6 @@ async function gracefulShutdown(signal: string): Promise<void> {
   logger.info({ signal, drainTimeoutMs: DRAIN_TIMEOUT_MS }, "graceful shutdown initiated — draining connections")
 
   // 0. Stop rate-limiter cleanup timers so they don't keep the event loop alive
-  socketLimiter.stopCleanup()
   stopGatewayCleanup()
 
   // 1. Stop accepting new HTTP connections and wait for in-flight requests
@@ -840,18 +582,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
   })
 
   // 4. Force-close remaining sockets — this triggers each socket's
-  //    "disconnect" handler which calls rooms.leaveAll() with full
-  //    side-effects (peer-left emit).
+  //    "disconnect" handler.
   io.close()
 
-  // 5. Close Redis room manager connections
-  if (rooms && "redis" in rooms) {
-    try {
-      await (rooms as { redis: Redis }).redis.quit()
-    } catch {
-      // Best-effort cleanup
-    }
-  }
+  // 5. Close Redis connections
   if (revocationRedis) {
     try {
       await revocationRedis.quit()
