@@ -5,6 +5,7 @@ import { exportAllTables } from "./export"
 import { importAllTables } from "./import"
 import { verifyMigration } from "./verify"
 import { exportAuthSecrets } from "./auth-secrets-export"
+import { importAuthSecrets } from "./import-auth-secrets"
 import { resolveMigrationOutputDir } from "./output-dir"
 import { createPgPool } from "./pg-client"
 
@@ -48,13 +49,13 @@ async function main() {
   const pool = createPgPool()
 
   try {
-    console.log(`\n== 1/${withAuthSecrets ? 4 : 3}: export ==`)
+    console.log(`\n== 1/${withAuthSecrets ? 5 : 3}: export ==`)
     await exportAllTables(pool, outputDir)
 
-    console.log(`\n== 2/${withAuthSecrets ? 4 : 3}: import ==`)
+    console.log(`\n== 2/${withAuthSecrets ? 5 : 3}: import ==`)
     await importAllTables(targetPath, outputDir)
 
-    console.log(`\n== 3/${withAuthSecrets ? 4 : 3}: verify ==`)
+    console.log(`\n== 3/${withAuthSecrets ? 5 : 3}: verify ==`)
     const report = await verifyMigration(pool, targetPath)
     for (const t of report.tables) {
       const status = t.countMatches && t.sampleMismatches.length === 0 ? "OK" : "MISMATCH"
@@ -67,8 +68,15 @@ async function main() {
     }
 
     if (withAuthSecrets) {
-      console.log(`\n== 4/4: auth-secrets export ==`)
+      console.log(`\n== 4/5: auth-secrets export ==`)
       await exportAuthSecrets(pool, outputDir)
+
+      console.log(`\n== 5/5: auth-secrets import ==`)
+      const result = await importAuthSecrets(targetPath, outputDir)
+      console.log(
+        `  imported ${result.credentials} credential(s), ${result.totpFactors} TOTP factor(s), ` +
+          `${result.oauthIdentities} OAuth identity(ies), ${result.passkeys} passkey(s)`
+      )
     }
 
     console.log(dryRun ? "\nDry run complete." : "\nMigration complete.")

@@ -14,7 +14,7 @@ import {
   PhoneCall,
   SlidersHorizontal,
 } from "lucide-react"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/supabase/server"
 import { VortexLogo } from "@/components/ui/vortex-logo"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { ChatMockup } from "@/components/ui/chat-mockup"
@@ -108,11 +108,10 @@ const steps = [
 
 export default async function HomePage() {
   try {
-    const supabase = await createServerSupabaseClient()
     const {
       data: { user },
       error,
-    } = await supabase.auth.getUser()
+    } = await getAuthUser()
 
     if (!error && user) {
       redirect("/channels/me")

@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server"
-import type { User } from "@supabase/supabase-js"
-import { updateSession } from "@/lib/supabase/middleware"
+import { auth } from "@/lib/auth/better-auth"
+
+// better-auth's SQLite adapter (better-sqlite3) is a native Node addon and
+// cannot run on the Edge runtime that Next.js middleware defaults to — opt
+// into the Node.js middleware runtime so `auth.api.getSession()` below can
+// actually open the database. (Stable since Next 15.2; this repo is on ^16.)
 
 /**
  * Generate a per-request nonce and Content-Security-Policy header.
@@ -81,8 +85,11 @@ const PUBLIC_ROUTES = [
   "/login",
   "/register",
   "/api/auth",
-  "/auth/callback",
   "/verify-email",
+  // Reached via a password-reset email link with a `?token=` query param,
+  // not an active session — Better Auth's resetPassword() flow is
+  // token-based, unlike Supabase's old "recovery session" pattern.
+  "/update-password",
   "/terms",
   "/privacy",
 ]
@@ -196,44 +203,36 @@ export async function proxy(request: NextRequest) {
     )
   }
 
-  // Allow public routes and marketing homepage
+  const passthroughResponse = NextResponse.next({ request: { headers: requestHeaders } })
+
+  // Allow public routes and marketing homepage — session isn't required, but
+  // still resolved so e.g. an already-logged-in user hitting /login could be
+  // redirected client-side; unlike Supabase's short-lived JWT, Better Auth's
+  // opaque session token doesn't need proactive middleware-side refreshing
+  // (7-day expiry, refreshed lazily wherever getSession() is actually called).
   if (pathname === "/" || PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
-    try {
-      const { response } = await updateSession(request, requestHeaders)
-      return applyCsp(response, nonce, cspHeader)
-    } catch {
-      return applyCsp(
-        NextResponse.next({ request: { headers: requestHeaders } }),
-        nonce,
-        cspHeader,
-      )
-    }
+    return applyCsp(passthroughResponse, nonce, cspHeader)
   }
 
-  // Update session and get user in a single call
-  let response: NextResponse
-  let user: User | null = null
-
+  let sessionResult: Awaited<ReturnType<typeof auth.api.getSession>> = null
   try {
-    const result = await updateSession(request, requestHeaders)
-    response = result.response
-    user = result.user
+    sessionResult = await auth.api.getSession({ headers: request.headers })
   } catch {
-    // If Supabase is unreachable or misconfigured, fail open to login
+    // If the DB is unreachable or misconfigured, fail closed to login.
     const loginUrl = new URL("/login", request.url)
     const dest = request.nextUrl.searchParams.get("redirect") || request.nextUrl.pathname
     loginUrl.searchParams.set("redirect", dest)
     return applyCsp(NextResponse.redirect(loginUrl), nonce, cspHeader)
   }
 
-  if (!user) {
+  if (!sessionResult?.user) {
     const loginUrl = new URL("/login", request.url)
     loginUrl.searchParams.set("redirect", pathname)
     return applyCsp(NextResponse.redirect(loginUrl), nonce, cspHeader)
   }
 
   // Block unverified users from accessing the app
-  if (!user.email_confirmed_at) {
+  if (!sessionResult.user.emailVerified) {
     // API clients expect JSON, not a redirect
     if (pathname.startsWith("/api/")) {
       return applyCsp(
@@ -246,11 +245,14 @@ export async function proxy(request: NextRequest) {
     return applyCsp(NextResponse.redirect(verifyUrl), nonce, cspHeader)
   }
 
-  return applyCsp(response, nonce, cspHeader)
+  return applyCsp(passthroughResponse, nonce, cspHeader)
 }
 
 export const config = {
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|json|webmanifest|txt|xml)$).*)",
   ],
+  // Better Auth's SQLite adapter (better-sqlite3) is a native Node addon and
+  // cannot run on the Edge runtime Next.js middleware defaults to.
+  runtime: "nodejs",
 }

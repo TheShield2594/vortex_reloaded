@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { sanitizeBannerColor } from "@/lib/banner-color"
 import type { UserRow } from "@/types/database"
 
@@ -10,7 +11,7 @@ type ProfileUpdatePayload = Partial<Pick<UserRow,
 export async function PATCH(request: Request) {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = (await request.json()) as ProfileUpdatePayload

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
 import { untypedFrom } from "@/lib/supabase/untyped-table"
 
@@ -54,7 +55,7 @@ export async function POST(
   try {
     const { channelId, messageId } = await params
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = (await req.json().catch(() => ({}))) as Body
@@ -95,7 +96,7 @@ export async function DELETE(
   try {
     const { channelId, messageId } = await params
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = (await req.json().catch(() => ({}))) as Body

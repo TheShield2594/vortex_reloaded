@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { text } from "drizzle-orm/sqlite-core"
+import { customType, text } from "drizzle-orm/sqlite-core"
 
 /**
  * UUID primary key, TEXT-typed, generated client-side by Drizzle
@@ -37,3 +37,36 @@ export function updatedAt(name = "updated_at") {
     .$defaultFn(() => new Date().toISOString())
     .$onUpdateFn(() => new Date().toISOString())
 }
+
+/**
+ * Same on-disk shape as `createdAt()`/`updatedAt()` (ISO-8601 TEXT) but
+ * typed as `Date` at the Drizzle level and — critically — accepts a real
+ * `Date` object as the value to bind, converting it to an ISO string via
+ * `toDriver` before it ever reaches better-sqlite3 (which can only bind
+ * numbers/strings/bigints/buffers/null, not Date instances).
+ *
+ * Needed specifically for `users.createdAt`/`updatedAt` (schema/users.ts):
+ * Better Auth's own internal-adapter always constructs `new Date()` for
+ * these fields when it creates/updates a user (see
+ * node_modules/better-auth/dist/db/internal-adapter.mjs), and — unlike the
+ * brand-new Better Auth-owned tables in schema/better-auth.ts, which use
+ * plain `integer({mode: "timestamp"})` for the same reason — `users` also
+ * carries data from the general Postgres migration
+ * (packages/db/src/migration/{export,import}.ts), which writes plain
+ * ISO-8601 strings via raw SQL, bypassing Drizzle's column typing entirely.
+ * `integer({mode: "timestamp"})` would misinterpret those migrated strings
+ * as Unix-epoch integers on read; this type keeps the on-disk format
+ * unchanged for both write paths while still accepting Better Auth's Date
+ * objects.
+ */
+export const isoDate = customType<{ data: Date; driverData: string }>({
+  dataType() {
+    return "text"
+  },
+  toDriver(value) {
+    return value.toISOString()
+  },
+  fromDriver(value) {
+    return new Date(value)
+  },
+})

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { isUserConnectionsTableMissing } from "@/lib/supabase/user-connections-errors"
 
 async function verifySteamAssertion(searchParams: URLSearchParams) {
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     const state = url.searchParams.get("state")
 
     const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
 
     if (authError || !user) {
       return NextResponse.redirect(buildRedirect(url, nextPath, "steam_auth_required"))

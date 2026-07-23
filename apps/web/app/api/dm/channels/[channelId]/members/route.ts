@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 
 // POST /api/dm/channels/[channelId]/members — add a member to a group DM
 export async function POST(
@@ -9,7 +10,7 @@ export async function POST(
   try {
     const { channelId } = await params
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     // Verify caller membership and channel type in parallel
@@ -61,7 +62,7 @@ export async function DELETE(
   try {
     const { channelId } = await params
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { searchParams } = new URL(req.url)

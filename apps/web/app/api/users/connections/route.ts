@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { isUserConnectionsTableMissing, USER_CONNECTIONS_SETUP_HINT } from "@/lib/supabase/user-connections-errors"
 
 const MANUAL_PROVIDERS = ["github", "x", "twitch", "reddit", "website"] as const
@@ -13,7 +14,7 @@ function normalizeProviderUserId(provider: string, value: string) {
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { data, error } = await supabase
@@ -39,7 +40,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = (await request.json().catch(() => ({}))) as {
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { searchParams } = new URL(request.url)

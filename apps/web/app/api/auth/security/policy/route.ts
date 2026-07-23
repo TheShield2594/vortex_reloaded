@@ -1,56 +1,70 @@
+import { headers } from "next/headers"
+import { eq } from "drizzle-orm"
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { untypedFrom } from "@/lib/supabase/untyped-table"
+import { authSecurityPolicies, createDb } from "@vortex/db"
+import { auth } from "@/lib/auth/better-auth"
+
+const db = createDb()
+
+const DEFAULT_POLICY = {
+  passkeyFirst: false,
+  enforcePasskey: false,
+  fallbackPassword: true,
+  fallbackMagicLink: true,
+}
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: auth } = await supabase.auth.getUser()
-    if (!auth.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { data } = await untypedFrom(supabase, "auth_security_policies")
-      .select("passkey_first,enforce_passkey,fallback_password,fallback_magic_link")
-      .eq("user_id", auth.user.id)
-      .maybeSingle()
+    const [row] = await db
+      .select({
+        passkeyFirst: authSecurityPolicies.passkeyFirst,
+        enforcePasskey: authSecurityPolicies.enforcePasskey,
+        fallbackPassword: authSecurityPolicies.fallbackPassword,
+        fallbackMagicLink: authSecurityPolicies.fallbackMagicLink,
+      })
+      .from(authSecurityPolicies)
+      .where(eq(authSecurityPolicies.userId, session.user.id))
+      .limit(1)
 
+    const policy = row ?? DEFAULT_POLICY
     return NextResponse.json({
-      policy: data || {
-        passkey_first: false,
-        enforce_passkey: false,
-        fallback_password: true,
-        fallback_magic_link: true,
+      policy: {
+        passkey_first: policy.passkeyFirst,
+        enforce_passkey: policy.enforcePasskey,
+        fallback_password: policy.fallbackPassword,
+        fallback_magic_link: policy.fallbackMagicLink,
       },
     })
-
   } catch (err) {
-    console.error("[auth/security/policy GET] error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("[auth/security/policy GET] error:", err)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 export async function PATCH(request: Request) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: auth } = await supabase.auth.getUser()
-    if (!auth.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const patch = await request.json()
-    const { error } = await untypedFrom(supabase, "auth_security_policies").upsert({
-      user_id: auth.user.id,
-      passkey_first: !!patch.passkey_first,
-      enforce_passkey: !!patch.enforce_passkey,
-      fallback_password: patch.fallback_password !== false,
-      fallback_magic_link: patch.fallback_magic_link !== false,
-    })
-
-    if (error) {
-      console.error("[auth/security/policy PATCH] db error:", error.message)
-      return NextResponse.json({ error: "Failed to update security policy" }, { status: 500 })
+    const patch = await request.json().catch(() => ({}))
+    const values = {
+      passkeyFirst: !!patch.passkey_first,
+      enforcePasskey: !!patch.enforce_passkey,
+      fallbackPassword: patch.fallback_password !== false,
+      fallbackMagicLink: patch.fallback_magic_link !== false,
     }
-    return NextResponse.json({ ok: true })
 
+    await db
+      .insert(authSecurityPolicies)
+      .values({ userId: session.user.id, ...values })
+      .onConflictDoUpdate({ target: authSecurityPolicies.userId, set: values })
+
+    return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error("[auth/security/policy PATCH] error:", err);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    console.error("[auth/security/policy PATCH] error:", err)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

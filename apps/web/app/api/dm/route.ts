@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
 import { createLogger } from "@/lib/logger"
@@ -9,7 +10,7 @@ const log = createLogger("api/dm")
 export async function GET(request: Request) {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
@@ -75,7 +76,7 @@ const MAX_DM_CONTENT_LENGTH = 4000
 export async function POST(request: Request) {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     // Rate limit: 15 messages per 10 seconds (matches newer DM route)

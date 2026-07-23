@@ -5,8 +5,10 @@
  * Usage:
  *   import { requireAuth, parseJsonBody, apiError, dbError, insertAuditLog } from "@/lib/utils/api-helpers"
  */
+import { headers as nextHeaders } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server"
+import { auth } from "@/lib/auth/better-auth"
 import { createLogger } from "@/lib/logger"
 import type { Json } from "@/types/database"
 
@@ -19,8 +21,30 @@ const log = createLogger("api-helpers")
 export type AuthResult = Awaited<ReturnType<typeof requireAuth>>
 
 /**
- * Authenticate the current request.
+ * Authenticated caller, shaped to what routes actually read off it (`.id`
+ * near-universally; `.email`/`.username` occasionally) — deliberately not a
+ * reconstruction of Supabase's old `User` type, since Better Auth's session
+ * user has a genuinely different shape (see lib/auth/better-auth.ts's
+ * `user.fields` mapping).
+ */
+export interface AuthUser {
+  id: string
+  email: string
+  emailVerified: boolean
+  username: string
+  displayName: string | null
+}
+
+/**
+ * Authenticate the current request against Better Auth's session.
  * Returns `{ supabase, user }` on success, or an early `NextResponse` on failure.
+ *
+ * `supabase` is still returned (and still the right client to use) because
+ * apps/web's non-auth data access hasn't moved off Supabase Postgres yet —
+ * only auth itself has cut over to Better Auth/SQLite (see issue #8's PR
+ * description for why the two live side by side for now). Only the identity
+ * check below changed; every route's existing `supabase.from(...)` calls are
+ * unaffected.
  *
  * Replace the 50+ copies of:
  *   const supabase = await createServerSupabaseClient()
@@ -29,30 +53,25 @@ export type AuthResult = Awaited<ReturnType<typeof requireAuth>>
  */
 export async function requireAuth() {
   const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
 
-  if (authError && !user) {
-    const errRecord = authError as unknown as Record<string, unknown>
-    const status = typeof errRecord.status === "number" ? errRecord.status : undefined
-    const code = typeof errRecord.code === "string" ? errRecord.code : undefined
-    const cause = errRecord.cause
-
-    const isNetworkError =
-      (typeof status === "number" && (status === 502 || status === 503 || status === 504))
-      || (typeof code === "string" && (code === "ECONNREFUSED" || code === "ENOTFOUND" || code === "ETIMEDOUT"))
-      || (cause instanceof TypeError)
-      || /fetch failed|econnrefused|network/i.test(authError.message ?? "")
-
-    if (isNetworkError) {
-      return { supabase, user: null, error: apiError("Auth service temporarily unavailable", 502) } as const
-    }
+  let session: Awaited<ReturnType<typeof auth.api.getSession>>
+  try {
+    session = await auth.api.getSession({ headers: await nextHeaders() })
+  } catch (err) {
+    log.error({ err: err instanceof Error ? err.message : String(err) }, "getSession failed")
+    return { supabase, user: null, error: apiError("Auth service temporarily unavailable", 502) } as const
   }
 
-  if (!user) {
+  if (!session?.user) {
     return { supabase, user: null, error: unauthorized() } as const
+  }
+
+  const user: AuthUser = {
+    id: session.user.id,
+    email: session.user.email,
+    emailVerified: session.user.emailVerified,
+    username: session.user.name,
+    displayName: (session.user as { displayName?: string | null }).displayName ?? null,
   }
 
   return { supabase, user, error: null } as const

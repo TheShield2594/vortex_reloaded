@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { filterBlockedUserIds, getBlockedUserIdsForViewer } from "@/lib/social-block-policy"
 
 // GET /api/friends/suggestions?q=alice&limit=8
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const q = req.nextUrl.searchParams.get("q")?.trim() ?? ""

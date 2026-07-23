@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm"
 import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core"
-import { createdAt, updatedAt, uuidPk } from "./columns"
+import { isoDate, uuidPk } from "./columns"
 
 /**
  * The app's root identity table. Postgres source:
@@ -13,6 +13,18 @@ import { createdAt, updatedAt, uuidPk } from "./columns"
  * `id` no longer FKs to Supabase's `auth.users` — Supabase Auth is being
  * replaced (see issue #8), so this table is the identity root on its own.
  *
+ * `email`/`emailVerified`/`twoFactorEnabled` were added for the Better Auth
+ * cutover (issue #8) — Better Auth's `user` model is mapped onto this table
+ * (see apps/web/lib/auth/better-auth.ts's `user.fields`) rather than creating
+ * a second, competing identity table. `email` was previously only known to
+ * Supabase's private `auth.users`, which the general table migration
+ * (packages/db/src/migration/{export,import}.ts, `public.*` tables only)
+ * can't see — `email` is nullable here specifically so that pass can insert
+ * a `users` row before `email` is known, backfilled immediately afterward by
+ * packages/db/src/migration/import-auth-secrets.ts from the dedicated
+ * `auth.users` export (auth-secrets-export.ts). A row with a null `email`
+ * simply has no working credential/OAuth sign-in yet.
+ *
  * `interests`' Postgres CHECK also validated each tag against
  * `^[a-z0-9][a-z0-9-]*[a-z0-9]?$` via a helper SQL function — SQLite has no
  * regex support in CHECK, so only the cardinality cap is enforced at the DB
@@ -22,6 +34,15 @@ export const users = sqliteTable(
   "users",
   {
     id: uuidPk(),
+    email: text("email").unique(),
+    // Not `.notNull()`, despite Better Auth always writing an explicit
+    // true/false itself: the general table migration (see the `email`
+    // field's comment above) inserts NULL for every column missing from its
+    // Postgres source row, `public.users` included — a `NOT NULL` column
+    // would make that raw INSERT fail outright. import-auth-secrets.ts
+    // coalesces any remaining NULLs to `false` once it's done backfilling.
+    emailVerified: integer("email_verified", { mode: "boolean" }).default(false),
+    twoFactorEnabled: integer("two_factor_enabled", { mode: "boolean" }).default(false),
     username: text("username").notNull().unique(),
     displayName: text("display_name"),
     avatarUrl: text("avatar_url"),
@@ -57,8 +78,16 @@ export const users = sqliteTable(
     lastOnlineAt: text("last_online_at"),
     /** Whole-value JSON: { game_name, game_id, started_at, source: "steam" | "manual" } | null. */
     gameActivity: text("game_activity", { mode: "json" }),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    // `isoDate`, not the shared `createdAt()`/`updatedAt()` helpers — see
+    // that type's doc comment (schema/columns.ts) for why this table needs
+    // Date-object-accepting columns specifically.
+    createdAt: isoDate("created_at")
+      .notNull()
+      .$defaultFn(() => new Date()),
+    updatedAt: isoDate("updated_at")
+      .notNull()
+      .$defaultFn(() => new Date())
+      .$onUpdateFn(() => new Date()),
   },
   (table) => [
     index("idx_users_presence_heartbeat")

@@ -11,22 +11,34 @@ Code lives in `packages/db/src/migration/`.
 
 ## What this does and doesn't cover
 
-This migrates the 28 tables in the frozen target schema — every `public`-schema
-table in `packages/db/src/schema`, including the hand-rolled `auth_*` app
-tables (`auth_challenges`, `auth_sessions`, `auth_trusted_devices`,
-`auth_security_policies`, `passkey_credentials`, `recovery_codes`,
-`login_risk_events`, `login_attempts`) layered on top of Supabase Auth today.
+> **Update (issue #8):** the Better Auth cutover retired 5 of the original 8
+> `auth_*` tables in favor of Better Auth's own (`sessions`, `accounts`,
+> `passkeys`, `two_factors`, plus the `twoFactor` plugin's stateless
+> trusted-device cookie) — see
+> [`docs/better-auth-cutover.md`](./better-auth-cutover.md). The general
+> `MIGRATION_TABLES` list (`packages/db/src/migration/tables.ts`) now covers
+> 24 tables, not 28; `auth_challenges`, `auth_sessions`,
+> `auth_trusted_devices`, `passkey_credentials`, and `recovery_codes` are
+> gone from it (three of those had a straight passthrough; `passkey_credentials`
+> moved into the auth-secrets flow described below since its target shape
+> changed too much for a passthrough). The rest of this doc otherwise still
+> describes the general-table migration accurately.
+
+This migrates the tables in the frozen target schema — every `public`-schema
+table in `packages/db/src/schema` that Better Auth doesn't itself own,
+including the hand-rolled `auth_*` app tables that remain
+(`auth_security_policies`, `login_risk_events`, `login_attempts`) layered on
+top of Supabase Auth today.
 
 It does **not** migrate Supabase's own private `auth` schema
-(`auth.users`, `auth.mfa_factors`, `auth.identities`) into a Drizzle table,
-because Better Auth's own `user`/`session`/`account`/`twoFactor` tables don't
-exist in this repo yet — generating them is
-[#8](https://github.com/TheShield2594/vortex_reloaded/issues/8)'s job (its
-Better Auth CLI-generate step, per
-[`docs/better-auth-verification-spike.md`](./better-auth-verification-spike.md)).
-Instead, `auth-secrets-export.ts` exports a best-effort-mapped staging file
-for #8 to consume once that schema lands — see
-["Auth data" below](#auth-data-the-issue-7-checklist).
+(`auth.users`, `auth.mfa_factors`, `auth.identities`) into a Drizzle table
+via this general pass — `auth-secrets-export.ts`/`import-auth-secrets.ts`
+(issue #8) handle that separately, since Better Auth's own
+`user`/`session`/`account`/`twoFactor` tables need field-mapping/transform
+logic a straight passthrough can't do — see
+["Auth data" below](#auth-data-the-issue-7-checklist) and
+[`docs/better-auth-cutover.md`](./better-auth-cutover.md) for the full
+picture, including the passkeys row now also routed through this path.
 
 ## Procedure
 

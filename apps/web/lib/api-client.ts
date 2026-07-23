@@ -1,33 +1,32 @@
 "use client"
 
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { authClient } from "@/lib/auth/auth-client"
 
 /**
- * Wraps a fetch response check — if 401, attempts a session refresh.
- * If refresh fails, redirects to login with a toast-friendly query param.
+ * Wraps a fetch response check — if 401, re-validates the session.
+ * Better Auth's opaque session token doesn't need an active refresh call
+ * the way Supabase's short-lived JWT did (it's refreshed lazily server-side
+ * on ordinary getSession() calls past the `updateAge` threshold) — a 401
+ * here means the session is genuinely gone (expired/revoked/signed out
+ * elsewhere), so this just confirms that and redirects to login.
  */
 export async function handleAuthError(response: Response): Promise<Response> {
   if (response.status === 401) {
     try {
-      const supabase = createClientSupabaseClient()
-      const { error } = await supabase.auth.refreshSession()
-      if (error) {
-        if (process.env.NODE_ENV !== "production") {
-          console.error("[api-client.handleAuthError] refreshSession failed", { status: response.status, reason: error.message })
-        }
-        // Session is truly expired — redirect to login
+      const { data } = await authClient.getSession()
+      if (!data?.session) {
         if (typeof window !== "undefined") {
           window.location.href = "/login?expired=true"
         }
       }
     } catch (err: unknown) {
       if (process.env.NODE_ENV !== "production") {
-        console.error("[api-client.handleAuthError] refreshSession threw", {
+        console.error("[api-client.handleAuthError] getSession threw", {
           status: response.status,
           reason: err instanceof Error ? err.message : String(err),
         })
       }
-      // refreshSession threw — treat as expired
+      // getSession threw — treat as expired
       if (typeof window !== "undefined") {
         window.location.href = "/login?expired=true"
       }

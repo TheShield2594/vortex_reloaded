@@ -1,4 +1,5 @@
 export * from "./auth"
+export * from "./better-auth"
 export * from "./dm"
 export * from "./misc"
 export * from "./notifications"

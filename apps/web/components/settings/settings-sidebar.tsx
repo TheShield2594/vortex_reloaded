@@ -14,8 +14,8 @@ import {
   Accessibility,
 } from "lucide-react"
 import type { UserRow } from "@/types/database"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
-import { useState, useMemo } from "react"
+import { authClient } from "@/lib/auth/auth-client"
+import { useMemo } from "react"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -42,14 +42,13 @@ export function SettingsSidebar({ user }: Props) {
   const pathname = usePathname()
   const router = useRouter()
   const { toast } = useToast()
-  const [supabase] = useState(() => createClientSupabaseClient())
   const initials = useMemo(() => {
     const name = user.display_name || user.username || "?"
     return name.slice(0, 2).toUpperCase()
   }, [user])
 
   async function handleLogout() {
-    const { error } = await supabase.auth.signOut()
+    const { error } = await authClient.signOut()
     if (error) {
       toast({ variant: "destructive", title: "Sign out failed", description: error.message })
       return

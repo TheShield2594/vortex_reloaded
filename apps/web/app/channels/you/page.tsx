@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useMemo, useRef } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { User, Palette, Bell, Shield, Volume2, LogOut, Circle } from "lucide-react"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useShallow } from "zustand/react/shallow"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { authClient } from "@/lib/auth/auth-client"
 import { useToast } from "@/components/ui/use-toast"
 import type { UserRow } from "@/types/database"
 import { STATUS_OPTIONS } from "@/lib/utils/status-options"
@@ -25,7 +25,6 @@ export default function YouPage() {
   )
   const router = useRouter()
   const { toast } = useToast()
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
   const statusAbortRef = useRef<AbortController | null>(null)
 
   if (!currentUser) {
@@ -69,7 +68,7 @@ export default function YouPage() {
 
   async function handleLogout(): Promise<void> {
     try {
-      const { error } = await supabase.auth.signOut()
+      const { error } = await authClient.signOut()
       if (error) {
         toast({ variant: "destructive", title: "Sign out failed", description: error.message })
         return

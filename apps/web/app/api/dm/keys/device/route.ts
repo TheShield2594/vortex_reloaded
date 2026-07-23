@@ -1,6 +1,7 @@
 import { webcrypto } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { untypedFrom, untypedRpc } from "@/lib/supabase/untyped-table"
 
 const DEVICE_LIMIT = 20
@@ -36,7 +37,7 @@ async function isValidP256SpkiPublicKey(publicKey: string): Promise<boolean> {
 export async function GET() {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const { data, error, count } = await untypedFrom(supabase, "user_device_keys")
@@ -62,7 +63,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const body = await req.json().catch(() => null)

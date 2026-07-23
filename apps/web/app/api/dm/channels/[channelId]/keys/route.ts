@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { untypedFrom } from "@/lib/supabase/untyped-table"
 
 const PER_USER_DEVICE_LIMIT = 20
@@ -7,7 +8,7 @@ const MAX_KEY_VERSION = 1_000_000
 
 async function assertMembership(channelId: string) {
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await getBetterAuthUser()
   if (!user) return { supabase, user: null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
 
   const { data: membership, error: membershipError } = await supabase

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { authClient } from "@/lib/auth/auth-client"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import { Loader2, MailCheck } from "lucide-react"
@@ -14,13 +14,13 @@ export default function VerifyEmailPage() {
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
   const [resending, setResending] = useState(false)
-  const supabase = createClientSupabaseClient()
 
   // Prefer the authenticated user's email (authoritative), fall back to
   // sessionStorage (set by login page) for users without a session.
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user?.email) {
+    authClient.getSession().then((result) => {
+      const data = result.data
+      if (data?.user?.email) {
         setEmail(data.user.email)
         // Clear stale sessionStorage if present
         try { sessionStorage.removeItem("verifyEmail") } catch {}
@@ -55,12 +55,11 @@ export default function VerifyEmailPage() {
     }
     setResending(true)
     try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
+      const { error } = await authClient.sendVerificationEmail({
         email: target,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+        callbackURL: "/channels/me",
       })
-      if (error) throw error
+      if (error) throw new Error(error.message)
       toast({ title: "Verification email sent!", description: `Check ${target} for a new verification link.` })
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "An unexpected error occurred"

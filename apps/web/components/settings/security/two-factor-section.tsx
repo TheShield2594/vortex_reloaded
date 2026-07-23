@@ -2,64 +2,65 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { Loader2, ShieldCheck, ShieldOff, Copy, Check } from "lucide-react"
+import QRCode from "qrcode"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
-import type { Factor } from "@supabase/supabase-js"
+import { authClient } from "@/lib/auth/auth-client"
 
 export function TwoFactorSection(): React.JSX.Element {
   const { toast } = useToast()
-  const [supabase] = useState(() => createClientSupabaseClient())
-  const [factors, setFactors] = useState<Factor[]>([])
+  const [has2FA, setHas2FA] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // Enable flow — password gate, then QR + backup codes in one response
+  const [enableOpen, setEnableOpen] = useState(false)
+  const [enablePassword, setEnablePassword] = useState("")
   const [enrolling, setEnrolling] = useState(false)
-  const [qrCode, setQrCode] = useState<string | null>(null)
-  const [secret, setSecret] = useState<string | null>(null)
-  const [factorId, setFactorId] = useState<string | null>(null)
+  const [totpURI, setTotpURI] = useState<string | null>(null)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [backupCodes, setBackupCodes] = useState<string[] | null>(null)
   const [verifyCode, setVerifyCode] = useState("")
   const [verifying, setVerifying] = useState(false)
+  const [codesAcknowledged, setCodesAcknowledged] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null)
-  const [recoveryAcknowledged, setRecoveryAcknowledged] = useState(false)
-  const [recoveryCopied, setRecoveryCopied] = useState(false)
 
-  // Unenroll dialog state — replaces window.prompt
-  const [unenrollOpen, setUnenrollOpen] = useState(false)
-  const [unenrollFactorId, setUnenrollFactorId] = useState<string | null>(null)
-  const [unenrollPassword, setUnenrollPassword] = useState("")
-  const [unenrolling, setUnenrolling] = useState(false)
+  // Disable dialog state
+  const [disableOpen, setDisableOpen] = useState(false)
+  const [disablePassword, setDisablePassword] = useState("")
+  const [disabling, setDisabling] = useState(false)
 
-  const loadFactors = useCallback(async (): Promise<void> => {
+  const loadStatus = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      const { data, error } = await supabase.auth.mfa.listFactors()
-      if (error) {
-        toast({ variant: "destructive", title: "Failed to load 2FA status" })
-      }
-      setFactors(data?.totp ?? [])
+      const { data } = await authClient.getSession()
+      setHas2FA(Boolean((data?.user as { twoFactorEnabled?: boolean } | undefined)?.twoFactorEnabled))
     } catch {
       toast({ variant: "destructive", title: "Failed to load 2FA status" })
     } finally {
       setLoading(false)
     }
-  }, [supabase, toast])
+  }, [toast])
 
-  useEffect(() => { loadFactors() }, [loadFactors])
+  useEffect(() => { loadStatus() }, [loadStatus])
 
-  async function handleEnroll(): Promise<void> {
+  async function handleStartEnroll(): Promise<void> {
+    if (!enablePassword) return
     setEnrolling(true)
     try {
-      const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", issuer: "VortexChat" })
+      const { data, error } = await authClient.twoFactor.enable({ password: enablePassword, issuer: "Vortex" })
       if (error || !data) {
         toast({ variant: "destructive", title: "Failed to start 2FA setup", description: error?.message })
         return
       }
-      setQrCode(data.totp.qr_code)
-      setSecret(data.totp.secret)
-      setFactorId(data.id)
+      setTotpURI(data.totpURI)
+      // Rendered entirely client-side — the URI embeds the raw TOTP secret,
+      // so it must never leave the browser (e.g. to a third-party QR API).
+      setQrDataUrl(await QRCode.toDataURL(data.totpURI))
+      setBackupCodes(data.backupCodes)
+      setCodesAcknowledged(false)
     } catch (err: unknown) {
       toast({ variant: "destructive", title: "Failed to start 2FA setup", description: err instanceof Error ? err.message : undefined })
     } finally {
@@ -68,94 +69,51 @@ export function TwoFactorSection(): React.JSX.Element {
   }
 
   async function handleVerify(): Promise<void> {
-    if (!factorId || verifyCode.length !== 6) return
+    if (verifyCode.length !== 6) return
     setVerifying(true)
-    const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId })
-    if (challengeError) {
-      toast({ variant: "destructive", title: "Challenge failed", description: challengeError.message })
-      setVerifying(false)
-      return
-    }
-    const { error: verifyError } = await supabase.auth.mfa.verify({ factorId, challengeId: challengeData.id, code: verifyCode })
-    if (verifyError) {
-      toast({ variant: "destructive", title: "Invalid code", description: "The code you entered is incorrect." })
-    } else {
-      // Generate recovery codes automatically during MFA enrollment
-      let generatedCodes = false
-      try {
-        const codesRes = await fetch("/api/auth/recovery-codes", { method: "POST" })
-        const codesData = await codesRes.json()
-        if (codesRes.ok && codesData.codes) {
-          setRecoveryCodes(codesData.codes)
-          setRecoveryAcknowledged(false)
-          generatedCodes = true
-          toast({ title: "2FA enabled!", description: "Save your recovery codes below before closing this dialog." })
-        }
-      } catch {
-        // Recovery code generation is non-critical — toast a warning but don't block
-      }
-      if (!generatedCodes) {
-        toast({ title: "2FA enabled!", description: "Your account is now protected with two-factor authentication. Generate recovery codes from the Recovery Codes section." })
-      }
-      setQrCode(null); setSecret(null); setFactorId(null); setVerifyCode("")
-      loadFactors()
-    }
-    setVerifying(false)
-  }
-
-  function openUnenrollDialog(id: string): void {
-    setUnenrollFactorId(id)
-    setUnenrollPassword("")
-    setUnenrollOpen(true)
-  }
-
-  async function submitUnenroll(): Promise<void> {
-    if (!unenrollFactorId || !unenrollPassword) return
-    setUnenrolling(true)
     try {
-      const stepRes = await fetch("/api/auth/step-up", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword: unenrollPassword }),
-      })
-      if (!stepRes.ok) {
-        const data = await stepRes.json().catch(() => ({}))
-        toast({ variant: "destructive", title: "Step-up failed", description: data.error ?? "Could not verify identity" })
+      const { error } = await authClient.twoFactor.verifyTotp({ code: verifyCode })
+      if (error) {
+        toast({ variant: "destructive", title: "Invalid code", description: "The code you entered is incorrect." })
         return
       }
+      toast({ title: "2FA enabled!", description: "Save your recovery codes below before closing this dialog." })
+    } catch (err: unknown) {
+      toast({ variant: "destructive", title: "Verification failed", description: err instanceof Error ? err.message : undefined })
+    } finally {
+      setVerifying(false)
+    }
+  }
 
-      const res = await fetch("/api/auth/mfa/disable", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ factorId: unenrollFactorId }),
-      })
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        toast({ variant: "destructive", title: "Failed to disable 2FA", description: payload.error ?? "Unknown error" })
+  function closeEnrollDialog(): void {
+    setEnableOpen(false)
+    setEnablePassword("")
+    setTotpURI(null)
+    setQrDataUrl(null)
+    setBackupCodes(null)
+    setVerifyCode("")
+    loadStatus()
+  }
+
+  async function submitDisable(): Promise<void> {
+    if (!disablePassword) return
+    setDisabling(true)
+    try {
+      const { error } = await authClient.twoFactor.disable({ password: disablePassword })
+      if (error) {
+        toast({ variant: "destructive", title: "Failed to disable 2FA", description: error.message })
         return
       }
-
       toast({ title: "2FA disabled" })
-      setUnenrollOpen(false)
-      loadFactors()
+      setDisableOpen(false)
+      setDisablePassword("")
+      loadStatus()
     } catch {
       toast({ variant: "destructive", title: "Failed to disable 2FA" })
     } finally {
-      setUnenrolling(false)
+      setDisabling(false)
     }
   }
-
-  async function copySecret(): Promise<void> {
-    if (!secret) return
-    try {
-      await navigator.clipboard.writeText(secret)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch { /* clipboard unavailable */ }
-  }
-
-  const verified = factors.filter((f) => f.status === "verified")
-  const has2FA = verified.length > 0
 
   if (loading) {
     return <div className="flex justify-center py-8"><Loader2 className="animate-spin" style={{ color: "var(--theme-text-muted)" }} /></div>
@@ -170,7 +128,6 @@ export function TwoFactorSection(): React.JSX.Element {
         </p>
       </div>
 
-      {/* Current 2FA status */}
       <div className="rounded-lg p-4 flex items-center gap-3" style={{ background: has2FA ? "rgba(35,165,90,0.1)" : "var(--theme-bg-secondary)", border: `1px solid ${has2FA ? "var(--theme-success)" : "var(--theme-bg-tertiary)"}` }}>
         {has2FA
           ? <ShieldCheck className="w-6 h-6 flex-shrink-0" style={{ color: "var(--theme-success)" }} />
@@ -178,107 +135,127 @@ export function TwoFactorSection(): React.JSX.Element {
         <div className="flex-1">
           <p className="text-sm font-medium text-white">{has2FA ? "2FA is enabled" : "2FA is not enabled"}</p>
           <p className="text-xs" style={{ color: "var(--theme-text-muted)" }}>
-            {has2FA ? `${verified.length} authenticator app${verified.length > 1 ? "s" : ""} registered.` : "Your account is protected by password only."}
+            {has2FA ? "Your account is protected by an authenticator app." : "Your account is protected by password only."}
           </p>
         </div>
         {has2FA
           ? (
-            <button onClick={() => openUnenrollDialog(verified[0].id)} className="px-3 py-1.5 rounded text-sm transition-colors" style={{ background: "rgba(242,63,67,0.15)", color: "var(--theme-danger)", border: "1px solid rgba(242,63,67,0.3)" }}>
+            <button onClick={() => setDisableOpen(true)} className="px-3 py-1.5 rounded text-sm transition-colors" style={{ background: "rgba(242,63,67,0.15)", color: "var(--theme-danger)", border: "1px solid rgba(242,63,67,0.3)" }}>
               Remove
             </button>
           )
-          : !qrCode && (
-            <button onClick={handleEnroll} disabled={enrolling} className="px-3 py-1.5 rounded text-sm font-semibold transition-colors" style={{ background: "var(--theme-accent)", color: "white" }}>
-              {enrolling ? <Loader2 className="w-4 h-4 animate-spin" /> : "Enable 2FA"}
+          : (
+            <button onClick={() => setEnableOpen(true)} className="px-3 py-1.5 rounded text-sm font-semibold transition-colors" style={{ background: "var(--theme-accent)", color: "white" }}>
+              Enable 2FA
             </button>
           )}
       </div>
 
-      {/* QR code enrollment flow */}
-      {qrCode && (
-        <div className="rounded-lg p-4 space-y-4" style={{ background: "var(--theme-bg-secondary)", border: "1px solid var(--theme-bg-tertiary)" }}>
-          <p className="text-sm font-medium text-white">Scan with your authenticator app</p>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={qrCode} alt="2FA QR Code" className="w-40 h-40 rounded bg-white p-2 mx-auto" />
-          {secret && (
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs px-2 py-1.5 rounded break-all font-mono" style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-muted)" }}>{secret}</code>
-              <button onClick={copySecret} className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded" style={{ background: "var(--theme-surface-input)", color: "var(--theme-text-secondary)" }} title="Copy secret">
+      {/* Enrollment dialog */}
+      <Dialog open={enableOpen} onOpenChange={(open) => { if (!open) closeEnrollDialog(); else setEnableOpen(true) }}>
+        <DialogContent style={{ background: "var(--theme-bg-primary)", borderColor: "var(--theme-bg-tertiary)" }}>
+          <DialogHeader>
+            <DialogTitle className="text-white">Enable Two-Factor Authentication</DialogTitle>
+          </DialogHeader>
+
+          {!totpURI && (
+            <div className="space-y-4">
+              <p className="text-sm" style={{ color: "var(--theme-text-secondary)" }}>Enter your password to begin 2FA setup.</p>
+              <div className="space-y-2">
+                <Label style={{ color: "var(--theme-text-secondary)" }}>Password</Label>
+                <Input
+                  type="password"
+                  value={enablePassword}
+                  onChange={(e) => setEnablePassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleStartEnroll() }}
+                  style={{ background: "var(--theme-bg-tertiary)", borderColor: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)" }}
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={closeEnrollDialog}>Cancel</Button>
+                <Button onClick={handleStartEnroll} disabled={enrolling || !enablePassword} style={{ background: "var(--theme-accent)", color: "white" }}>
+                  {enrolling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} Continue
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {totpURI && qrDataUrl && backupCodes && (
+            <div className="space-y-4">
+              <p className="text-sm font-medium text-white">Scan with your authenticator app</p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrDataUrl}
+                alt="2FA QR Code"
+                className="w-40 h-40 rounded bg-white p-2 mx-auto"
+              />
+              <code className="block text-xs px-2 py-1.5 rounded break-all font-mono" style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-muted)" }}>{totpURI}</code>
+
+              <div className="space-y-2">
+                <p className="text-sm" style={{ color: "var(--theme-text-secondary)" }}>Enter the 6-digit code from your app to confirm:</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={verifyCode}
+                    onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="000000"
+                    className="w-32 px-3 py-2 rounded text-center text-lg tracking-widest focus:outline-none font-mono"
+                    style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)", border: "1px solid var(--theme-surface-elevated)" }}
+                  />
+                  <button onClick={handleVerify} disabled={verifyCode.length !== 6 || verifying} className="px-4 py-2 rounded font-semibold transition-colors disabled:opacity-50" style={{ background: "var(--theme-accent)", color: "white" }}>
+                    {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-lg p-3" style={{ background: "rgba(250,166,26,0.1)", border: "1px solid rgba(250,166,26,0.3)" }}>
+                <p className="text-sm font-medium" style={{ color: "var(--theme-warning)" }}>Save your recovery codes</p>
+                <p className="text-xs mt-1" style={{ color: "var(--theme-warning)" }}>
+                  These backup codes will not be shown again. Use them if you lose access to your authenticator app.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {backupCodes.map((code, i) => (
+                  <div key={i} className="rounded px-3 py-2 text-center font-mono text-sm" style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)" }}>
+                    {code}
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(backupCodes.join("\n"))
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  } catch { /* clipboard unavailable */ }
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 rounded text-sm"
+                style={{ background: "var(--theme-surface-input)", color: "var(--theme-text-secondary)" }}
+              >
                 {copied ? <Check className="w-4 h-4" style={{ color: "var(--theme-success)" }} /> : <Copy className="w-4 h-4" />}
+                {copied ? "Copied" : "Copy all"}
+              </button>
+              <label className="flex items-center gap-2 text-sm" style={{ color: "var(--theme-text-secondary)" }}>
+                <input type="checkbox" checked={codesAcknowledged} onChange={(e) => setCodesAcknowledged(e.target.checked)} />
+                I have saved these recovery codes in a safe place
+              </label>
+              <button
+                onClick={closeEnrollDialog}
+                disabled={!codesAcknowledged}
+                className="w-full py-2 rounded text-sm font-semibold transition-colors disabled:opacity-40"
+                style={{ background: "var(--theme-accent)", color: "white" }}
+              >
+                Done
               </button>
             </div>
           )}
-          <div className="space-y-2">
-            <p className="text-sm" style={{ color: "var(--theme-text-secondary)" }}>Enter the 6-digit code from your app to confirm:</p>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={verifyCode}
-                onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
-                placeholder="000000"
-                className="w-32 px-3 py-2 rounded text-center text-lg tracking-widest focus:outline-none font-mono"
-                style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)", border: "1px solid var(--theme-surface-elevated)" }}
-              />
-              <button onClick={handleVerify} disabled={verifyCode.length !== 6 || verifying} className="px-4 py-2 rounded font-semibold transition-colors disabled:opacity-50" style={{ background: "var(--theme-accent)", color: "white" }}>
-                {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
-              </button>
-              <button onClick={() => { setQrCode(null); setSecret(null); setFactorId(null) }} className="px-3 py-2 rounded text-sm" style={{ color: "var(--theme-text-muted)" }}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Recovery codes generated during enrollment */}
-      {recoveryCodes && (
-        <div className="rounded-lg p-4 space-y-4" style={{ background: "var(--theme-bg-secondary)", border: "1px solid rgba(250,166,26,0.4)" }}>
-          <div className="rounded-lg p-3" style={{ background: "rgba(250,166,26,0.1)", border: "1px solid rgba(250,166,26,0.3)" }}>
-            <p className="text-sm font-medium" style={{ color: "var(--theme-warning)" }}>Save your recovery codes</p>
-            <p className="text-xs mt-1" style={{ color: "var(--theme-warning)" }}>
-              2FA is now active. Save these backup codes — they will not be shown again. Use them if you lose access to your authenticator app.
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            {recoveryCodes.map((code, i) => (
-              <div key={i} className="rounded px-3 py-2 text-center font-mono text-sm" style={{ background: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)" }}>
-                {code}
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(recoveryCodes.join("\n"))
-                  setRecoveryCopied(true)
-                  setTimeout(() => setRecoveryCopied(false), 2000)
-                } catch { /* clipboard unavailable */ }
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded text-sm"
-              style={{ background: "var(--theme-surface-input)", color: "var(--theme-text-secondary)" }}
-            >
-              {recoveryCopied ? <Check className="w-4 h-4" style={{ color: "var(--theme-success)" }} /> : <Copy className="w-4 h-4" />}
-              {recoveryCopied ? "Copied" : "Copy all"}
-            </button>
-          </div>
-          <label className="flex items-center gap-2 text-sm" style={{ color: "var(--theme-text-secondary)" }}>
-            <input type="checkbox" checked={recoveryAcknowledged} onChange={(e) => setRecoveryAcknowledged(e.target.checked)} />
-            I have saved these recovery codes in a safe place
-          </label>
-          <button
-            onClick={() => { setRecoveryCodes(null); setRecoveryAcknowledged(false) }}
-            disabled={!recoveryAcknowledged}
-            className="w-full py-2 rounded text-sm font-semibold transition-colors disabled:opacity-40"
-            style={{ background: "var(--theme-accent)", color: "white" }}
-          >
-            Done
-          </button>
-        </div>
-      )}
-
-      {/* Unenroll confirmation dialog — replaces window.prompt */}
-      <Dialog open={unenrollOpen} onOpenChange={setUnenrollOpen}>
+      {/* Disable confirmation dialog */}
+      <Dialog open={disableOpen} onOpenChange={setDisableOpen}>
         <DialogContent style={{ background: "var(--theme-bg-primary)", borderColor: "var(--theme-bg-tertiary)" }}>
           <DialogHeader>
             <DialogTitle className="text-white">Disable Two-Factor Authentication</DialogTitle>
@@ -291,21 +268,21 @@ export function TwoFactorSection(): React.JSX.Element {
               <Label style={{ color: "var(--theme-text-secondary)" }}>Current Password</Label>
               <Input
                 type="password"
-                value={unenrollPassword}
-                onChange={(e) => setUnenrollPassword(e.target.value)}
+                value={disablePassword}
+                onChange={(e) => setDisablePassword(e.target.value)}
                 placeholder="Enter your password"
-                onKeyDown={(e) => { if (e.key === "Enter") submitUnenroll() }}
+                onKeyDown={(e) => { if (e.key === "Enter") submitDisable() }}
                 style={{ background: "var(--theme-bg-tertiary)", borderColor: "var(--theme-bg-tertiary)", color: "var(--theme-text-primary)" }}
               />
             </div>
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setUnenrollOpen(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setDisableOpen(false)}>Cancel</Button>
               <Button
-                onClick={submitUnenroll}
-                disabled={unenrolling || !unenrollPassword}
+                onClick={submitDisable}
+                disabled={disabling || !disablePassword}
                 style={{ background: "var(--theme-danger)", color: "var(--theme-danger-foreground)" }}
               >
-                {unenrolling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                {disabling ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
                 Disable 2FA
               </Button>
             </div>

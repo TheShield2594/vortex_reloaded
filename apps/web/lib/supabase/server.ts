@@ -4,10 +4,16 @@ import { createClient } from "@supabase/supabase-js"
 import { cookies } from "next/headers"
 import type { Database } from "@/types/database"
 
-/** Per-request cached auth check. Deduplicates getUser() across nested layouts and pages within a single render. */
+/**
+ * Per-request cached auth check. Deduplicates the session lookup across
+ * nested layouts and pages within a single render. Backed by Better Auth
+ * (see lib/auth/better-auth.ts's `getBetterAuthUser` — same
+ * `supabase.auth.getUser()`-shaped return value, so every existing caller
+ * here needed no changes beyond the auth check itself moving off Supabase).
+ */
 export const getAuthUser = cache(async () => {
-  const supabase = await createServerSupabaseClient()
-  return supabase.auth.getUser()
+  const { getBetterAuthUser } = await import("@/lib/auth/better-auth")
+  return getBetterAuthUser()
 })
 
 /** Per-request cached Supabase client. Deduplicates client creation across nested layouts and pages within a single render. */
