@@ -63,6 +63,7 @@ async function main() {
     if (!report.ok) {
       console.error("\nVerification found mismatches — see above. Not proceeding further.")
       process.exitCode = 1
+      return
     }
 
     if (withAuthSecrets) {

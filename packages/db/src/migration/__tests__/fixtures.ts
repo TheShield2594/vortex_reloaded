@@ -2,6 +2,7 @@ import { writeFileSync } from "node:fs"
 import path from "node:path"
 import { toPortableRow, type PgRow } from "../transform"
 import { tableDumpPath } from "../output-dir"
+import { MIGRATION_TABLES } from "../tables"
 
 /**
  * A small "Postgres-shaped" fixture dataset — rows exactly as node-pg would
@@ -117,9 +118,16 @@ export const FIXTURE_TABLES: Record<string, PgRow[]> = {
   ],
 }
 
+/**
+ * Mirrors export.ts's real behavior: every table in MIGRATION_TABLES gets a
+ * dump file, even ones with no fixture rows — a real export always writes
+ * an (empty) file for a zero-row table, and import.ts's readRows() treats a
+ * genuinely *missing* file as a botched export, not an empty table.
+ */
 export function writeFixtureDumps(outputDir: string): void {
-  for (const [table, rows] of Object.entries(FIXTURE_TABLES)) {
+  for (const table of MIGRATION_TABLES) {
+    const rows = FIXTURE_TABLES[table.name] ?? []
     const lines = rows.map((row) => JSON.stringify(toPortableRow(row))).join("\n") + (rows.length > 0 ? "\n" : "")
-    writeFileSync(path.join(outputDir, path.basename(tableDumpPath(outputDir, table))), lines)
+    writeFileSync(path.join(outputDir, path.basename(tableDumpPath(outputDir, table.name))), lines)
   }
 }

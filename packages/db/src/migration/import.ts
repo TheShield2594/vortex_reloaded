@@ -1,4 +1,4 @@
-import { createReadStream, existsSync } from "node:fs"
+import { createReadStream, existsSync, rmSync } from "node:fs"
 import { createInterface } from "node:readline"
 import Database from "better-sqlite3"
 import { MIGRATION_TABLES } from "./tables"
@@ -42,8 +42,18 @@ export interface ImportResult {
   counts: Record<string, number>
 }
 
+/**
+ * export.ts always writes a dump file per table, even an empty one for a
+ * table with zero rows (see exportTable's `writeFileSync(dumpPath, "")`) —
+ * so a *missing* file means the export never ran for this table (a botched
+ * or partial prior export.ts run), not "this table is empty." Importing
+ * silently as zero rows here would report a clean-looking migration that's
+ * quietly missing an entire table.
+ */
 async function readRows(dumpPath: string): Promise<PortableRow[]> {
-  if (!existsSync(dumpPath)) return []
+  if (!existsSync(dumpPath)) {
+    throw new Error(`Missing export dump: ${dumpPath} — run export.ts (or run.ts) before import.ts`)
+  }
 
   const rows: PortableRow[] = []
   const rl = createInterface({ input: createReadStream(dumpPath, "utf-8"), crlfDelay: Infinity })
@@ -110,6 +120,7 @@ export async function importAllTables(
   sqlite.pragma("journal_mode = WAL")
 
   const counts: Record<string, number> = {}
+  let succeeded = false
   try {
     applyTableMigrations(sqlite)
 
@@ -123,8 +134,23 @@ export async function importAllTables(
     applyFts5AndTriggers(sqlite)
     rebuildFts5Index(sqlite)
     console.log("  rebuilt direct_messages_fts index and passed integrity check")
+    succeeded = true
   } finally {
     sqlite.close()
+    if (!succeeded) {
+      // Don't leave a half-loaded database behind on failure — it would
+      // otherwise sit there looking like a real file and block a retry via
+      // the "already exists" guard above. Best-effort: failing to clean up
+      // must never hide the real error from the migration/parsing/FTS
+      // failure that got us here.
+      for (const file of [targetPath, `${targetPath}-wal`, `${targetPath}-shm`]) {
+        try {
+          rmSync(file, { force: true })
+        } catch {
+          // ignore — the original error is what matters
+        }
+      }
+    }
   }
 
   return { counts }

@@ -1,4 +1,4 @@
-import { closeSync, mkdirSync, openSync, writeSync } from "node:fs"
+import { closeSync, fchmodSync, mkdirSync, openSync, writeSync } from "node:fs"
 import path from "node:path"
 import type { Pool } from "pg"
 import { resolveMigrationOutputDir } from "./output-dir"
@@ -49,6 +49,12 @@ function writeSecretFile(filePath: string, lines: string[]): void {
   mkdirSync(path.dirname(filePath), { recursive: true })
   const fd = openSync(filePath, "w", 0o600)
   try {
+    // The mode passed to openSync only applies when the file is newly
+    // created — a leftover file from an earlier run (e.g. created under a
+    // looser umask before this script existed) would otherwise keep its old
+    // permissions after being truncated and rewritten here. Force it every
+    // time so this file is never readable by anyone but the owner.
+    fchmodSync(fd, 0o600)
     for (const line of lines) writeSync(fd, line + "\n")
   } finally {
     closeSync(fd)

@@ -41,11 +41,14 @@ for #8 to consume once that schema lands — see
    ```
    This exports every table, imports into a throwaway temp SQLite file
    (never the real target — `--dry-run` ignores `--target`/`DATABASE_URL`
-   entirely so this can't be pointed at a real file by mistake), runs the
-   auth-secrets export, verifies row counts + a sample-row diff, prints the
-   report, and deletes the temp file. Pass `--keep` to inspect it afterward.
-   Read the verification report before doing anything else — a mismatch here
-   means a transform bug, not a real cutover risk yet.
+   entirely so this can't be pointed at a real file by mistake), and verifies
+   row counts + a sample-row diff. `migrate:dry-run` (see
+   `packages/db/package.json`) bakes in `--auth-secrets`, so this also runs
+   the auth-secrets export — drop that flag (`tsx src/migration/run.ts
+   --dry-run`) if you want a dry run that skips it. Either way it prints the
+   report and deletes the temp file when done; pass `--keep` to inspect it
+   afterward. Read the verification report before doing anything else — a
+   mismatch here means a transform bug, not a real cutover risk yet.
 3. **Real cutover**, once the dry run is clean:
    ```sh
    SUPABASE_DB_URL=postgres://... DATABASE_URL=file:/data/vortex.db npm run migrate:run -- --auth-secrets

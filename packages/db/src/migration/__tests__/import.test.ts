@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import Database from "better-sqlite3"
@@ -33,8 +33,16 @@ describe("importAllTables", () => {
     for (const [table, rows] of Object.entries(FIXTURE_TABLES)) {
       expect(counts[table]).toBe(rows.length)
     }
-    // Tables with no dump file (nothing written by writeFixtureDumps) import as zero rows.
+    // Tables with an empty (but present) dump file import as zero rows.
     expect(counts.friendships).toBe(0)
+  })
+
+  it("rejects the import outright if a table's dump file is missing entirely", async () => {
+    // writeFixtureDumps() writes an (empty) file for every MIGRATION_TABLES
+    // entry, matching what a real export.ts run does — so a missing file
+    // here means the export never ran for this table, not "it's empty."
+    unlinkSync(path.join(outputDir, "friendships.ndjson"))
+    await expect(importAllTables(targetPath, outputDir)).rejects.toThrow(/Missing export dump/)
   })
 
   it("round-trips type conversions faithfully", async () => {
