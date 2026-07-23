@@ -1,9 +1,6 @@
-import { readFileSync } from "node:fs"
-import path from "node:path"
 import Database from "better-sqlite3"
-import { drizzle } from "drizzle-orm/better-sqlite3"
-import { migrate } from "drizzle-orm/better-sqlite3/migrator"
 import { resolveDbPath } from "./db-path"
+import { applyFts5AndTriggers, applyTableMigrations } from "./schema-setup"
 
 /**
  * Two-step migration, run in order:
@@ -14,17 +11,18 @@ import { resolveDbPath } from "./db-path"
  * Idempotent: the generated migrations are tracked by drizzle's own
  * migrations table, and every statement in fts5-and-triggers.sql uses
  * `IF NOT EXISTS` / `CREATE TRIGGER IF NOT EXISTS`.
+ *
+ * For migrating existing Supabase data into a fresh SQLite file, use
+ * `src/migration/run.ts` instead — it applies these same two steps with a
+ * bulk data import in between (see that file's module comment).
  */
 function main() {
   const dbPath = resolveDbPath()
   const sqlite = new Database(dbPath)
   sqlite.pragma("foreign_keys = ON")
 
-  const db = drizzle(sqlite)
-  migrate(db, { migrationsFolder: path.join(__dirname, "..", "migrations") })
-
-  const rawSql = readFileSync(path.join(__dirname, "sql", "fts5-and-triggers.sql"), "utf-8")
-  sqlite.exec(rawSql)
+  applyTableMigrations(sqlite)
+  applyFts5AndTriggers(sqlite)
 
   sqlite.close()
   console.log(`Migrated ${dbPath}`)

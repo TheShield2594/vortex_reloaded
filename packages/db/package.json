@@ -16,19 +16,29 @@
   },
   "dependencies": {
     "better-sqlite3": "^11.3.0",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^20",
+    "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.19.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^3.2.7"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && mkdir -p dist/sql && cp src/sql/*.sql dist/sql/",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/migrate.ts"
+    "db:migrate": "tsx src/migrate.ts",
+    "migrate:export": "tsx src/migration/export.ts",
+    "migrate:import": "tsx src/migration/import.ts",
+    "migrate:verify": "tsx src/migration/verify.ts",
+    "migrate:auth-secrets": "tsx src/migration/auth-secrets-export.ts",
+    "migrate:run": "tsx src/migration/run.ts",
+    "migrate:dry-run": "tsx src/migration/run.ts --dry-run --auth-secrets"
   }
 }

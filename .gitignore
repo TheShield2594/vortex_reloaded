@@ -26,6 +26,11 @@ supabase/.temp/
 /livekit.yaml
 /data/
 
+# Supabase -> SQLite data migration (issue #7): raw NDJSON table dumps and
+# the auth-secrets staging file (password hashes, TOTP secrets) — real user
+# data, never committed.
+.migration-output/
+
 # MCP config (contains project-specific refs)
 .mcp.json
 
