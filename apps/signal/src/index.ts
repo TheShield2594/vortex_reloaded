@@ -579,7 +579,15 @@ io.on("connection", (socket: Socket) => {
         return
       }
 
-      const userId = clientUserId
+      if (!(await validateSession(socket))) {
+        socket.emit("error", { message: "Unauthorized" })
+        return
+      }
+
+      // Prefer the Better Auth-verified session userId over the
+      // client-supplied one — never trust client-provided identity when a
+      // verified session is available (see #45 review).
+      const userId = sessionValidationCache.get(socket.id)?.userId ?? clientUserId
 
       // Join socket.io room
       socket.join(channelId)
