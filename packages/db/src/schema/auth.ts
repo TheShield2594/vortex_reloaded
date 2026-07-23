@@ -102,3 +102,31 @@ export const loginAttempts = sqliteTable(
   ]
 )
 
+/**
+ * Issue #3 ("Login"): registration is invite-gated rather than open or
+ * phone-number-verified — "server-issued keys + a short invite code or QR,
+ * like a mini Matrix." Any authenticated user can generate one (see
+ * apps/web/app/api/invites/route.ts); redemption is enforced atomically in
+ * `databaseHooks.user.create.before` (lib/auth/better-auth.ts) via a single
+ * conditional `use_count + 1` UPDATE, so two simultaneous signups can never
+ * both consume the last use of a code.
+ */
+export const registrationInvites = sqliteTable(
+  "registration_invites",
+  {
+    id: uuidPk(),
+    code: text("code").notNull().unique(),
+    createdBy: text("created_by").references(() => users.id, { onDelete: "set null" }),
+    maxUses: integer("max_uses").notNull().default(1),
+    useCount: integer("use_count").notNull().default(0),
+    expiresAt: text("expires_at"),
+    revokedAt: text("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("idx_registration_invites_created_by").on(table.createdBy),
+    check("registration_invites_max_uses_check", sql`${table.maxUses} >= 1`),
+    check("registration_invites_use_count_check", sql`${table.useCount} >= 0`),
+  ]
+)
+
