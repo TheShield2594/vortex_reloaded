@@ -32,8 +32,10 @@ function betterAuthTimestamp(name: string) {
  * (see schema/users.ts) instead of a second identity table — a shape the CLI
  * generator doesn't produce on its own.
  *
- * These supersede four of the hand-rolled tables in schema/auth.ts that
+ * These supersede five of the hand-rolled tables in schema/auth.ts that
  * were layered on top of Supabase Auth pre-cutover:
+ *   - `auth_challenges`      -> the `@better-auth/passkey` plugin manages its
+ *     own WebAuthn challenge storage internally; not ported to any table here.
  *   - `auth_sessions`        -> `sessions` (below)
  *   - `auth_trusted_devices` -> the `twoFactor` plugin's own trusted-device
  *     cookie (stateless, no table)
@@ -109,7 +111,7 @@ export const twoFactors = sqliteTable("two_factors", {
     .references(() => users.id, { onDelete: "cascade" }),
   secret: text("secret").notNull(),
   backupCodes: text("backup_codes").notNull(),
-  verified: integer("verified", { mode: "boolean" }).notNull().default(true),
+  verified: integer("verified", { mode: "boolean" }).notNull().default(false),
   failedVerificationCount: integer("failed_verification_count").notNull().default(0),
   lockedUntil: betterAuthTimestamp("locked_until"),
 })
