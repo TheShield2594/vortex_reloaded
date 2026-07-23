@@ -37,6 +37,29 @@ function isValidDmE2eeEnvelope(value: unknown): boolean {
     && envelope.keyVersion >= 0
 }
 
+function isValidSignalCiphertextShape(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const v = value as Record<string, unknown>
+  return (v.type === 0 || v.type === 1) && typeof v.body === "string" && v.body.length > 0
+}
+
+// Signal Protocol envelopes carry one Olm ciphertext per recipient *device*
+// (see lib/signal-protocol.ts) — used for both 1:1 and group DM channels
+// alike, no separate group-ratchet envelope (issue #3: pairwise Double
+// Ratchet per conversation, not Megolm). The server only validates shape;
+// it never sees plaintext or holds any private key.
+function isValidDmSignalEnvelope(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false
+  const envelope = value as Record<string, unknown>
+  if (envelope.kind !== "dm-signal" || envelope.v !== 1) return false
+  if (typeof envelope.senderDeviceId !== "string" || envelope.senderDeviceId.length === 0) return false
+  const ciphertexts = envelope.ciphertexts
+  if (!ciphertexts || typeof ciphertexts !== "object" || Array.isArray(ciphertexts)) return false
+  const entries = Object.entries(ciphertexts as Record<string, unknown>)
+  if (entries.length === 0) return false
+  return entries.every(([key, ct]) => typeof key === "string" && key.includes(":") && isValidSignalCiphertextShape(ct))
+}
+
 
 // POST /api/dm/channels/[channelId]/messages — send a message
 export async function POST(
@@ -79,7 +102,11 @@ export async function POST(
     req.json().then((b: unknown) => ({ body: b as { content?: string; reply_to_id?: string }, error: null as string | null }))
       .catch(() => ({ body: null as { content?: string; reply_to_id?: string } | null, error: "Invalid JSON body" })),
     db
-      .select({ isEncrypted: dmChannels.isEncrypted, encryptionKeyVersion: dmChannels.encryptionKeyVersion })
+      .select({
+        isEncrypted: dmChannels.isEncrypted,
+        encryptionKeyVersion: dmChannels.encryptionKeyVersion,
+        encryptionScheme: dmChannels.encryptionScheme,
+      })
       .from(dmChannels)
       .where(eq(dmChannels.id, channelId))
       .limit(1)
@@ -115,11 +142,17 @@ export async function POST(
   if (channelInfo?.isEncrypted) {
     try {
       const parsed = JSON.parse(content)
-      if (!isValidDmE2eeEnvelope(parsed)) {
-        return NextResponse.json({ error: "Encrypted channels require encrypted payload" }, { status: 400 })
-      }
-      if ((parsed as { keyVersion: number }).keyVersion !== channelInfo.encryptionKeyVersion) {
-        return NextResponse.json({ error: "Encrypted channels require current keyVersion" }, { status: 400 })
+      if (channelInfo.encryptionScheme === "signal-protocol") {
+        if (!isValidDmSignalEnvelope(parsed)) {
+          return NextResponse.json({ error: "Encrypted channels require encrypted payload" }, { status: 400 })
+        }
+      } else {
+        if (!isValidDmE2eeEnvelope(parsed)) {
+          return NextResponse.json({ error: "Encrypted channels require encrypted payload" }, { status: 400 })
+        }
+        if ((parsed as { keyVersion: number }).keyVersion !== channelInfo.encryptionKeyVersion) {
+          return NextResponse.json({ error: "Encrypted channels require current keyVersion" }, { status: 400 })
+        }
       }
     } catch {
       return NextResponse.json({ error: "Encrypted channels require encrypted payload" }, { status: 400 })

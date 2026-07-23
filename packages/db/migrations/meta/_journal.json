@@ -8,6 +8,13 @@
       "when": 1784772998106,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784839946495,
+      "tag": "0001_special_blazing_skull",
+      "breakpoints": true
     }
   ]
 }

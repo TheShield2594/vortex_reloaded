@@ -31,6 +31,17 @@ export const dmChannels = sqliteTable(
     isEncrypted: integer("is_encrypted", { mode: "boolean" }).notNull().default(false),
     encryptionKeyVersion: integer("encryption_key_version").notNull().default(1),
     encryptionMembershipEpoch: integer("encryption_membership_epoch").notNull().default(0),
+    /**
+     * Which E2EE scheme this channel's `directMessages.content` envelopes
+     * use. New encrypted channels are always created as "signal-protocol"
+     * (see apps/web/app/api/dm/channels/route.ts) — "legacy-ecdh" (the
+     * static per-device ECDH+AES-GCM wrap in lib/dm-encryption.ts) only
+     * exists on channels created before the Signal Protocol migration and
+     * is never assigned to a new channel going forward.
+     */
+    encryptionScheme: text("encryption_scheme", { enum: ["legacy-ecdh", "signal-protocol"] })
+      .notNull()
+      .default("legacy-ecdh"),
     themePreset: text("theme_preset", {
       enum: [
         "twilight",
@@ -59,6 +70,10 @@ export const dmChannels = sqliteTable(
         'frost', 'clarity', 'velvet-dusk', 'terminal', 'sakura-blossom',
         'frosthearth', 'night-city-neural'
       )`
+    ),
+    check(
+      "dm_channels_encryption_scheme_check",
+      sql`${table.encryptionScheme} in ('legacy-ecdh', 'signal-protocol')`
     ),
   ]
 )
@@ -249,3 +264,60 @@ export const userDeviceKeys = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.userId, table.deviceId] })]
 )
+
+/**
+ * Signal Protocol (Olm) device identity — one row per (user, device),
+ * independent of `userDeviceKeys` (the legacy-ecdh scheme's device table).
+ * `curve25519IdentityKey`/`ed25519IdentityKey` come straight from
+ * `Olm.Account.identity_keys()`; `fallback*` is the device's current Olm
+ * fallback key (functions like Signal's signed prekey — a long-lived key
+ * used to establish a session once one-time keys are exhausted). Both the
+ * fallback key and every one-time key in `signalOneTimeKeys` are signed with
+ * the device's ed25519 identity key (`Olm.Account.sign`) so a session
+ * initiator can verify authenticity independent of server trust — see
+ * apps/web/lib/signal-protocol.ts's `signBundle`/`verifyBundleSignature`.
+ */
+export const signalDeviceIdentities = sqliteTable(
+  "signal_device_identities",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceId: text("device_id").notNull(),
+    curve25519IdentityKey: text("curve25519_identity_key").notNull(),
+    ed25519IdentityKey: text("ed25519_identity_key").notNull(),
+    fallbackKeyId: text("fallback_key_id").notNull(),
+    fallbackPublicKey: text("fallback_public_key").notNull(),
+    fallbackSignature: text("fallback_signature").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.deviceId] })]
+)
+
+/**
+ * One-time prekeys for X3DH-style Olm session establishment. Each row is
+ * claimed (and deleted) at most once via
+ * apps/web/app/api/dm/signal/keys/claim/route.ts's atomic
+ * select-then-delete, so two initiators can never race onto the same OTK —
+ * reusing an Olm one-time key breaks the forward-secrecy guarantee it exists
+ * to provide.
+ */
+export const signalOneTimeKeys = sqliteTable(
+  "signal_one_time_keys",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceId: text("device_id").notNull(),
+    keyId: text("key_id").notNull(),
+    publicKey: text("public_key").notNull(),
+    signature: text("signature").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.deviceId, table.keyId] }),
+    index("signal_one_time_keys_claim_idx").on(table.userId, table.deviceId, table.createdAt),
+  ]
+)
+
