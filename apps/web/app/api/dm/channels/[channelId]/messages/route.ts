@@ -1,13 +1,26 @@
 import { NextRequest, NextResponse, after } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, eq, isNull } from "drizzle-orm"
+import { alias } from "drizzle-orm/sqlite-core"
+import { createDb, directMessages, dmChannelMembers, dmChannels, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { sendPushToChannel } from "@/lib/push"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
 import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { createLogger } from "@/lib/logger"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
+import { toSnakeCase } from "@/lib/utils/case"
 
 const log = createLogger("api/dm/messages")
+const db = createDb()
+const senderUsers = alias(users, "sender_users")
+
+const SENDER_COLUMNS = {
+  id: senderUsers.id,
+  username: senderUsers.username,
+  displayName: senderUsers.displayName,
+  avatarUrl: senderUsers.avatarUrl,
+  status: senderUsers.status,
+}
 
 function isValidDmE2eeEnvelope(value: unknown): boolean {
   if (!value || typeof value !== "object") return false
@@ -32,7 +45,6 @@ export async function POST(
 ) {
   try {
   const { channelId } = await params
-  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await getBetterAuthUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -40,36 +52,39 @@ export async function POST(
   if (limited) return limited
 
   // Fetch all channel members (verifies membership and gets other member IDs in one query)
-  const { data: channelMembers, error: channelMembersError } = await supabase
-    .from("dm_channel_members")
-    .select("user_id")
-    .eq("dm_channel_id", channelId)
-
-  if (channelMembersError || !channelMembers) {
+  let channelMembers: Array<{ userId: string }>
+  try {
+    channelMembers = await db
+      .select({ userId: dmChannelMembers.userId })
+      .from(dmChannelMembers)
+      .where(eq(dmChannelMembers.dmChannelId, channelId))
+  } catch {
     return NextResponse.json({ error: "Failed to load DM members" }, { status: 500 })
   }
 
-  if (!channelMembers.some((member) => member.user_id === user.id)) {
+  if (!channelMembers.some((member) => member.userId === user.id)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   const otherMemberIds = channelMembers
-    .filter((member) => member.user_id !== user.id)
-    .map((member) => member.user_id)
+    .filter((member) => member.userId !== user.id)
+    .map((member) => member.userId)
 
   // Run blocking checks, body parsing, and channel encryption fetch in parallel
   const [blockCheckResult, bodyResult, channelResult] = await Promise.all([
     Promise.all(
-      otherMemberIds.map((memberId) => isBlockedBetweenUsers(supabase, user.id, memberId))
+      otherMemberIds.map((memberId) => isBlockedBetweenUsers(user.id, memberId))
     ).then((results) => ({ blocked: results.some(Boolean), error: null as Error | null }))
      .catch((error: Error) => ({ blocked: false, error })),
     req.json().then((b: unknown) => ({ body: b as { content?: string; reply_to_id?: string }, error: null as string | null }))
       .catch(() => ({ body: null as { content?: string; reply_to_id?: string } | null, error: "Invalid JSON body" })),
-    supabase
-      .from("dm_channels")
-      .select("is_encrypted, encryption_key_version")
-      .eq("id", channelId)
-      .maybeSingle(),
+    db
+      .select({ isEncrypted: dmChannels.isEncrypted, encryptionKeyVersion: dmChannels.encryptionKeyVersion })
+      .from(dmChannels)
+      .where(eq(dmChannels.id, channelId))
+      .limit(1)
+      .then((rows) => ({ data: rows[0] ?? null, error: null as Error | null }))
+      .catch((error: Error) => ({ data: null, error })),
   ])
 
   if (blockCheckResult.error) {
@@ -97,13 +112,13 @@ export async function POST(
   const content = body.content.trim()
   if (!content) return NextResponse.json({ error: "Content required" }, { status: 400 })
 
-  if (channelInfo?.is_encrypted) {
+  if (channelInfo?.isEncrypted) {
     try {
       const parsed = JSON.parse(content)
       if (!isValidDmE2eeEnvelope(parsed)) {
         return NextResponse.json({ error: "Encrypted channels require encrypted payload" }, { status: 400 })
       }
-      if (parsed.keyVersion !== channelInfo.encryption_key_version) {
+      if ((parsed as { keyVersion: number }).keyVersion !== channelInfo.encryptionKeyVersion) {
         return NextResponse.json({ error: "Encrypted channels require current keyVersion" }, { status: 400 })
       }
     } catch {
@@ -115,43 +130,61 @@ export async function POST(
   const replyToId = body.reply_to_id ?? null
   let replyToMessage: Record<string, unknown> | null = null
   if (replyToId) {
-    const { data: replyTarget, error: replyError } = await supabase
-      .from("direct_messages")
-      .select("id, dm_channel_id, content, sender_id, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url, status)")
-      .eq("id", replyToId)
-      .is("deleted_at", null)
-      .single()
+    const [replyTarget] = await db
+      .select({
+        id: directMessages.id,
+        dmChannelId: directMessages.dmChannelId,
+        content: directMessages.content,
+        senderId: directMessages.senderId,
+        sender: SENDER_COLUMNS,
+      })
+      .from(directMessages)
+      .leftJoin(senderUsers, eq(directMessages.senderId, senderUsers.id))
+      .where(and(eq(directMessages.id, replyToId), isNull(directMessages.deletedAt)))
+      .limit(1)
 
-    if (replyError || !replyTarget) {
+    if (!replyTarget) {
       return NextResponse.json({ error: "Replied-to message not found" }, { status: 400 })
     }
-    if (replyTarget.dm_channel_id !== channelId) {
+    if (replyTarget.dmChannelId !== channelId) {
       return NextResponse.json({ error: "Replied-to message must be in the same channel" }, { status: 400 })
     }
-    replyToMessage = replyTarget as unknown as Record<string, unknown>
+    replyToMessage = {
+      ...toSnakeCase<Record<string, unknown>>({ id: replyTarget.id, dmChannelId: replyTarget.dmChannelId, content: replyTarget.content, senderId: replyTarget.senderId }),
+      sender: replyTarget.sender ? toSnakeCase(replyTarget.sender) : null,
+    }
   }
 
-  const { data: message, error } = await supabase
-    .from("direct_messages")
-    .insert({
-      dm_channel_id: channelId,
-      sender_id: user.id,
-      content,
-      ...(replyToId ? { reply_to_id: replyToId } : {}),
-    })
-    .select("*, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url, status)")
-    .single()
+  let message: typeof directMessages.$inferSelect
+  try {
+    const [row] = await db
+      .insert(directMessages)
+      .values({
+        dmChannelId: channelId,
+        senderId: user.id,
+        content,
+        ...(replyToId ? { replyToId } : {}),
+      })
+      .returning()
+    if (!row) throw new Error("insert returned no row")
+    message = row
+  } catch {
+    return NextResponse.json({ error: "Failed to send message" }, { status: 500 })
+  }
 
-  if (error) return NextResponse.json({ error: "Failed to send message" }, { status: 500 })
+  const [senderProfile] = await db
+    .select({ id: users.id, username: users.username, displayName: users.displayName, avatarUrl: users.avatarUrl, status: users.status })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1)
 
   // Send push notifications (fire-and-forget)
-  const sender = (message as unknown as { sender?: { display_name?: string; username?: string; avatar_url?: string | null } }).sender
-  const senderName = sender?.display_name || sender?.username || "Someone"
+  const senderName = senderProfile?.displayName || senderProfile?.username || "Someone"
   sendPushToChannel({
     dmChannelId: channelId,
     senderName,
-    senderAvatarUrl: sender?.avatar_url ?? null,
-    content: channelInfo?.is_encrypted ? "Encrypted message" : content,
+    senderAvatarUrl: senderProfile?.avatarUrl ?? null,
+    content: channelInfo?.isEncrypted ? "Encrypted message" : content,
     excludeUserId: user.id,
   }).catch(() => {})
 
@@ -162,7 +195,14 @@ export async function POST(
     data: { messageId: message.id, replyToId, content },
   }, { route: "/api/dm/channels/[channelId]/messages" }))
 
-  return NextResponse.json({ ...message, reply_to_id: replyToId, reply_to: replyToMessage }, { status: 201 })
+  const responseBody = {
+    ...toSnakeCase<Record<string, unknown>>(message),
+    sender: senderProfile ? toSnakeCase(senderProfile) : null,
+    reply_to_id: replyToId,
+    reply_to: replyToMessage,
+  }
+
+  return NextResponse.json(responseBody, { status: 201 })
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : "Unknown error"
     log.error({ route: "/api/dm/channels/[channelId]/messages", action: "POST", error: errMsg }, "POST error")

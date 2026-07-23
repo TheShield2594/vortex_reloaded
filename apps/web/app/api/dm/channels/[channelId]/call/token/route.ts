@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server"
 import { AccessToken, RoomServiceClient } from "livekit-server-sdk"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { eq } from "drizzle-orm"
+import { createDb, dmChannelMembers } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { createLogger } from "@/lib/logger"
 
 const log = createLogger("dm-call-token")
+const db = createDb()
 
 // LiveKit tokens are the entire authorization mechanism (LiveKit has no
 // separate room-membership concept of its own) — keep the TTL short enough
@@ -17,7 +19,6 @@ export async function POST(
   { params }: { params: Promise<{ channelId: string }> }
 ): Promise<NextResponse> {
   const { channelId } = await params
-  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await getBetterAuthUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -25,12 +26,12 @@ export async function POST(
   // privileged DM route. The membership check has to happen before minting,
   // since the signed JWT grant below is the only authorization LiveKit
   // itself will ever check.
-  const { data: members } = await supabase
-    .from("dm_channel_members")
-    .select("user_id")
-    .eq("dm_channel_id", channelId)
+  const members = await db
+    .select({ userId: dmChannelMembers.userId })
+    .from(dmChannelMembers)
+    .where(eq(dmChannelMembers.dmChannelId, channelId))
 
-  const isMember = members?.some((m: { user_id: string }) => m.user_id === user.id)
+  const isMember = members.some((m) => m.userId === user.id)
   if (!isMember) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   const apiKey = process.env.LIVEKIT_API_KEY
@@ -48,7 +49,7 @@ export async function POST(
   // participant cap — but bounds exposure even if a token leaked. Failure
   // here is non-fatal; auto-create-on-join covers us either way.
   const apiUrl = process.env.LIVEKIT_API_URL
-  if (apiUrl && members?.length) {
+  if (apiUrl && members.length) {
     try {
       const roomService = new RoomServiceClient(apiUrl, apiKey, apiSecret)
       await roomService.createRoom({ name: roomName, maxParticipants: members.length })

@@ -1,9 +1,11 @@
 import * as Sentry from "@sentry/nextjs"
 import { NextRequest, NextResponse } from "next/server"
-import { createServiceRoleClient } from "@/lib/supabase/server"
-import { untypedFrom } from "@/lib/supabase/untyped-table"
+import { and, eq, isNotNull, isNull, lt } from "drizzle-orm"
+import { attachments, createDb, dmAttachments } from "@vortex/db"
 import { verifyBearerToken } from "@/lib/utils/timing-safe"
 import { attachmentsDir, deleteUploadFile } from "@/lib/storage/local-storage"
+
+const db = createDb()
 
 // deleteUploadFile() already treats a missing file as success, so anything
 // landing here is a genuinely unexpected failure (permission/disk issues) —
@@ -32,24 +34,27 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const serviceClient = await createServiceRoleClient()
     const now = new Date().toISOString()
     const BATCH_LIMIT = 200
 
     // ── Purge expired channel attachments ────────────────────────────────────
 
-    const { data: expiredAttachments } = await serviceClient
-      .from("attachments")
-      .select("id, url, filename, size, message_id")
-      .lt("expires_at", now)
-      .is("purged_at", null)
-      .not("expires_at", "is", null)
+    const expiredAttachments = await db
+      .select({ id: attachments.id, url: attachments.url })
+      .from(attachments)
+      .where(
+        and(
+          isNotNull(attachments.expiresAt),
+          lt(attachments.expiresAt, now),
+          isNull(attachments.purgedAt)
+        )
+      )
       .limit(BATCH_LIMIT)
 
     let purgedChannel = 0
     let storageErrors = 0
 
-    for (const att of expiredAttachments ?? []) {
+    for (const att of expiredAttachments) {
       try {
         await deleteUploadFile(attachmentsDir(), att.url)
       } catch (removeError) {
@@ -62,32 +67,34 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // Still mark as purged — the file may already be gone
       }
 
-      await serviceClient
-        .from("attachments")
-        .update({ purged_at: now })
-        .eq("id", att.id)
+      try {
+        await db.update(attachments).set({ purgedAt: now }).where(eq(attachments.id, att.id))
+      } catch (updateError) {
+        console.error("[cron/attachment-decay] update failed", { attachmentId: att.id, error: updateError })
+        storageErrors++
+        continue
+      }
 
       purgedChannel++
     }
 
     // ── Purge expired DM attachments ─────────────────────────────────────────
 
-    // dm_attachments is not in generated Supabase types yet
-    type DmAttRow = { id: string; url: string; filename: string; size: number; dm_id: string }
-    const { data: expiredDmAttachments, error: dmQueryError } = await untypedFrom(serviceClient, "dm_attachments")
-      .select("id, url, filename, size, dm_id")
-      .lt("expires_at", now)
-      .is("purged_at", null)
-      .not("expires_at", "is", null)
-      .limit(BATCH_LIMIT) as { data: DmAttRow[] | null; error: { message: string } | null }
-
-    if (dmQueryError) {
-      console.error("[cron/attachment-decay] dm query failed", { error: dmQueryError.message })
-    }
+    const expiredDmAttachments = await db
+      .select({ id: dmAttachments.id, url: dmAttachments.url })
+      .from(dmAttachments)
+      .where(
+        and(
+          isNotNull(dmAttachments.expiresAt),
+          lt(dmAttachments.expiresAt, now),
+          isNull(dmAttachments.purgedAt)
+        )
+      )
+      .limit(BATCH_LIMIT)
 
     let purgedDm = 0
 
-    for (const att of expiredDmAttachments ?? []) {
+    for (const att of expiredDmAttachments) {
       try {
         await deleteUploadFile(attachmentsDir(), att.url)
       } catch (removeError) {
@@ -100,11 +107,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // Still mark as purged — the file may already be gone
       }
 
-      const { error: updateError } = await untypedFrom(serviceClient, "dm_attachments")
-        .update({ purged_at: now })
-        .eq("id", att.id)
-
-      if (updateError) {
+      try {
+        await db.update(dmAttachments).set({ purgedAt: now }).where(eq(dmAttachments.id, att.id))
+      } catch (updateError) {
         console.error("[cron/attachment-decay] dm update failed", { attachmentId: att.id, error: updateError })
         storageErrors++
         continue

@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server"
+import { eq } from "drizzle-orm"
+import { createDb, users } from "@vortex/db"
 import { requireAuth } from "@/lib/utils/api-helpers"
+import { toSnakeCase } from "@/lib/utils/case"
 import type { Json } from "@/types/database"
+
+const db = createDb()
 
 export async function PATCH(request: Request): Promise<NextResponse> {
   try {
-    const { supabase, user, error: authError } = await requireAuth()
+    const { user, error: authError } = await requireAuth()
     if (authError) return authError
 
     let body: unknown
@@ -62,17 +67,18 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       }
     }
 
-    const { data, error: updateError } = await supabase
-      .from("users")
-      .update({ appearance_settings })
-      .eq("id", user.id)
-      .select()
-      .single()
-
-    if (updateError) {
+    let data: typeof users.$inferSelect | undefined
+    try {
+      const rows = await db
+        .update(users)
+        .set({ appearanceSettings: appearance_settings })
+        .where(eq(users.id, user.id))
+        .returning()
+      data = rows[0]
+    } catch (updateError) {
       console.error("[PATCH /api/users/appearance]", {
         userId: user.id,
-        message: updateError.message,
+        message: updateError instanceof Error ? updateError.message : String(updateError),
       })
       return NextResponse.json(
         { error: "Failed to update appearance settings" },
@@ -84,7 +90,7 @@ export async function PATCH(request: Request): Promise<NextResponse> {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    return NextResponse.json(data)
+    return NextResponse.json(toSnakeCase(data))
   } catch (err) {
     console.error("[PATCH /api/users/appearance] Unhandled error:", err)
     return NextResponse.json(

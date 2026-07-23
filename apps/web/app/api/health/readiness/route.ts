@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createDb, users } from "@vortex/db"
+
+const db = createDb()
 
 /**
  * GET /api/health/readiness
- * Readiness probe — verifies the app can reach Supabase/DB.
+ * Readiness probe — verifies the app can reach the SQLite DB.
  * Returns 200 when ready, 503 when a dependency is unreachable.
- * Uses the anon-key client (no service-role key exposure).
  */
 export async function GET() {
   const start = Date.now()
   let dbOk = false
 
   try {
-    const supabase = await createServerSupabaseClient()
-    const { error } = await supabase.from("users").select("id", { count: "exact", head: true }).limit(0)
-    dbOk = !error
+    await db.select({ id: users.id }).from(users).limit(1)
+    dbOk = true
   } catch {
     dbOk = false
   }

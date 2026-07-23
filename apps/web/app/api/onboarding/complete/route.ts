@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { eq } from "drizzle-orm"
+import { createDb, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+
+const db = createDb()
 
 /**
  * POST /api/onboarding/complete
@@ -11,26 +14,36 @@ import { getBetterAuthUser } from "@/lib/auth/better-auth"
 export async function POST(): Promise<NextResponse> {
   let userId: string | undefined
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
     userId = user.id
 
-    const { data: updatedUser, error: updateError } = await supabase
-      .from("users")
-      .update({ onboarding_completed_at: new Date().toISOString() })
-      .eq("id", user.id)
-      .select("id")
-      .single()
-
-    if (updateError || !updatedUser) {
+    let updatedUser: { id: string } | undefined
+    try {
+      const rows = await db
+        .update(users)
+        .set({ onboardingCompletedAt: new Date().toISOString() })
+        .where(eq(users.id, user.id))
+        .returning({ id: users.id })
+      updatedUser = rows[0]
+    } catch (updateError) {
       console.error("Onboarding complete failed:", {
         route: "/api/onboarding/complete",
         action: "complete-onboarding",
         userId: user.id,
-        error: updateError?.message ?? "No user row updated",
+        error: updateError instanceof Error ? updateError.message : String(updateError),
+      })
+      return NextResponse.json({ error: "Failed to update onboarding status" }, { status: 500 })
+    }
+
+    if (!updatedUser) {
+      console.error("Onboarding complete failed:", {
+        route: "/api/onboarding/complete",
+        action: "complete-onboarding",
+        userId: user.id,
+        error: "No user row updated",
       })
       return NextResponse.json({ error: "Failed to update onboarding status" }, { status: 500 })
     }

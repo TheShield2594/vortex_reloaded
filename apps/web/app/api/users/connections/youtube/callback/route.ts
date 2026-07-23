@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createDb, userConnections } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
-import { isUserConnectionsTableMissing } from "@/lib/supabase/user-connections-errors"
+
+const db = createDb()
 
 const FETCH_TIMEOUT_MS = 8_000
 
@@ -103,7 +104,6 @@ export async function GET(request: Request): Promise<NextResponse> {
   const nextPath = colonIdx > 0 ? decodeURIComponent(rawState.slice(colonIdx + 1)) : "/"
 
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
 
     if (authError || !user) {
@@ -154,29 +154,43 @@ export async function GET(request: Request): Promise<NextResponse> {
       ? `https://youtube.com/${channelHandle}`
       : `https://youtube.com/channel/${channel.id}`
 
-    const { error } = await supabase
-      .from("user_connections")
-      .upsert({
-        user_id: user.id,
-        provider: "youtube",
-        provider_user_id: channel.id,
-        username: channelHandle ?? channel.id,
-        display_name: channelTitle,
-        profile_url: profileUrl,
-        metadata: {
-          linked_via: "google_oauth",
-          ...(snippet?.thumbnails?.high?.url ? { avatar_url: snippet.thumbnails.high.url } : {}),
-          ...(stats?.subscriberCount ? { subscriber_count: Number(stats.subscriberCount) } : {}),
-          ...(stats?.videoCount ? { video_count: Number(stats.videoCount) } : {}),
-          ...(stats?.viewCount ? { view_count: Number(stats.viewCount) } : {}),
-        },
-      }, { onConflict: "user_id,provider" })
+    const metadata = {
+      linked_via: "google_oauth",
+      ...(snippet?.thumbnails?.high?.url ? { avatar_url: snippet.thumbnails.high.url } : {}),
+      ...(stats?.subscriberCount ? { subscriber_count: Number(stats.subscriberCount) } : {}),
+      ...(stats?.videoCount ? { video_count: Number(stats.videoCount) } : {}),
+      ...(stats?.viewCount ? { view_count: Number(stats.viewCount) } : {}),
+    }
 
-    const status = !error
-      ? "youtube_linked"
-      : isUserConnectionsTableMissing(error)
-        ? "connections_storage_unavailable"
-        : "youtube_save_failed"
+    let saveFailed = false
+    try {
+      await db
+        .insert(userConnections)
+        .values({
+          userId: user.id,
+          provider: "youtube",
+          providerUserId: channel.id,
+          username: channelHandle ?? channel.id,
+          displayName: channelTitle,
+          profileUrl,
+          metadata,
+        })
+        .onConflictDoUpdate({
+          target: [userConnections.userId, userConnections.provider],
+          set: {
+            providerUserId: channel.id,
+            username: channelHandle ?? channel.id,
+            displayName: channelTitle,
+            profileUrl,
+            metadata,
+          },
+        })
+    } catch (err) {
+      console.error("Failed to save YouTube connection", { userId: user.id, error: err instanceof Error ? err.message : String(err) })
+      saveFailed = true
+    }
+
+    const status = !saveFailed ? "youtube_linked" : "youtube_save_failed"
 
     const response = NextResponse.redirect(buildRedirect(url, nextPath, status))
     response.cookies.delete("youtube_oauth_state")

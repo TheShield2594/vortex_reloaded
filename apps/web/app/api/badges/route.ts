@@ -2,24 +2,23 @@
  * GET /api/badges — list all badge definitions (public catalog)
  */
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { asc } from "drizzle-orm"
+import { badgeDefinitions, createDb } from "@vortex/db"
+import { toSnakeCase } from "@/lib/utils/case"
+import type { BadgeDefinitionRow } from "@/types/database"
 import { createLogger } from "@/lib/logger"
 
 const log = createLogger("api/badges")
+const db = createDb()
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
+    const rows = await db
+      .select()
+      .from(badgeDefinitions)
+      .orderBy(asc(badgeDefinitions.sortOrder))
 
-    const { data: badges, error } = await supabase
-      .from("badge_definitions")
-      .select("*")
-      .order("sort_order", { ascending: true })
-
-    if (error) {
-      log.error({ err: error.message }, "Failed to fetch badge definitions")
-      return NextResponse.json({ error: "Failed to fetch badges" }, { status: 500 })
-    }
+    const badges = toSnakeCase<BadgeDefinitionRow[]>(rows)
 
     return NextResponse.json(badges)
   } catch (err) {

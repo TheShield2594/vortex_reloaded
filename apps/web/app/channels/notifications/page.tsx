@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Bell, Check, CheckCheck, Hash, AtSign, UserPlus, X } from "lucide-react"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences"
@@ -47,7 +46,6 @@ function mergeNotifications(existing: Notification[], incoming: Notification[]):
 }
 
 export default function NotificationsPage() {
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
   const gateway = useGatewayContext()
   const router = useRouter()
   const { playNotification } = useNotificationSound()
@@ -188,15 +186,13 @@ export default function NotificationsPage() {
       if (n.server_id && n.channel_id) {
         const params = new URLSearchParams()
         if (n.message_id) {
+          // `n.server_id`/`n.channel_id`/thread context pointed at the
+          // servers/channels/threads feature, which no longer exists (see
+          // packages/db/src/schema/notifications.ts) — nothing populates
+          // these fields anymore, so this branch is structurally dead, but
+          // left in place rather than deleted since `Notification`'s shape
+          // still carries the fields.
           params.set("message", n.message_id)
-          try {
-            const { data: message } = await supabase
-              .from("messages")
-              .select("thread_id")
-              .eq("id", n.message_id)
-              .maybeSingle()
-            if (message?.thread_id) params.set("thread", message.thread_id)
-          } catch {}
         }
         const query = params.toString()
         router.push(`/channels/${n.server_id}/${n.channel_id}${query ? `?${query}` : ""}`)

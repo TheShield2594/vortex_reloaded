@@ -14,7 +14,7 @@ import {
   PhoneCall,
   SlidersHorizontal,
 } from "lucide-react"
-import { getAuthUser } from "@/lib/supabase/server"
+import { getAuthUser } from "@/lib/auth/better-auth"
 import { VortexLogo } from "@/components/ui/vortex-logo"
 import { ScrollReveal } from "@/components/ui/scroll-reveal"
 import { ChatMockup } from "@/components/ui/chat-mockup"

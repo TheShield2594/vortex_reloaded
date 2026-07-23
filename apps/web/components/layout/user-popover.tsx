@@ -8,7 +8,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { useToast } from "@/components/ui/use-toast"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useShallow } from "zustand/react/shallow"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { STATUS_OPTIONS, getStatusColor } from "@/lib/utils/status-options"
 import type { UserRow } from "@/types/database"
 
@@ -25,7 +24,6 @@ export function UserPopover({ user, children, isStatusExpired }: Props) {
   const { setCurrentUser } = useAppStore(
     useShallow((s) => ({ setCurrentUser: s.setCurrentUser }))
   )
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
   const [open, setOpen] = useState(false)
   const [showStatusMenu, setShowStatusMenu] = useState(false)
   const [focusedStatusIndex, setFocusedStatusIndex] = useState(-1)
@@ -88,11 +86,12 @@ export function UserPopover({ user, children, isStatusExpired }: Props) {
     try {
       const latestUser = useAppStore.getState().currentUser
       if (!latestUser) return
-      const { error } = await supabase
-        .from("users")
-        .update({ status })
-        .eq("id", latestUser.id)
-      if (error) throw error
+      const res = await fetch("/api/presence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "Failed to update status")
       setCurrentUser({ ...latestUser, status })
       setShowStatusMenu(false)
     } catch (err: unknown) {

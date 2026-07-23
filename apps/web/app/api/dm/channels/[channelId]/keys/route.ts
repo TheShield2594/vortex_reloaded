@@ -1,26 +1,31 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, desc, eq, inArray, sql } from "drizzle-orm"
+import { createDb, dmChannelKeys, dmChannelMembers, dmChannels, pruneDmChannelKeys, userDeviceKeys } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
-import { untypedFrom } from "@/lib/supabase/untyped-table"
+import { toSnakeCase } from "@/lib/utils/case"
+
+const db = createDb()
 
 const PER_USER_DEVICE_LIMIT = 20
 const MAX_KEY_VERSION = 1_000_000
 
 async function assertMembership(channelId: string) {
-  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await getBetterAuthUser()
-  if (!user) return { supabase, user: null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
+  if (!user) return { user: null, error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) }
 
-  const { data: membership, error: membershipError } = await supabase
-    .from("dm_channel_members")
-    .select("user_id")
-    .eq("dm_channel_id", channelId)
-    .eq("user_id", user.id)
-    .maybeSingle()
-
-  if (membershipError) return { supabase, user, error: NextResponse.json({ error: "Failed to verify membership" }, { status: 500 }) }
-  if (!membership) return { supabase, user, error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
-  return { supabase, user, error: null }
+  let membership: { userId: string } | undefined
+  try {
+    const rows = await db
+      .select({ userId: dmChannelMembers.userId })
+      .from(dmChannelMembers)
+      .where(and(eq(dmChannelMembers.dmChannelId, channelId), eq(dmChannelMembers.userId, user.id)))
+      .limit(1)
+    membership = rows[0]
+  } catch {
+    return { user, error: NextResponse.json({ error: "Failed to verify membership" }, { status: 500 }) }
+  }
+  if (!membership) return { user, error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) }
+  return { user, error: null }
 }
 
 export async function GET(
@@ -29,48 +34,81 @@ export async function GET(
 ) {
   try {
     const { channelId } = await params
-    const { supabase, user, error } = await assertMembership(channelId)
+    const { user, error } = await assertMembership(channelId)
     if (error || !user) return error!
 
-    const [channelResult, memberRowsResult, keyRowsResult] = await Promise.all([
-      untypedFrom(supabase, "dm_channels")
-        .select("id, is_encrypted, encryption_key_version, encryption_membership_epoch")
-        .eq("id", channelId)
-        .maybeSingle(),
-      supabase.from("dm_channel_members").select("user_id").eq("dm_channel_id", channelId),
-      untypedFrom(supabase, "dm_channel_keys")
-        .select("key_version, target_user_id, target_device_id, wrapped_key, wrapped_by_user_id, wrapped_by_device_id, sender_public_key")
-        .eq("dm_channel_id", channelId)
-        .eq("target_user_id", user.id),
-    ])
+    let channel: { id: string; isEncrypted: boolean; encryptionKeyVersion: number; encryptionMembershipEpoch: number } | undefined
+    let memberRows: Array<{ userId: string }>
+    let keyRows: Array<{
+      keyVersion: number
+      targetUserId: string
+      targetDeviceId: string
+      wrappedKey: string
+      wrappedByUserId: string
+      wrappedByDeviceId: string
+      senderPublicKey: string
+    }>
+    try {
+      const [channelResult, memberRowsResult, keyRowsResult] = await Promise.all([
+        db
+          .select({
+            id: dmChannels.id,
+            isEncrypted: dmChannels.isEncrypted,
+            encryptionKeyVersion: dmChannels.encryptionKeyVersion,
+            encryptionMembershipEpoch: dmChannels.encryptionMembershipEpoch,
+          })
+          .from(dmChannels)
+          .where(eq(dmChannels.id, channelId))
+          .limit(1),
+        db.select({ userId: dmChannelMembers.userId }).from(dmChannelMembers).where(eq(dmChannelMembers.dmChannelId, channelId)),
+        db
+          .select({
+            keyVersion: dmChannelKeys.keyVersion,
+            targetUserId: dmChannelKeys.targetUserId,
+            targetDeviceId: dmChannelKeys.targetDeviceId,
+            wrappedKey: dmChannelKeys.wrappedKey,
+            wrappedByUserId: dmChannelKeys.wrappedByUserId,
+            wrappedByDeviceId: dmChannelKeys.wrappedByDeviceId,
+            senderPublicKey: dmChannelKeys.senderPublicKey,
+          })
+          .from(dmChannelKeys)
+          .where(and(eq(dmChannelKeys.dmChannelId, channelId), eq(dmChannelKeys.targetUserId, user.id))),
+      ])
+      channel = channelResult[0]
+      memberRows = memberRowsResult
+      keyRows = keyRowsResult
+    } catch {
+      return NextResponse.json({ error: "Failed to fetch channel encryption data" }, { status: 500 })
+    }
 
-    if (channelResult.error) return NextResponse.json({ error: "Failed to fetch channel encryption data" }, { status: 500 })
-    if (!channelResult.data) return NextResponse.json({ error: "DM channel not found" }, { status: 404 })
-    if (memberRowsResult.error) return NextResponse.json({ error: "Failed to fetch channel members" }, { status: 500 })
-    if (keyRowsResult.error) return NextResponse.json({ error: "Failed to fetch encryption keys" }, { status: 500 })
+    if (!channel) return NextResponse.json({ error: "DM channel not found" }, { status: 404 })
 
-    const memberIds = (memberRowsResult.data ?? []).map((m) => m.user_id)
-    const deviceRowsResult = memberIds.length
-      ? await untypedFrom(supabase, "user_device_keys")
-        .select("user_id, device_id, public_key, updated_at")
-        .in("user_id", memberIds)
-        .order("updated_at", { ascending: false })
-      : { data: [], error: null }
+    const memberIds = memberRows.map((m) => m.userId)
+    let deviceRows: Array<{ userId: string; deviceId: string; publicKey: string; updatedAt: string }>
+    try {
+      deviceRows = memberIds.length
+        ? await db
+            .select({ userId: userDeviceKeys.userId, deviceId: userDeviceKeys.deviceId, publicKey: userDeviceKeys.publicKey, updatedAt: userDeviceKeys.updatedAt })
+            .from(userDeviceKeys)
+            .where(inArray(userDeviceKeys.userId, memberIds))
+            .orderBy(desc(userDeviceKeys.updatedAt))
+        : []
+    } catch {
+      return NextResponse.json({ error: "Failed to fetch device keys" }, { status: 500 })
+    }
 
-    if (deviceRowsResult.error) return NextResponse.json({ error: "Failed to fetch device keys" }, { status: 500 })
-
-    const grouped = new Map<string, Array<{ user_id: string; device_id: string; public_key: string }>>()
-    for (const row of (deviceRowsResult.data ?? []) as Array<{ user_id: string; device_id: string; public_key: string }>) {
-      const list = grouped.get(row.user_id) ?? []
-      if (list.length < PER_USER_DEVICE_LIMIT) list.push(row)
-      grouped.set(row.user_id, list)
+    const grouped = new Map<string, Array<{ userId: string; deviceId: string; publicKey: string }>>()
+    for (const row of deviceRows) {
+      const list = grouped.get(row.userId) ?? []
+      if (list.length < PER_USER_DEVICE_LIMIT) list.push({ userId: row.userId, deviceId: row.deviceId, publicKey: row.publicKey })
+      grouped.set(row.userId, list)
     }
     const boundedDeviceRows = Array.from(grouped.values()).flat()
 
     return NextResponse.json({
-      channel: channelResult.data,
-      memberDeviceKeys: boundedDeviceRows,
-      wrappedKeys: keyRowsResult.data ?? [],
+      channel: toSnakeCase(channel),
+      memberDeviceKeys: toSnakeCase(boundedDeviceRows),
+      wrappedKeys: toSnakeCase(keyRows),
     })
 
   } catch (err) {
@@ -106,7 +144,7 @@ export async function POST(
 ) {
   try {
     const { channelId } = await params
-    const { supabase, user, error } = await assertMembership(channelId)
+    const { user, error } = await assertMembership(channelId)
     if (error || !user) return error!
 
     const body = await req.json().catch(() => null)
@@ -117,29 +155,35 @@ export async function POST(
       return NextResponse.json({ error: "keyVersion and wrappedKeys[] required" }, { status: 400 })
     }
 
-    const { data: channelInfo, error: channelError } = await untypedFrom(supabase, "dm_channels")
-      .select("encryption_key_version")
-      .eq("id", channelId)
-      .maybeSingle()
-
-    if (channelError || !channelInfo) {
+    let channelInfo: { encryptionKeyVersion: number } | undefined
+    try {
+      const rows = await db
+        .select({ encryptionKeyVersion: dmChannels.encryptionKeyVersion })
+        .from(dmChannels)
+        .where(eq(dmChannels.id, channelId))
+        .limit(1)
+      channelInfo = rows[0]
+    } catch {
       return NextResponse.json({ error: "Unable to verify channel key version" }, { status: 500 })
     }
 
-    if (keyVersion < 0 || keyVersion > MAX_KEY_VERSION || keyVersion > channelInfo.encryption_key_version) {
+    if (!channelInfo) {
+      return NextResponse.json({ error: "Unable to verify channel key version" }, { status: 500 })
+    }
+
+    if (keyVersion < 0 || keyVersion > MAX_KEY_VERSION || keyVersion > channelInfo.encryptionKeyVersion) {
       return NextResponse.json({ error: "Invalid keyVersion" }, { status: 400 })
     }
 
-    const { count: memberCount, error: memberCountError } = await supabase
-      .from("dm_channel_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("dm_channel_id", channelId)
-
-    if (memberCountError) {
+    let memberCount: number
+    try {
+      const rows = await db.select({ userId: dmChannelMembers.userId }).from(dmChannelMembers).where(eq(dmChannelMembers.dmChannelId, channelId))
+      memberCount = rows.length
+    } catch {
       return NextResponse.json({ error: "Failed to verify channel membership" }, { status: 500 })
     }
 
-    const maxAllowed = Math.max((memberCount ?? 0) * PER_USER_DEVICE_LIMIT, PER_USER_DEVICE_LIMIT)
+    const maxAllowed = Math.max(memberCount * PER_USER_DEVICE_LIMIT, PER_USER_DEVICE_LIMIT)
     if (wrappedKeys.length > maxAllowed) {
       return NextResponse.json({ error: "Too many wrappedKeys" }, { status: 400 })
     }
@@ -150,20 +194,44 @@ export async function POST(
     }
 
     const rows = wrappedKeys.map((entry: { targetUserId: string; targetDeviceId: string; wrappedKey: string; wrappedByDeviceId: string; senderPublicKey: string }) => ({
-      dm_channel_id: channelId,
-      key_version: keyVersion,
-      target_user_id: entry.targetUserId,
-      target_device_id: entry.targetDeviceId,
-      wrapped_key: entry.wrappedKey,
-      wrapped_by_user_id: user.id,
-      wrapped_by_device_id: entry.wrappedByDeviceId,
-      sender_public_key: entry.senderPublicKey,
+      dmChannelId: channelId,
+      keyVersion,
+      targetUserId: entry.targetUserId,
+      targetDeviceId: entry.targetDeviceId,
+      wrappedKey: entry.wrappedKey,
+      wrappedByUserId: user.id,
+      wrappedByDeviceId: entry.wrappedByDeviceId,
+      senderPublicKey: entry.senderPublicKey,
     }))
 
-    const { error: upsertError } = await untypedFrom(supabase, "dm_channel_keys")
-      .upsert(rows)
+    try {
+      await db
+        .insert(dmChannelKeys)
+        .values(rows)
+        .onConflictDoUpdate({
+          target: [dmChannelKeys.dmChannelId, dmChannelKeys.keyVersion, dmChannelKeys.targetUserId, dmChannelKeys.targetDeviceId],
+          set: {
+            wrappedKey: sql`excluded.wrapped_key`,
+            wrappedByUserId: sql`excluded.wrapped_by_user_id`,
+            wrappedByDeviceId: sql`excluded.wrapped_by_device_id`,
+            senderPublicKey: sql`excluded.sender_public_key`,
+          },
+        })
+    } catch {
+      return NextResponse.json({ error: "Failed to store encryption keys" }, { status: 500 })
+    }
 
-    if (upsertError) return NextResponse.json({ error: "Failed to store encryption keys" }, { status: 500 })
+    // Postgres's `prune_dm_channel_keys` cleanup ran off a statement-level
+    // AFTER INSERT/UPDATE trigger on dm_channel_keys — SQLite has no
+    // equivalent, so call the ported application-code helper directly after
+    // this write batch (single dm channel per request). Best-effort: the key
+    // write above already committed, so a prune failure shouldn't turn a
+    // successful response into a 500.
+    try {
+      pruneDmChannelKeys(db, [channelId])
+    } catch (err) {
+      console.error("[dm/channels/[channelId]/keys POST] prune failed:", err)
+    }
 
     return NextResponse.json({ ok: true })
 

@@ -15,11 +15,7 @@ interface EnvVar {
   alternativeName?: string
 }
 
-const REQUIRED: EnvVar[] = [
-  { name: "NEXT_PUBLIC_SUPABASE_URL", required: true, description: "Supabase project URL" },
-  { name: "NEXT_PUBLIC_SUPABASE_ANON_KEY", required: true, description: "Supabase anon key" },
-  { name: "SUPABASE_SERVICE_ROLE_KEY", required: true, description: "Supabase service role key (server-side)" },
-]
+const REQUIRED: EnvVar[] = []
 
 const OPTIONAL: EnvVar[] = [
   { name: "NEXT_PUBLIC_APP_URL", required: false, description: "Public app URL (e.g. https://your-app.vercel.app) — used in web push payloads" },

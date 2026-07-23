@@ -1,18 +1,21 @@
 import { redirect } from "next/navigation"
-import { createServerSupabaseClient, getAuthUser } from "@/lib/supabase/server"
+import { eq } from "drizzle-orm"
+import { createDb, users } from "@vortex/db"
+import { getAuthUser } from "@/lib/auth/better-auth"
+import { toSnakeCase } from "@/lib/utils/case"
+import type { UserRow } from "@/types/database"
 import { ProfileSettingsPage } from "@/components/settings/profile-settings-page"
 
 export const metadata = { title: "Profile Settings — VortexChat" }
 
+const db = createDb()
+
 export default async function ProfileSettings() {
-  const [supabase, { data: { user }, error }] = await Promise.all([
-    createServerSupabaseClient(),
-    getAuthUser(),
-  ])
+  const { data: { user }, error } = await getAuthUser()
   if (error || !user) redirect("/login")
 
-  const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).single()
-  if (!profile) redirect("/login")
+  const [row] = await db.select().from(users).where(eq(users.id, user.id)).limit(1)
+  if (!row) redirect("/login")
 
-  return <ProfileSettingsPage user={profile} />
+  return <ProfileSettingsPage user={toSnakeCase<UserRow>(row)} />
 }

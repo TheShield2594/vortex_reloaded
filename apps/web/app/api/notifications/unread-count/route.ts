@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, count, eq } from "drizzle-orm"
+import { createDb, notifications } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+
+const db = createDb()
 
 /**
  * GET /api/notifications/unread-count
@@ -11,21 +14,15 @@ import { getBetterAuthUser } from "@/lib/auth/better-auth"
  */
 export async function GET(): Promise<NextResponse> {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { count, error } = await supabase
-      .from("notifications")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("read", false)
+    const [row] = await db
+      .select({ value: count() })
+      .from(notifications)
+      .where(and(eq(notifications.userId, user.id), eq(notifications.read, false)))
 
-    if (error) {
-      return NextResponse.json({ error: "Failed to fetch unread count" }, { status: 500 })
-    }
-
-    return NextResponse.json({ count: count ?? 0 })
+    return NextResponse.json({ count: row?.value ?? 0 })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

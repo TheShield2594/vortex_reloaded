@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, getAuthUser } from "@/lib/supabase/server"
+import { and, eq, isNull, lt, ne, or } from "drizzle-orm"
+import { createDb, users } from "@vortex/db"
+import { getAuthUser } from "@/lib/auth/better-auth"
 import {
   PRESENCE_HEARTBEAT_DEBOUNCE_MS,
   type UserStatus,
 } from "@vortex/shared"
+
+const db = createDb()
 
 const VALID_STATUSES = new Set<UserStatus>(["online", "idle", "dnd", "invisible"])
 
@@ -49,33 +53,41 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const now = new Date()
     const nowIso = now.toISOString()
     const debounceThreshold = new Date(now.getTime() - PRESENCE_HEARTBEAT_DEBOUNCE_MS).toISOString()
-    const supabase = await createServerSupabaseClient()
 
     // Atomic conditional UPDATE: only writes when either the heartbeat is stale
     // (older than debounce threshold) OR the status has changed. This prevents
     // concurrent tabs from all writing when they observe the same stale value.
     //
-    // The .or() filter ensures we only touch rows that actually need updating:
+    // The `or(...)` filter ensures we only touch rows that actually need updating:
     // - last_heartbeat_at is null (first heartbeat / legacy user)
     // - last_heartbeat_at is older than the debounce window
     // - status differs from the desired status
-    const { data: updatedUser, error: updateError } = await supabase
-      .from("users")
-      .update({
-        last_heartbeat_at: nowIso,
-        updated_at: nowIso,
-        status: status as UserStatus,
-      })
-      .eq("id", user.id)
-      .or(`last_heartbeat_at.is.null,last_heartbeat_at.lt.${debounceThreshold},status.neq.${status}`)
-      .select("id")
-      .maybeSingle()
-
-    if (updateError) {
+    let updatedUser: { id: string } | undefined
+    try {
+      const rows = await db
+        .update(users)
+        .set({
+          lastHeartbeatAt: nowIso,
+          updatedAt: now,
+          status: status as UserStatus,
+        })
+        .where(
+          and(
+            eq(users.id, user.id),
+            or(
+              isNull(users.lastHeartbeatAt),
+              lt(users.lastHeartbeatAt, debounceThreshold),
+              ne(users.status, status as UserStatus)
+            )
+          )
+        )
+        .returning({ id: users.id })
+      updatedUser = rows[0]
+    } catch (updateError) {
       console.error("presence/heartbeat: failed to update", {
         route: "presence/heartbeat",
         userId: user.id,
-        error: updateError.message,
+        error: updateError instanceof Error ? updateError.message : updateError,
       })
       return NextResponse.json({ error: "Failed to update heartbeat" }, { status: 500 })
     }
@@ -83,11 +95,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // No row matched: either debounced (heartbeat recent + same status) or
     // user doesn't exist. Distinguish by checking if the user row exists.
     if (!updatedUser) {
-      const { data: exists } = await supabase
-        .from("users")
-        .select("id")
-        .eq("id", user.id)
-        .maybeSingle()
+      const [exists] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, user.id))
+        .limit(1)
 
       if (!exists) {
         return NextResponse.json({ error: "User not found" }, { status: 404 })

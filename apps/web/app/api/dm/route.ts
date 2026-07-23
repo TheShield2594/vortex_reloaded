@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm"
+import { createDb, directMessages, dmAttachments, dmReactions, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
 import { createLogger } from "@/lib/logger"
+import { toSnakeCase } from "@/lib/utils/case"
 
 const log = createLogger("api/dm")
+const db = createDb()
 
 export async function GET(request: Request) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -18,32 +20,39 @@ export async function GET(request: Request) {
 
     if (!partnerId) {
       // Return all DM conversations (latest message per partner) — fetch in parallel
-      const [{ data: sent }, { data: received }] = await Promise.all([
-        supabase
-          .from("direct_messages")
-          .select("receiver_id, created_at")
-          .eq("sender_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("direct_messages")
-          .select("sender_id, created_at")
-          .eq("receiver_id", user.id)
-          .order("created_at", { ascending: false }),
+      const [sent, received] = await Promise.all([
+        db
+          .select({ receiverId: directMessages.receiverId, createdAt: directMessages.createdAt })
+          .from(directMessages)
+          .where(eq(directMessages.senderId, user.id))
+          .orderBy(desc(directMessages.createdAt)),
+        db
+          .select({ senderId: directMessages.senderId, createdAt: directMessages.createdAt })
+          .from(directMessages)
+          .where(eq(directMessages.receiverId, user.id))
+          .orderBy(desc(directMessages.createdAt)),
       ])
 
       const partnerIds = new Set<string>([
-        ...(sent?.map((m) => m.receiver_id).filter((id): id is string => id !== null) ?? []),
-        ...(received?.map((m) => m.sender_id) ?? []),
+        ...sent.map((m) => m.receiverId).filter((id): id is string => id !== null),
+        ...received.map((m) => m.senderId),
       ])
 
       if (partnerIds.size === 0) return NextResponse.json([])
 
-      const { data: partners } = await supabase
-        .from("users")
-        .select("id, username, display_name, avatar_url, status, status_message")
-        .in("id", Array.from(partnerIds))
+      const partners = await db
+        .select({
+          id: users.id,
+          username: users.username,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          status: users.status,
+          statusMessage: users.statusMessage,
+        })
+        .from(users)
+        .where(inArray(users.id, Array.from(partnerIds)))
 
-      return NextResponse.json(partners ?? [])
+      return NextResponse.json(toSnakeCase(partners))
     }
 
     // Validate partnerId is a valid UUID to prevent PostgREST filter injection
@@ -53,17 +62,75 @@ export async function GET(request: Request) {
     }
 
     // Get messages with specific partner
-    const { data: messages, error } = await supabase
-      .from("direct_messages")
-      .select(`id, sender_id, receiver_id, content, created_at, edited_at, deleted_at, reply_to_id, dm_attachments(*), reactions(*)`)
-      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${user.id})`)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: true })
-      .limit(100)
+    let messages: Array<{
+      id: string
+      senderId: string
+      receiverId: string | null
+      content: string | null
+      createdAt: string
+      editedAt: string | null
+      deletedAt: string | null
+      replyToId: string | null
+    }>
+    try {
+      messages = await db
+        .select({
+          id: directMessages.id,
+          senderId: directMessages.senderId,
+          receiverId: directMessages.receiverId,
+          content: directMessages.content,
+          createdAt: directMessages.createdAt,
+          editedAt: directMessages.editedAt,
+          deletedAt: directMessages.deletedAt,
+          replyToId: directMessages.replyToId,
+        })
+        .from(directMessages)
+        .where(
+          and(
+            isNull(directMessages.deletedAt),
+            or(
+              and(eq(directMessages.senderId, user.id), eq(directMessages.receiverId, partnerId)),
+              and(eq(directMessages.senderId, partnerId), eq(directMessages.receiverId, user.id))
+            )
+          )
+        )
+        .orderBy(asc(directMessages.createdAt))
+        .limit(100)
+    } catch {
+      return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 })
+    }
 
-    if (error) return NextResponse.json({ error: "Failed to fetch messages" }, { status: 500 })
+    const messageIds = messages.map((m) => m.id)
+    let attachmentsByMessage: Record<string, Array<Record<string, unknown>>> = {}
+    let reactionsByMessage: Record<string, Array<Record<string, unknown>>> = {}
+    if (messageIds.length > 0) {
+      const [attachmentRows, reactionRows] = await Promise.all([
+        db.select().from(dmAttachments).where(inArray(dmAttachments.dmId, messageIds)),
+        db.select().from(dmReactions).where(inArray(dmReactions.dmId, messageIds)),
+      ])
+      attachmentsByMessage = {}
+      for (const row of attachmentRows) {
+        const snake = toSnakeCase<Record<string, unknown>>(row)
+        const list = attachmentsByMessage[row.dmId] ?? []
+        list.push(snake)
+        attachmentsByMessage[row.dmId] = list
+      }
+      reactionsByMessage = {}
+      for (const row of reactionRows) {
+        const snake = toSnakeCase<Record<string, unknown>>(row)
+        const list = reactionsByMessage[row.dmId] ?? []
+        list.push(snake)
+        reactionsByMessage[row.dmId] = list
+      }
+    }
 
-    return NextResponse.json(messages ?? [])
+    const enriched = messages.map((m) => ({
+      ...toSnakeCase<Record<string, unknown>>(m),
+      dm_attachments: attachmentsByMessage[m.id] ?? [],
+      reactions: reactionsByMessage[m.id] ?? [],
+    }))
+
+    return NextResponse.json(enriched)
 
   } catch (err) {
     log.error({ route: "/api/dm", action: "GET", error: err }, "GET error");
@@ -75,7 +142,6 @@ const MAX_DM_CONTENT_LENGTH = 4000
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -120,20 +186,24 @@ export async function POST(request: Request) {
     }
 
     // Block check: prevent messaging blocked users
-    const blocked = await isBlockedBetweenUsers(supabase, user.id, receiverId)
+    const blocked = await isBlockedBetweenUsers(user.id, receiverId)
     if (blocked) {
       return NextResponse.json({ error: "Cannot send message to this user" }, { status: 403 })
     }
 
-    const { data, error } = await supabase
-      .from("direct_messages")
-      .insert({ sender_id: user.id, receiver_id: receiverId, content: trimmed })
-      .select()
-      .single()
+    let inserted: typeof directMessages.$inferSelect
+    try {
+      const [row] = await db
+        .insert(directMessages)
+        .values({ senderId: user.id, receiverId, content: trimmed })
+        .returning()
+      if (!row) throw new Error("insert returned no row")
+      inserted = row
+    } catch {
+      return NextResponse.json({ error: "Failed to send message" }, { status: 500 })
+    }
 
-    if (error) return NextResponse.json({ error: "Failed to send message" }, { status: 500 })
-
-    return NextResponse.json(data, { status: 201 })
+    return NextResponse.json(toSnakeCase(inserted), { status: 201 })
 
   } catch (err) {
     log.error({ route: "/api/dm", action: "POST", error: err }, "POST error");

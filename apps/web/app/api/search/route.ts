@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from "next/server"
+import { and, eq, inArray } from "drizzle-orm"
+import { createDb, dmChannelMembers, users } from "@vortex/db"
 import { requireAuth } from "@/lib/utils/api-helpers"
 import { filterBlockedUserIds, getBlockedUserIdsForViewer } from "@/lib/social-block-policy"
 import { rateLimiter } from "@/lib/rate-limit"
 import { createLogger } from "@/lib/logger"
+import { toSnakeCase } from "@/lib/utils/case"
 
 const log = createLogger("api/search")
+const db = createDb()
+
+interface DmSearchRow {
+  id: string
+  dm_channel_id: string | null
+  content: string | null
+  created_at: string
+  sender_id: string
+}
 
 interface SearchFilters {
   fromUserId?: string
@@ -51,10 +63,26 @@ function parseSearchQuery(raw: string): { query: string; filters: SearchFilters 
   return { query: query.replace(/\s+/g, " ").trim(), filters }
 }
 
+/**
+ * FTS5's MATCH operand has its own query syntax (column filters, NEAR(),
+ * boolean operators, prefix `*`, quoting) — even bound as a parameter, the
+ * value is parsed as an FTS5 query, not literal text. Wrap every token in
+ * its own quoted phrase (doubling embedded quotes, FTS5's escape for a
+ * literal `"`) so user input can't be read as FTS5 syntax; tokens stay
+ * implicitly ANDed together, same as unquoted bareword tokens are today.
+ */
+function toFtsMatchQuery(query: string): string {
+  return query
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => `"${token.replace(/"/g, '""')}"`)
+    .join(" ")
+}
+
 // Search within a single DM/group channel the caller is a member of.
 export async function GET(req: NextRequest) {
   try {
-    const { supabase, user, error: authError } = await requireAuth()
+    const { user, error: authError } = await requireAuth()
     if (authError) return authError
 
     // Rate limit: 10 searches per minute per user
@@ -75,65 +103,96 @@ export async function GET(req: NextRequest) {
     const { query, filters } = parseSearchQuery(rawQuery)
 
     // Verify the user is a member of this DM channel
-    const { data: membership, error: membershipError } = await supabase
-      .from("dm_channel_members")
-      .select("user_id")
-      .eq("dm_channel_id", dmChannelId)
-      .eq("user_id", user.id)
-      .maybeSingle()
-
-    if (membershipError) {
-      log.error({ route: "/api/search", action: "dmMembershipCheck", dmChannelId, userId: user.id, error: membershipError.message }, "DM membership check failed")
+    let membership: { userId: string } | undefined
+    try {
+      const rows = await db
+        .select({ userId: dmChannelMembers.userId })
+        .from(dmChannelMembers)
+        .where(and(eq(dmChannelMembers.dmChannelId, dmChannelId), eq(dmChannelMembers.userId, user.id)))
+        .limit(1)
+      membership = rows[0]
+    } catch (membershipError) {
+      log.error({ route: "/api/search", action: "dmMembershipCheck", dmChannelId, userId: user.id, error: membershipError instanceof Error ? membershipError.message : String(membershipError) }, "DM membership check failed")
       return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
     if (!membership) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    let dmQuery = supabase
-      .from("direct_messages")
-      .select("id, content, dm_channel_id, created_at, sender_id, sender:users!direct_messages_sender_id_fkey(id, username, display_name, avatar_url)")
-      .eq("dm_channel_id", dmChannelId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(limit)
+    // Drizzle has no schema-level FTS5 support (see
+    // docs/sqlite-migration-fts5-transactions-spike.md) — query the
+    // direct_messages_fts virtual table (packages/db/src/sql/fts5-and-triggers.sql)
+    // directly via the underlying better-sqlite3 client.
+    const conditions: string[] = ["dm.dm_channel_id = ?", "dm.deleted_at IS NULL"]
+    const params: Array<string> = [dmChannelId]
 
-    if (query) {
-      dmQuery = dmQuery.textSearch("search_vector", query, { type: "websearch", config: "english" })
-    }
     if (filters.fromUserId) {
-      dmQuery = dmQuery.eq("sender_id", filters.fromUserId)
+      conditions.push("dm.sender_id = ?")
+      params.push(filters.fromUserId)
     }
     if (filters.before) {
-      dmQuery = dmQuery.lt("created_at", filters.before)
+      conditions.push("dm.created_at < ?")
+      params.push(filters.before)
     }
     if (filters.after) {
-      dmQuery = dmQuery.gt("created_at", filters.after)
+      conditions.push("dm.created_at > ?")
+      params.push(filters.after)
     }
     if (filters.has === "link") {
-      dmQuery = dmQuery.ilike("content", "%http%")
+      conditions.push("dm.content LIKE '%http%'")
     }
     if (filters.has === "image") {
-      dmQuery = dmQuery.or(
-        "content.ilike.%http%.png%,content.ilike.%http%.jpg%,content.ilike.%http%.jpeg%,content.ilike.%http%.gif%,content.ilike.%http%.webp%"
-      )
+      conditions.push("(dm.content LIKE '%http%.png%' OR dm.content LIKE '%http%.jpg%' OR dm.content LIKE '%http%.jpeg%' OR dm.content LIKE '%http%.gif%' OR dm.content LIKE '%http%.webp%')")
     }
     if (filters.has === "file") {
-      dmQuery = dmQuery.or(
-        "content.ilike.%.pdf%,content.ilike.%.docx%,content.ilike.%.xlsx%,content.ilike.%.zip%,content.ilike.%.mp3%,content.ilike.%.mp4%"
-      )
+      conditions.push("(dm.content LIKE '%.pdf%' OR dm.content LIKE '%.docx%' OR dm.content LIKE '%.xlsx%' OR dm.content LIKE '%.zip%' OR dm.content LIKE '%.mp3%' OR dm.content LIKE '%.mp4%')")
     }
 
-    const { data: dmMessages, error: dmError } = await dmQuery
-
-    if (dmError) {
-      log.error({ route: "/api/search", action: "dmSearch", dmChannelId, userId: user.id, error: dmError.message }, "DM search query failed")
+    let dmMessages: DmSearchRow[]
+    try {
+      if (query) {
+        const sqlText = `
+          SELECT dm.id, dm.dm_channel_id, dm.content, dm.created_at, dm.sender_id
+          FROM direct_messages_fts
+          JOIN direct_messages dm ON dm.rowid = direct_messages_fts.rowid
+          WHERE direct_messages_fts MATCH ? AND ${conditions.join(" AND ")}
+          ORDER BY bm25(direct_messages_fts)
+          LIMIT ?
+        `
+        dmMessages = db.$client.prepare(sqlText).all(toFtsMatchQuery(query), ...params, limit) as DmSearchRow[]
+      } else {
+        const sqlText = `
+          SELECT dm.id, dm.dm_channel_id, dm.content, dm.created_at, dm.sender_id
+          FROM direct_messages dm
+          WHERE ${conditions.join(" AND ")}
+          ORDER BY dm.created_at DESC
+          LIMIT ?
+        `
+        dmMessages = db.$client.prepare(sqlText).all(...params, limit) as DmSearchRow[]
+      }
+    } catch (dmError) {
+      const message = dmError instanceof Error ? dmError.message : String(dmError)
+      log.error({ route: "/api/search", action: "dmSearch", dmChannelId, userId: user.id, error: message }, "DM search query failed")
+      // An FTS5 syntax error means the (now-escaped) query still couldn't be parsed as a
+      // MATCH expression — a malformed search, not a server fault — vs. a genuine DB error.
+      if (/fts5:/i.test(message)) {
+        return NextResponse.json({ error: "Invalid search query" }, { status: 400 })
+      }
       return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 
-    const blockedUserIds = await getBlockedUserIdsForViewer(supabase, user.id)
+    const senderIds = Array.from(new Set(dmMessages.map((m) => m.sender_id)))
+    const senderRows = senderIds.length
+      ? await db
+          .select({ id: users.id, username: users.username, displayName: users.displayName, avatarUrl: users.avatarUrl })
+          .from(users)
+          .where(inArray(users.id, senderIds))
+      : []
+    const senderMap = Object.fromEntries(senderRows.map((s) => [s.id, toSnakeCase(s)]))
+
+    const blockedUserIds = await getBlockedUserIdsForViewer(user.id)
     const visibleDMs = filterBlockedUserIds(
-      dmMessages ?? [],
+      dmMessages,
       (msg) => msg.sender_id,
       blockedUserIds,
     )
@@ -145,7 +204,7 @@ export async function GET(req: NextRequest) {
       channel_id: m.dm_channel_id,
       created_at: m.created_at,
       author_id: m.sender_id,
-      author: m.sender,
+      author: senderMap[m.sender_id] ?? null,
     }))
 
     return NextResponse.json({ results, total: results.length }, {

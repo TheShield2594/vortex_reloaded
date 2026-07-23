@@ -7,7 +7,6 @@
  */
 import { headers as nextHeaders } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
-import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server"
 import { auth } from "@/lib/auth/better-auth"
 import { createLogger } from "@/lib/logger"
 
@@ -36,33 +35,23 @@ export interface AuthUser {
 
 /**
  * Authenticate the current request against Better Auth's session.
- * Returns `{ supabase, user }` on success, or an early `NextResponse` on failure.
- *
- * `supabase` is still returned (and still the right client to use) because
- * apps/web's non-auth data access hasn't moved off Supabase Postgres yet —
- * only auth itself has cut over to Better Auth/SQLite (see issue #8's PR
- * description for why the two live side by side for now). Only the identity
- * check below changed; every route's existing `supabase.from(...)` calls are
- * unaffected.
+ * Returns `{ user }` on success, or an early `NextResponse` on failure.
  *
  * Replace the 50+ copies of:
- *   const supabase = await createServerSupabaseClient()
- *   const { data: { user } } = await supabase.auth.getUser()
+ *   const { data: { user } } = await getAuthUser()
  *   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
  */
 export async function requireAuth() {
-  const supabase = await createServerSupabaseClient()
-
   let session: Awaited<ReturnType<typeof auth.api.getSession>>
   try {
     session = await auth.api.getSession({ headers: await nextHeaders() })
   } catch (err) {
     log.error({ err: err instanceof Error ? err.message : String(err) }, "getSession failed")
-    return { supabase, user: null, error: apiError("Auth service temporarily unavailable", 502) } as const
+    return { user: null, error: apiError("Auth service temporarily unavailable", 502) } as const
   }
 
   if (!session?.user) {
-    return { supabase, user: null, error: unauthorized() } as const
+    return { user: null, error: unauthorized() } as const
   }
 
   const user: AuthUser = {
@@ -73,18 +62,7 @@ export async function requireAuth() {
     displayName: (session.user as { displayName?: string | null }).displayName ?? null,
   }
 
-  return { supabase, user, error: null } as const
-}
-
-/**
- * Same as `requireAuth` but also returns a service-role client for admin ops.
- */
-export async function requireAuthWithServiceRole() {
-  const result = await requireAuth()
-  if (result.error) return { ...result, serviceSupabase: null } as const
-
-  const serviceSupabase = await createServiceRoleClient()
-  return { ...result, serviceSupabase } as const
+  return { user, error: null } as const
 }
 
 // ---------------------------------------------------------------------------

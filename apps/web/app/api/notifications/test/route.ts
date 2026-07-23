@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { eq } from "drizzle-orm"
+import { createDb, pushSubscriptions } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { sendPushToUser } from "@/lib/push"
 import { rateLimiter } from "@/lib/rate-limit"
+
+const db = createDb()
 
 /**
  * POST /api/notifications/test
@@ -12,7 +15,6 @@ import { rateLimiter } from "@/lib/rate-limit"
  */
 export async function POST(): Promise<NextResponse> {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -29,13 +31,13 @@ export async function POST(): Promise<NextResponse> {
     }
 
     // Check if the user has any push subscriptions
-    const { data: subs } = await supabase
-      .from("push_subscriptions")
-      .select("id")
-      .eq("user_id", user.id)
+    const subs = await db
+      .select({ id: pushSubscriptions.id })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, user.id))
       .limit(1)
 
-    if (!subs?.length) {
+    if (!subs.length) {
       return NextResponse.json(
         { error: "No push subscription found. Please enable notifications first." },
         { status: 400 }
