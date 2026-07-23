@@ -22,14 +22,12 @@ function buildCsp(): { nonce: string; header: string } {
   const nonce = Buffer.from(array).toString("base64")
 
   // Build domain allowlists from env vars so deployments with different
-  // Supabase / LiveKit / Sentry hosts work without code changes.
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""
+  // LiveKit / Sentry hosts work without code changes.
   const livekitUrl = process.env.NEXT_PUBLIC_LIVEKIT_URL ?? ""
   const sentryDsn = process.env.NEXT_PUBLIC_SENTRY_DSN ?? ""
   const signalUrl = process.env.NEXT_PUBLIC_SIGNAL_URL ?? ""
 
   // Extract hostnames for CSP directives
-  const supabaseHost = safeHost(supabaseUrl)   // e.g. "xyz.supabase.co"
   const livekitHost = safeHost(livekitUrl)      // e.g. "my-app.livekit.cloud"
   const sentryHost = safeHost(sentryDsn)         // e.g. "oXXXXXX.ingest.sentry.io"
   const signalHost = safeHost(signalUrl)         // e.g. "vortex-signal.up.railway.app"
@@ -39,11 +37,9 @@ function buildCsp(): { nonce: string; header: string } {
     "'self' blob: data: https:",
   ].join(" ")
 
-  // connect-src: Supabase (REST + Realtime WS), LiveKit, Klipy, Giphy, Sentry
+  // connect-src: LiveKit, Klipy, Giphy, Sentry
   const connectSrc = [
     "'self'",
-    supabaseHost ? `https://${supabaseHost} wss://${supabaseHost}` : "",
-    "https://*.supabase.co wss://*.supabase.co",
     livekitHost ? `wss://${livekitHost}` : "",
     "https://api.klipy.co https://api.klipy.com https://api.giphy.com https://cdn.jsdelivr.net",
     sentryHost ? `https://${sentryHost}` : "",
