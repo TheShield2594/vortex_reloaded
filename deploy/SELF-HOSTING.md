@@ -22,10 +22,10 @@ Portainer (see [Deploying via Portainer](#deploying-via-portainer) below).
         │  :6379   │          │  (HTTP)     │
         └──────────┘          └─────────────┘
 
-     ┌──────────────────┐   ┌───────────────────┐
-     │   SQLite (file)   │   │  LiveKit + coturn │
-     │  ./data/vortex.db │   │  (voice/video)    │
-     │  mounted into      │   │  :7880/:7881/UDP   │
+     ┌──────────────────┐   ┌───────────────────┐   ┌──────────────┐
+     │   SQLite (file)   │   │  LiveKit + coturn │   │     ntfy     │
+     │  ./data/vortex.db │   │  (voice/video)    │   │ (push, :8080)│
+     │  mounted into      │   │  :7880/:7881/UDP   │   └──────────────┘
      │  web + signal      │   │  :3478/:5349/UDP   │
      └──────────────────┘   └───────────────────┘
 ```
@@ -44,6 +44,17 @@ cluster without re-architecting the database layer.
 carries call media; coturn is the TURN/STUN server clients fall back to
 when they can't reach LiveKit directly (symmetric NAT, restrictive
 corporate networks). Both run as containers in this same stack.
+
+**Push notifications: Web Push, or self-hosted ntfy (issue #38).** Web
+Push always delivers through the browser vendor's push service — Google
+FCM for Chrome/Android, Apple APNs for Safari/iOS — even though everything
+else here is self-hosted, which leaks "this user just got a message"
+metadata to that third party. The `ntfy` service is a self-hosted
+alternative: each user gets a private topic and subscribes to it directly
+from the ntfy app/web UI pointed at *your* server, so no third party is
+ever involved. It's an additional channel, not a hard swap — enable it per
+user in Settings → Notifications, and leave Web Push unsubscribed if you
+want ntfy exclusively.
 
 ---
 
@@ -92,6 +103,7 @@ VortexChat will be available at `http://localhost:3000` (or your configured URL)
 | `cron` | — | Periodic task runner (internal only, calls `web` via Docker network) |
 | `livekit` | 7880/tcp (signaling+API), 7881/tcp (TCP fallback), 50000-50019/udp (RTC media) | Self-hosted SFU for voice/video calls |
 | `coturn` | 3478/tcp+udp, 5349/tcp+udp, 49160-49200/udp | TURN/STUN relay for restrictive networks |
+| `ntfy` | 8080/tcp | Self-hosted push notifications (issue #38) — alternative to Web Push's FCM/APNs relay |
 
 The database isn't a service — it's `./data/vortex.db` on the host,
 bind-mounted into `web` and `signal`.
@@ -127,6 +139,7 @@ All configuration is via environment variables in `.env` and
 | `WEB_URL` | `http://web:3000` | Cron → Web connection |
 | `ALLOWED_ORIGINS` | From `NEXT_PUBLIC_APP_URL` | Signal server CORS |
 | `LIVEKIT_API_URL` | `http://livekit:7880` | Web → LiveKit server-side API calls (token minting itself needs no network call; this is for explicit room management) |
+| `NTFY_SERVER_URL` | `http://ntfy:80` | Web → ntfy server-side publish calls. This is only the *default* — an `NTFY_SERVER_URL` already set in `.env` takes precedence (e.g. to point at an external ntfy instance instead of the bundled `ntfy` service) |
 
 ### Optional
 
@@ -134,6 +147,7 @@ All configuration is via environment variables in `.env` and
 |-------------|---------|-------|
 | `KLIPY_API_KEY`, `GIPHY_API_KEY` | GIF providers | Picker hidden when not configured |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Web Push | Push notifications disabled without these |
+| `NEXT_PUBLIC_NTFY_URL` | Self-hosted push (ntfy) | Public URL clients subscribe to. `NTFY_SERVER_URL` (server-side publish address) is auto-set by docker-compose; Settings → Notifications hides the ntfy section until it's set, and needs `NEXT_PUBLIC_NTFY_URL` too before it can show a subscribe link. |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry | Error monitoring |
 | `STEAM_WEB_API_KEY` | Steam API | Profile enrichment |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth | YouTube connections |
@@ -258,6 +272,10 @@ signal.example.com {
 livekit.example.com {
     reverse_proxy livekit:7880
 }
+
+ntfy.example.com {
+    reverse_proxy ntfy:80
+}
 ```
 
 **nginx:**
@@ -299,7 +317,30 @@ server {
         proxy_set_header Host $host;
     }
 }
+
+server {
+    listen 443 ssl;
+    server_name ntfy.example.com;
+
+    location / {
+        proxy_pass http://ntfy:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
+
+**ntfy over plaintext HTTP is not safe for an internet-facing deployment.**
+With `NTFY_ENABLE_LOGIN: "false"` (this stack's default), a subscription
+topic is effectively a bearer credential — anyone who can read the wire
+can read notification content and, potentially, the topic itself. `scripts/setup.sh`
+still defaults `NEXT_PUBLIC_NTFY_URL` to a plain `http://` URL (matching
+this same script's existing `ws://`-by-default pattern for LiveKit's
+public URL, TLS'd the same way via this reverse-proxy section rather than
+enforced in the script) — put ntfy behind the Caddy/nginx block above and
+switch `NEXT_PUBLIC_NTFY_URL` to `https://ntfy.example.com` before relying
+on it outside a trusted LAN/tailnet.
 
 If you front LiveKit with a domain like this, update `NEXT_PUBLIC_LIVEKIT_URL`
 to `wss://livekit.example.com` and re-run `docker compose up -d` — the UDP
@@ -369,6 +410,15 @@ docker compose up -d
 **Push notifications not working:**
 - Generate VAPID keys: `npx web-push generate-vapid-keys`
 - Set `VAPID_SUBJECT` to a `mailto:` or `https:` URL
+
+**ntfy push not showing up in Settings → Notifications:**
+- `NTFY_SERVER_URL` must be set on the `web` container — `scripts/setup.sh`
+  writes it via docker-compose's `web.environment` block automatically; if
+  you're not using the bundled `ntfy` service, set it to your own server
+  yourself in `.env`
+- `NEXT_PUBLIC_NTFY_URL` must also be set for the subscribe link to appear
+- Check `docker compose logs ntfy` — a missing `NTFY_BASE_URL` or port
+  conflict on 8080 is the usual cause
 
 **Calls fail for remote users but work on the same LAN:**
 - `TURN_EXTERNAL_IP` is almost certainly wrong or unset — check both `.env`

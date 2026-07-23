@@ -73,6 +73,7 @@
 | Installable manifest + service worker | Done | `manifest.json`, `sw.js` with multi-strategy caching |
 | Push notifications (Web Push VAPID) | Done | All users, 4-level settings hierarchy |
 | Push permission soft-ask | Done | 60s delay, contextual prompt |
+| Self-hosted push via ntfy (#38) | Done | `lib/ntfy.ts` + `ntfy_subscriptions` table; independent channel alongside Web Push, never routes through FCM/APNs; `ntfy` service in docker-compose.yml; UI in Notification settings |
 | Offline banner + connection state machine | Done | `use-connection-status` FSM, color-coded banner |
 | Message outbox (offline queue) | Done | localStorage-persisted, flushes on reconnect |
 | Mobile bottom tab bar (no drawer) | Done | 4-tab pill nav, drawer removed; server sidebar desktop-only |

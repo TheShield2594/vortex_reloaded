@@ -144,6 +144,14 @@ echo ""
 LIVEKIT_DEFAULT="ws://${TURN_EXTERNAL_IP:-localhost}:7880"
 read_with_default "Public LiveKit URL (browsers connect here)" "$LIVEKIT_DEFAULT" LIVEKIT_PUBLIC_URL
 
+echo ""
+echo -e "${BOLD}Self-hosted push notifications (ntfy) — issue #38${NC}"
+echo "  Alternative to Web Push that never routes through Google FCM / Apple"
+echo "  APNs. Ships in docker-compose.yml by default; users opt in per-account"
+echo "  from Settings → Notifications."
+NTFY_DEFAULT="http://${TURN_EXTERNAL_IP:-localhost}:8080"
+read_with_default "Public ntfy URL (clients subscribe here)" "$NTFY_DEFAULT" NTFY_PUBLIC_URL
+
 # ─── Generate livekit.yaml from the template ────────────────────────────────
 sed \
   -e "s|__TURN_EXTERNAL_IP__|${TURN_EXTERNAL_IP}|g" \
@@ -207,6 +215,13 @@ TURN_REALM=vortexchat.local
 # Client-facing TURN URL(s) — point these at this box's public IP/hostname.
 TURN_URL=turn:${TURN_EXTERNAL_IP}:3478
 TURNS_URL=turns:${TURN_EXTERNAL_IP}:5349
+
+# ─── ntfy (self-hosted push, issue #38) ──────────────────────────────────
+# NTFY_SERVER_URL (the internal address the web container publishes to) is
+# already set in docker-compose.yml's web.environment — no need to repeat
+# it here. This is only the public URL clients use to subscribe.
+NEXT_PUBLIC_NTFY_URL=${NTFY_PUBLIC_URL}
+# NTFY_PORT=8080
 
 # ─── GIF providers (optional — picker hidden when not configured) ────────
 # KLIPY_API_KEY=your-klipy-api-key
@@ -279,7 +294,7 @@ echo "       if it wasn't auto-detected correctly."
 echo "    2. Open these ports on this box's firewall:"
 echo "       3000/tcp (web), 3001/tcp (signal), 7880-7881/tcp (livekit),"
 echo "       50000-50019/udp (livekit RTC), 3478/tcp+udp, 5349/tcp+udp,"
-echo "       49160-49200/udp (coturn)"
+echo "       49160-49200/udp (coturn), 8080/tcp (ntfy)"
 echo "    3. Start VortexChat:"
 echo "       docker compose up -d"
 echo "    4. Check status:"
@@ -288,5 +303,6 @@ echo ""
 echo "    Web:     ${APP_URL}"
 echo "    Signal:  ${SIGNAL_URL}"
 echo "    LiveKit: ${LIVEKIT_PUBLIC_URL}"
+echo "    ntfy:    ${NTFY_PUBLIC_URL}"
 echo "    Data:    ${DATA_DIR}/vortex.db (back this up — see deploy/SELF-HOSTING.md)"
 echo ""

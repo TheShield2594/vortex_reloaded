@@ -1,8 +1,9 @@
 import webpush from "web-push"
 import { and, eq, inArray, ne } from "drizzle-orm"
-import { createDb, dmChannelMembers, pushSubscriptions, userNotificationPreferences } from "@vortex/db"
+import { createDb, dmChannelMembers, ntfySubscriptions, pushSubscriptions, userNotificationPreferences } from "@vortex/db"
 import { resolveNotification } from "@/lib/notification-resolver"
 import { isInQuietHours } from "@/lib/quiet-hours"
+import { isNtfyConfigured, publishNtfy } from "@/lib/ntfy"
 
 const db = createDb()
 
@@ -57,11 +58,13 @@ export async function sendPushToUser(
   { skipQuietHours = false }: { skipQuietHours?: boolean } = {}
 ): Promise<void> {
   try {
-    if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
-      console.warn("sendPushToUser: VAPID keys not configured — push notifications disabled")
+    const vapidReady = Boolean(VAPID_PUBLIC && VAPID_PRIVATE)
+    const ntfyReady = isNtfyConfigured()
+    if (!vapidReady && !ntfyReady) {
+      console.warn("sendPushToUser: no push transport configured (VAPID keys / NTFY_SERVER_URL) — push notifications disabled")
       return
     }
-    ensureVapid()
+    if (vapidReady) ensureVapid()
 
     // Check quiet hours — suppress push if the user is in their scheduled DND window
     if (!skipQuietHours) {
@@ -99,45 +102,66 @@ export async function sendPushToUser(
       }
     }
 
-    const subs = await db
-      .select({
-        id: pushSubscriptions.id,
-        endpoint: pushSubscriptions.endpoint,
-        p256dh: pushSubscriptions.p256dh,
-        auth: pushSubscriptions.auth,
-      })
-      .from(pushSubscriptions)
-      .where(eq(pushSubscriptions.userId, userId))
-
-    if (!subs.length) return
-
-    const results = await Promise.allSettled(
-      subs.map((sub: { id: string; endpoint: string; p256dh: string; auth: string }) =>
-        webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          JSON.stringify(payload),
-          { TTL: PUSH_TTL_SECONDS, urgency: PUSH_URGENCY }
-        ).catch(async (err: unknown) => {
-          const statusCode = (err as { statusCode?: number }).statusCode
-          // 410 = subscription expired; clean it up
-          if (statusCode === 410 || statusCode === 404) {
-            try {
-              await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id))
-            } catch (deleteError) {
-              console.error(`sendPushToUser: failed to remove stale subscription ${sub.id}`, deleteError)
-            }
-          } else {
-            console.error(`sendPushToUser: push to ${sub.endpoint.slice(0, 50)}… failed`, statusCode ?? err)
-          }
-          throw err // re-throw so allSettled marks as rejected
+    if (vapidReady) {
+      const subs = await db
+        .select({
+          id: pushSubscriptions.id,
+          endpoint: pushSubscriptions.endpoint,
+          p256dh: pushSubscriptions.p256dh,
+          auth: pushSubscriptions.auth,
         })
-      )
-    )
+        .from(pushSubscriptions)
+        .where(eq(pushSubscriptions.userId, userId))
 
-    // Warn when ALL subscriptions failed — likely iOS SW eviction or stale endpoints
-    const allFailed = results.every((r) => r.status === "rejected")
-    if (allFailed) {
-      console.warn(`sendPushToUser: all ${subs.length} push subscriptions failed for user ${userId} — possible iOS service worker eviction`)
+      if (subs.length) {
+        const results = await Promise.allSettled(
+          subs.map((sub: { id: string; endpoint: string; p256dh: string; auth: string }) =>
+            webpush.sendNotification(
+              { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+              JSON.stringify(payload),
+              { TTL: PUSH_TTL_SECONDS, urgency: PUSH_URGENCY }
+            ).catch(async (err: unknown) => {
+              const statusCode = (err as { statusCode?: number }).statusCode
+              // 410 = subscription expired; clean it up
+              if (statusCode === 410 || statusCode === 404) {
+                try {
+                  await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id))
+                } catch (deleteError) {
+                  console.error(`sendPushToUser: failed to remove stale subscription ${sub.id}`, deleteError)
+                }
+              } else {
+                console.error(`sendPushToUser: push to ${sub.endpoint.slice(0, 50)}… failed`, statusCode ?? err)
+              }
+              throw err // re-throw so allSettled marks as rejected
+            })
+          )
+        )
+
+        // Warn when ALL subscriptions failed — likely iOS SW eviction or stale endpoints
+        const allFailed = results.every((r) => r.status === "rejected")
+        if (allFailed) {
+          console.warn(`sendPushToUser: all ${subs.length} push subscriptions failed for user ${userId} — possible iOS service worker eviction`)
+        }
+      }
+    }
+
+    // Self-hosted ntfy transport (issue #38) — independent of Web Push, so a
+    // user relying solely on ntfy still gets notified even with no VAPID
+    // subscription on file.
+    if (ntfyReady) {
+      try {
+        const rows = await db
+          .select({ topic: ntfySubscriptions.topic })
+          .from(ntfySubscriptions)
+          .where(and(eq(ntfySubscriptions.userId, userId), eq(ntfySubscriptions.enabled, true)))
+          .limit(1)
+        const ntfySub = rows[0]
+        if (ntfySub) {
+          await publishNtfy(ntfySub.topic, { title: payload.title, body: payload.body, url: payload.url, icon: payload.icon })
+        }
+      } catch (ntfyError) {
+        console.error("sendPushToUser: ntfy publish failed", ntfyError instanceof Error ? ntfyError.message : ntfyError)
+      }
     }
   } catch (err) {
     console.error("sendPushToUser: unexpected error", err)
@@ -166,8 +190,8 @@ export async function sendPushToChannel(opts: {
   excludeUserId: string
 }): Promise<void> {
   try {
-  if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
-    console.warn("sendPushToChannel: VAPID keys not configured — push notifications disabled")
+  if ((!VAPID_PUBLIC || !VAPID_PRIVATE) && !isNtfyConfigured()) {
+    console.warn("sendPushToChannel: no push transport configured (VAPID keys / NTFY_SERVER_URL) — push notifications disabled")
     return
   }
   ensureVapid()
