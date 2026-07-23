@@ -109,11 +109,30 @@ TEXT/ISO-8601 format, but accepts a `Date` object as input.
   based login/step-up route and the dev-only WebAuthn stub respectively;
   both were deleted rather than rewritten. New auth-flow test coverage is a
   follow-up.
+- **Browser-side Supabase queries are still unauthenticated for RLS
+  purposes.** `createServerSupabaseClient()` (server) now mints a
+  short-lived Supabase-shaped access token for the Better Auth session (see
+  `lib/auth/supabase-jwt.ts`) so `auth.uid()`-keyed RLS policies resolve
+  correctly there. `createClientSupabaseClient()` (browser,
+  `lib/supabase/client.ts` — used directly by ~20 client components/hooks
+  for Realtime subscriptions and RPCs like `mark_channel_read`) has no
+  equivalent yet: Supabase Auth's cookie-based session is gone, and signing
+  happens server-side only (`SUPABASE_JWT_SECRET` must never reach the
+  browser), so these calls still run as the anonymous Postgres role and any
+  RLS-gated read/write or Realtime-authorization check will silently fail.
+  Needs a token-refresh endpoint (or `@supabase/ssr`'s `accessToken`
+  callback wired to one) before this is safe to rely on client-side —
+  tracked as a fast-follow.
 
 ## Deployment
 
 - `BETTER_AUTH_SECRET` is required in production (throws on boot if unset,
   mirroring `STEP_UP_SECRET`'s existing pattern).
+- `SUPABASE_JWT_SECRET` (Supabase dashboard → Settings → API → JWT
+  Settings) is required for any authenticated Supabase Postgres query to
+  pass RLS — see `lib/auth/supabase-jwt.ts` and the "known gaps" note
+  above. Thrown as a runtime error (not caught at boot) the first time an
+  authenticated `createServerSupabaseClient()` call is made without it.
 - SMTP config (`SMTP_HOST`/`PORT`/`USER`/`PASSWORD`, `EMAIL_FROM`) is new —
   Supabase Auth previously sent verification/reset/magic-link emails via
   its own managed SMTP; self-hosting Better Auth means the app now owns

@@ -53,7 +53,54 @@ Vortex runs on three cloud services:
 
 ---
 
-## 2. Signal Server → Railway
+## 2. Better Auth
+
+Auth (credentials, GitHub/Twitch/Reddit OAuth, MFA, passkeys) is owned by
+Better Auth (see `docs/better-auth-cutover.md`), backed by its own SQLite
+file — separate from the Supabase Postgres database above, which still
+holds every other table.
+
+1. **`DATABASE_URL`** — `file:<path>`, pointing at a persistent volume
+   shared between `apps/web` and `apps/signal` (e.g. `file:/data/vortex.db`
+   on a Fly.io/Railway volume mount — Vercel's serverless filesystem is
+   ephemeral and **cannot** host this file; deploy `apps/web` somewhere with
+   a persistent disk, or externalize the SQLite file to a mounted volume).
+2. **`BETTER_AUTH_SECRET`** — generate with `openssl rand -base64 32`. Used
+   to sign/encrypt sessions and the `jwt` plugin's JWKS private key; treat
+   like any other application secret.
+3. **`SUPABASE_JWT_SECRET`** — Supabase dashboard → **Settings → API →
+   JWT Settings → JWT Secret**. Lets `apps/web` mint short-lived,
+   Supabase-shaped access tokens for the Better-Auth-authenticated user
+   (see `lib/auth/supabase-jwt.ts`), so Postgres RLS policies keyed on
+   `auth.uid()` still resolve correctly even though Supabase Auth itself no
+   longer issues the session.
+4. **OAuth providers** (each optional — omitting a pair disables that
+   provider's sign-in button):
+   ```
+   GITHUB_CLIENT_ID=...
+   GITHUB_CLIENT_SECRET=...
+   TWITCH_CLIENT_ID=...
+   TWITCH_CLIENT_SECRET=...
+   REDDIT_CLIENT_ID=...
+   REDDIT_CLIENT_SECRET=...
+   ```
+5. **Outbound email** (verification links, magic links, password reset):
+   ```
+   SMTP_HOST=...
+   SMTP_PORT=...
+   SMTP_USER=...
+   SMTP_PASSWORD=...
+   EMAIL_FROM=noreply@your-app.example.com
+   ```
+6. **Passkeys** — `NEXT_PUBLIC_WEBAUTHN_RP_ID` must match the deployed
+   domain (e.g. `your-app.vercel.app`), not `localhost`.
+7. **`NEXT_PUBLIC_APP_ORIGIN`** — falls back to `NEXT_PUBLIC_APP_URL` if
+   unset; only needed as a separate var if they ever diverge (e.g. behind a
+   proxy that rewrites the origin).
+
+---
+
+## 3. Signal Server → Railway
 
 The WebRTC signaling server runs persistent WebSocket connections and must be hosted on a platform that supports long-lived TCP connections. Railway is the recommended option.
 
@@ -96,7 +143,7 @@ The WebRTC signaling server runs persistent WebSocket connections and must be ho
 
 ---
 
-## 3. Web App → Vercel
+## 4. Web App → Vercel
 
 ### Connect repo
 
@@ -114,9 +161,16 @@ Add these in **Vercel → Project → Settings → Environment Variables**:
 NEXT_PUBLIC_SUPABASE_URL      = https://<project-ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY = <anon-key>
 SUPABASE_SERVICE_ROLE_KEY     = <service-role-key>
+SUPABASE_JWT_SECRET           = <jwt-secret>
 NEXT_PUBLIC_SIGNAL_URL        = wss://vortex-signal.up.railway.app
 NEXT_PUBLIC_APP_URL           = https://your-app.vercel.app
+DATABASE_URL                  = file:/data/vortex.db
+BETTER_AUTH_SECRET            = <generate with `openssl rand -base64 32`>
 ```
+
+Plus whichever OAuth provider / SMTP variables from **§2** you want enabled.
+See §2 for why `DATABASE_URL` needs a real persistent volume, which Vercel's
+serverless functions don't provide on their own.
 
 Set all variables for **Production**, **Preview**, and **Development** environments as needed.
 
