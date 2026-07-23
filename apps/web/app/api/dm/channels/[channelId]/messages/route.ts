@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { sendPushToChannel } from "@/lib/push"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
 import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { createLogger } from "@/lib/logger"
+import { publishGatewayEvent } from "@/lib/gateway-publish"
 
 const log = createLogger("api/dm/messages")
 
@@ -153,6 +154,13 @@ export async function POST(
     content: channelInfo?.is_encrypted ? "Encrypted message" : content,
     excludeUserId: user.id,
   }).catch(() => {})
+
+  after(() => publishGatewayEvent({
+    type: "message.created",
+    channelId,
+    actorId: user.id,
+    data: { messageId: message.id, replyToId, content },
+  }, { route: "/api/dm/channels/[channelId]/messages" }))
 
   return NextResponse.json({ ...message, reply_to_id: replyToId, reply_to: replyToMessage }, { status: 201 })
   } catch (err) {

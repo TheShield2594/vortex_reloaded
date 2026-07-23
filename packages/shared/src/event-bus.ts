@@ -25,6 +25,7 @@ export type VortexEventType =
   | "channel.updated"
   | "thread.created"
   | "thread.updated"
+  | "notification.created"
   | "voice.peer_joined"
   | "voice.peer_left"
   | "voice.state_changed"
@@ -35,7 +36,13 @@ export interface VortexEvent<T = unknown> {
   id: string
   /** Event type discriminator. */
   type: VortexEventType
-  /** Channel/scope this event belongs to. */
+  /**
+   * Channel/scope this event belongs to. For per-user events with no
+   * natural DM/group channel (e.g. `notification.created`, or a
+   * `member.joined`/`member.left` notice to the affected user), this is
+   * the synthetic `user:{userId}` channel — see `checkChannelAccess` in
+   * apps/signal/src/gateway.ts.
+   */
   channelId: string
   /** Server context (null for DMs). */
   serverId: string | null

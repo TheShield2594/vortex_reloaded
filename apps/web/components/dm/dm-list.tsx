@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
+import { useGatewayContext } from "@/hooks/use-gateway-context"
+import type { VortexEvent } from "@vortex/shared"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Users, Plus, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils/cn"
@@ -161,7 +162,7 @@ export function DMList({ onNavigate }: { onNavigate?: () => void } = {}) {
   const [newDmOpen, setNewDmOpen] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
-  const supabase = useMemo(() => createClientSupabaseClient(), [])
+  const gateway = useGatewayContext()
   const currentUserId = useAppStore((state) => state.currentUser?.id)
   const inFlightRefreshRef = useRef<Promise<void> | null>(null)
 
@@ -205,43 +206,43 @@ export function DMList({ onNavigate }: { onNavigate?: () => void } = {}) {
     return channels.map((channel) => channel.id).sort().join(",")
   }, [channels])
 
-  // Refresh list when DM messages or membership changes happen
+  // Keep the gateway subscribed to every channel currently in the list so
+  // message.created events arrive even for channels that aren't open.
+  // Deliberately sticky (no unsubscribe): dm-channel-area.tsx and
+  // useDmNotificationSound may also depend on these same channel rooms for
+  // this socket, and gateway:unsubscribe leaves a room for the whole
+  // socket, not just this listener. Subscriptions are cheap and few
+  // (a user's DM channel count), so we just let them accumulate for the
+  // session rather than reference-count across independent hooks.
+  useEffect(() => {
+    const ids = channelIdsStr ? channelIdsStr.split(",") : []
+    if (ids.length === 0) return
+    gateway.subscribe(ids)
+  }, [channelIdsStr, gateway])
+
+  // Refresh the list when a message lands in one of our channels, or when
+  // our own membership changes (channel created/added to, or removed from —
+  // delivered on the per-user channel since we aren't subscribed to a
+  // channel's room before we've joined it).
   useEffect(() => {
     if (!currentUserId) return
 
-    let cancelled = false
+    const ids = channelIdsStr ? channelIdsStr.split(",") : []
+    const removeListeners = ids.map((id) =>
+      gateway.addEventListener(id, (event: VortexEvent) => {
+        if (event.type === "message.created") refreshChannels()
+      })
+    )
 
-    const dmMessageFilter = channelIdsStr
-      ? `dm_channel_id=in.(${channelIdsStr})`
-      : `sender_id=eq.${currentUserId}`
+    const removeUserListener = gateway.addEventListener(`user:${currentUserId}`, (event: VortexEvent) => {
+      if (event.type === "member.joined" || event.type === "member.left") refreshChannels()
+    })
 
-    // Use a random name so we never collide with a channel that is still
-    // being torn down asynchronously by a previous effect cleanup.
-    const ch = supabase
-      .channel(`dm-list-updates:${crypto.randomUUID()}`)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "direct_messages", filter: dmMessageFilter },
-        () => {
-          if (!cancelled) refreshChannels()
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "dm_channel_members", filter: `user_id=eq.${currentUserId}` },
-        () => { if (!cancelled) refreshChannels() }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "dm_channel_members", filter: `user_id=eq.${currentUserId}` },
-        () => { if (!cancelled) refreshChannels() }
-      )
-      .subscribe()
     return () => {
-      cancelled = true
-      supabase.removeChannel(ch)
+      for (const remove of removeListeners) remove()
+      removeUserListener()
     }
-  }, [supabase, refreshChannels, channelIdsStr, currentUserId])
+  }, [channelIdsStr, currentUserId, gateway, refreshChannels])
 
   async function startDM(friendId: string): Promise<boolean> {
     try {

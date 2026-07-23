@@ -12,7 +12,7 @@ import { RedisRoomManager } from "./redis-rooms"
 import { createVoiceStateSync } from "./voice-state-sync"
 import { RedisEventBus } from "./event-bus"
 import { PresenceManager } from "./presence"
-import { initGateway, stopGatewayCleanup } from "./gateway"
+import { initGateway, stopGatewayCleanup, revokeChannelAccess } from "./gateway"
 import { SocketRateLimiter } from "./rate-limiter"
 
 dotenv.config()
@@ -292,6 +292,73 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
         res.end(JSON.stringify({ error: "Payload too large" }))
       } else {
         logger.error({ err }, "POST /force-disconnect error")
+        res.writeHead(500, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "Internal server error" }))
+      }
+    }
+    return
+  }
+
+  // ─── Gateway channel access revocation endpoint ─────────────────────────
+  // Called by the web app when a user is removed from a DM/group channel, so
+  // their already-connected socket(s) stop receiving message/reaction events
+  // for it immediately rather than waiting for a reconnect. Protected by the
+  // same shared secret as /revoke-token and /force-disconnect.
+  if (req.url === "/revoke-channel-access" && req.method === "POST") {
+    try {
+      if (!REVOKE_TOKEN_SECRET) {
+        logger.warn("POST /revoke-channel-access called but SIGNAL_REVOKE_SECRET is not configured")
+        res.writeHead(503, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "Endpoint not configured" }))
+        return
+      }
+
+      const authHeader = req.headers.authorization ?? ""
+      if (authHeader !== `Bearer ${REVOKE_TOKEN_SECRET}`) {
+        res.writeHead(401, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "Unauthorized" }))
+        return
+      }
+
+      const body = await new Promise<string>((resolve, reject) => {
+        const chunks: Buffer[] = []
+        let totalBytes = 0
+        req.on("data", (chunk: Buffer) => {
+          totalBytes += chunk.length
+          if (totalBytes > 4096) {
+            reject(Object.assign(new Error("Body too large"), { statusCode: 413 }))
+          } else {
+            chunks.push(chunk)
+          }
+        })
+        req.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")))
+        req.on("error", reject)
+      })
+
+      const parsed: unknown = JSON.parse(body)
+      if (typeof parsed !== "object" || parsed === null) {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "Invalid JSON body" }))
+        return
+      }
+      const { userId, channelId } = parsed as Record<string, unknown>
+      if (typeof userId !== "string" || !userId || typeof channelId !== "string" || !channelId) {
+        res.writeHead(400, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "Missing or invalid 'userId' and/or 'channelId' fields" }))
+        return
+      }
+
+      await revokeChannelAccess(io, userId, channelId)
+
+      res.writeHead(200, { "Content-Type": "application/json" })
+      res.end(JSON.stringify({ ok: true }))
+    } catch (err) {
+      const statusCode = (err as { statusCode?: number }).statusCode
+      if (statusCode === 413) {
+        res.writeHead(413, { "Content-Type": "application/json" })
+        res.end(JSON.stringify({ error: "Payload too large" }))
+      } else {
+        logger.error({ err }, "POST /revoke-channel-access error")
         res.writeHead(500, { "Content-Type": "application/json" })
         res.end(JSON.stringify({ error: "Internal server error" }))
       }
