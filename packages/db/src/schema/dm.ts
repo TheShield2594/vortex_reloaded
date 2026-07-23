@@ -1,0 +1,251 @@
+import { sql } from "drizzle-orm"
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  type AnySQLiteColumn,
+} from "drizzle-orm/sqlite-core"
+import { createdAt, updatedAt, uuidPk } from "./columns"
+import { users } from "./users"
+
+/**
+ * supabase/migrations/00009_group_dms.sql, 00030_dm_e2ee.sql, 00105_dm_channel_theme.sql.
+ * `updated_at` auto-touches on any Drizzle-issued UPDATE (renames, theme
+ * changes, ...) *and* is bumped directly by the `dm_message_bump_trigger`
+ * and `dm_rotate_on_member_change` triggers (see src/sql/) for writes that
+ * happen on other tables — see those triggers for the two write paths
+ * that don't go through a `dm_channels` UPDATE.
+ */
+export const dmChannels = sqliteTable(
+  "dm_channels",
+  {
+    id: uuidPk(),
+    name: text("name"),
+    iconUrl: text("icon_url"),
+    ownerId: text("owner_id").references(() => users.id, { onDelete: "set null" }),
+    isGroup: integer("is_group", { mode: "boolean" }).notNull().default(false),
+    isEncrypted: integer("is_encrypted", { mode: "boolean" }).notNull().default(false),
+    encryptionKeyVersion: integer("encryption_key_version").notNull().default(1),
+    encryptionMembershipEpoch: integer("encryption_membership_epoch").notNull().default(0),
+    themePreset: text("theme_preset", {
+      enum: [
+        "twilight",
+        "midnight-neon",
+        "synthwave",
+        "carbon",
+        "oled-black",
+        "frost",
+        "clarity",
+        "velvet-dusk",
+        "terminal",
+        "sakura-blossom",
+        "frosthearth",
+        "night-city-neural",
+      ],
+    }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("dm_channels_updated_idx").on(table.updatedAt),
+    check(
+      "dm_channels_theme_preset_check",
+      sql`${table.themePreset} is null or ${table.themePreset} in (
+        'twilight', 'midnight-neon', 'synthwave', 'carbon', 'oled-black',
+        'frost', 'clarity', 'velvet-dusk', 'terminal', 'sakura-blossom',
+        'frosthearth', 'night-city-neural'
+      )`
+    ),
+  ]
+)
+
+/**
+ * supabase/migrations/00001_initial_schema.sql, 00009_group_dms.sql,
+ * 00038_dm_reply_to.sql, 00089_dm_full_text_search.sql.
+ *
+ * `search_vector` (Postgres tsvector + GIN index + trigger) is dropped
+ * entirely per the migration plan's TSVECTOR mapping — replaced by the
+ * `direct_messages_fts` FTS5 virtual table in src/sql/, not a column here.
+ *
+ * The two overlapping Postgres indexes on `(dm_channel_id, created_at)`
+ * (00095's `idx_direct_messages_dm_channel_id_created` and 00100's superset
+ * `idx_direct_messages_channel_created_deleted`, which also covers
+ * `deleted_at`) are consolidated to the superset only.
+ */
+export const directMessages = sqliteTable(
+  "direct_messages",
+  {
+    id: uuidPk(),
+    senderId: text("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    receiverId: text("receiver_id").references(() => users.id, { onDelete: "cascade" }),
+    content: text("content"),
+    readAt: text("read_at"),
+    editedAt: text("edited_at"),
+    deletedAt: text("deleted_at"),
+    dmChannelId: text("dm_channel_id").references(() => dmChannels.id, { onDelete: "cascade" }),
+    replyToId: text("reply_to_id").references((): AnySQLiteColumn => directMessages.id, {
+      onDelete: "set null",
+    }),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("idx_direct_messages_sender_receiver").on(table.senderId, table.receiverId),
+    index("idx_direct_messages_created_at").on(table.createdAt),
+    index("idx_direct_messages_reply_to_id")
+      .on(table.replyToId)
+      .where(sql`${table.replyToId} is not null`),
+    index("idx_direct_messages_channel_created_deleted").on(
+      table.dmChannelId,
+      table.createdAt,
+      table.deletedAt
+    ),
+  ]
+)
+
+/** supabase/migrations/00009_group_dms.sql. No later migration touches this table. */
+export const dmChannelMembers = sqliteTable(
+  "dm_channel_members",
+  {
+    dmChannelId: text("dm_channel_id")
+      .notNull()
+      .references(() => dmChannels.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    addedBy: text("added_by").references(() => users.id, { onDelete: "set null" }),
+    addedAt: createdAt("added_at"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.dmChannelId, table.userId] }),
+    index("dm_channel_members_user_idx").on(table.userId),
+    index("idx_dm_channel_members_dm_channel_id").on(table.dmChannelId),
+  ]
+)
+
+/** supabase/migrations/00009_group_dms.sql. No later migration touches this table. */
+export const dmReadStates = sqliteTable(
+  "dm_read_states",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    dmChannelId: text("dm_channel_id")
+      .notNull()
+      .references(() => dmChannels.id, { onDelete: "cascade" }),
+    lastReadAt: createdAt("last_read_at"),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.dmChannelId] })]
+)
+
+/** supabase/migrations/00082_dm_reactions.sql. Composite PK, no surrogate id. */
+export const dmReactions = sqliteTable(
+  "dm_reactions",
+  {
+    dmId: text("dm_id")
+      .notNull()
+      .references(() => directMessages.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    emoji: text("emoji").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.dmId, table.userId, table.emoji] }),
+    index("idx_dm_reactions_dm_id").on(table.dmId),
+  ]
+)
+
+/** supabase/migrations/00001_initial_schema.sql, 00081_attachment_decay.sql. */
+export const dmAttachments = sqliteTable(
+  "dm_attachments",
+  {
+    id: uuidPk(),
+    dmId: text("dm_id")
+      .notNull()
+      .references(() => directMessages.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    filename: text("filename").notNull(),
+    size: integer("size").notNull(),
+    contentType: text("content_type").notNull(),
+    createdAt: createdAt(),
+    expiresAt: text("expires_at"),
+    lastAccessedAt: text("last_accessed_at"),
+    purgedAt: text("purged_at"),
+    lifetimeDays: integer("lifetime_days"),
+    decayCost: real("decay_cost"),
+  },
+  (table) => [
+    index("idx_dm_attachments_decay_expiry")
+      .on(table.expiresAt)
+      .where(sql`${table.expiresAt} is not null and ${table.purgedAt} is null`),
+  ]
+)
+
+/**
+ * supabase/migrations/00030_dm_e2ee.sql.
+ * The Postgres `prune_dm_channel_keys` cleanup ran off a *statement-level*
+ * `AFTER INSERT/UPDATE ... REFERENCING NEW TABLE` trigger, which has no
+ * SQLite equivalent — ported to application code instead, see
+ * `../lib/prune-dm-channel-keys.ts`.
+ */
+export const dmChannelKeys = sqliteTable(
+  "dm_channel_keys",
+  {
+    dmChannelId: text("dm_channel_id")
+      .notNull()
+      .references(() => dmChannels.id, { onDelete: "cascade" }),
+    keyVersion: integer("key_version").notNull(),
+    targetUserId: text("target_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    targetDeviceId: text("target_device_id").notNull(),
+    wrappedKey: text("wrapped_key").notNull(),
+    wrappedByUserId: text("wrapped_by_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    wrappedByDeviceId: text("wrapped_by_device_id").notNull(),
+    senderPublicKey: text("sender_public_key").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.dmChannelId, table.keyVersion, table.targetUserId, table.targetDeviceId],
+    }),
+    index("dm_channel_keys_target_idx").on(
+      table.targetUserId,
+      table.targetDeviceId,
+      table.dmChannelId,
+      table.keyVersion
+    ),
+  ]
+)
+
+/**
+ * supabase/migrations/00030_dm_e2ee.sql.
+ * The Postgres `upsert_user_device_key` RPC's count-then-insert device cap
+ * (default limit 20, matching `DEVICE_LIMIT` in
+ * apps/web/app/api/dm/keys/device/route.ts) is folded into a `BEFORE
+ * INSERT` trigger in src/sql/ per the FTS5/transactions spike's
+ * recommendation (issue #4) — safe under real concurrency without needing
+ * better-sqlite3's async-incompatible `db.transaction()`.
+ */
+export const userDeviceKeys = sqliteTable(
+  "user_device_keys",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceId: text("device_id").notNull(),
+    publicKey: text("public_key").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.deviceId] })]
+)
