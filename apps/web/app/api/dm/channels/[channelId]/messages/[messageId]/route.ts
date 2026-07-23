@@ -159,7 +159,7 @@ export async function PATCH(
         .returning()
       data = rows[0]
     } catch {
-      return NextResponse.json({ error: "Message not found or not editable" }, { status: 404 })
+      return NextResponse.json({ error: "Failed to update message" }, { status: 500 })
     }
 
     if (!data) return NextResponse.json({ error: "Message not found or not editable" }, { status: 404 })

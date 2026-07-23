@@ -1,28 +1,8 @@
 import { and, eq, or } from "drizzle-orm"
 import { createDb, friendships } from "@vortex/db"
+import { deriveBlockedUserIds } from "@/lib/social-block-policy"
 
 const db = createDb()
-
-type FriendshipStatus = "pending" | "accepted" | "blocked"
-
-type FriendshipPair = {
-  requesterId: string
-  addresseeId: string
-  status: FriendshipStatus
-}
-
-/** Derives the set of user ids blocked relative to `userId` from a set of `blocked`-status friendship rows involving them. */
-function deriveBlockedUserIds(userId: string, rows: FriendshipPair[]): Set<string> {
-  const blocked = new Set<string>()
-
-  for (const row of rows) {
-    if (row.status !== "blocked") continue
-    if (row.requesterId === userId && row.addresseeId) blocked.add(row.addresseeId)
-    if (row.addresseeId === userId && row.requesterId) blocked.add(row.requesterId)
-  }
-
-  return blocked
-}
 
 /** Returns true when either participant has blocked the other. */
 export async function isBlockedBetweenUsers(

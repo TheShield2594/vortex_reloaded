@@ -8,7 +8,7 @@ import { jwt, magicLink, twoFactor } from "better-auth/plugins"
 import { nextCookies } from "better-auth/next-js"
 import { passkey } from "@better-auth/passkey"
 import * as vortexDb from "@vortex/db"
-import { loginAttempts, loginRiskEvents, notifications, users } from "@vortex/db"
+import { loginAttempts, loginRiskEvents, notifications, userConnections, users } from "@vortex/db"
 import { computeLoginRisk } from "@/lib/auth/risk"
 import { sendAuthEmail } from "@/lib/auth/email"
 import { hasValidStepUpToken } from "@/lib/auth/step-up"
@@ -397,8 +397,6 @@ export const auth = betterAuth({
           // populate the same display fields the old Supabase-linkIdentity
           // flow did.
           try {
-            const { createDb, userConnections } = await import("@vortex/db")
-            const db = createDb()
             await db
               .insert(userConnections)
               .values({

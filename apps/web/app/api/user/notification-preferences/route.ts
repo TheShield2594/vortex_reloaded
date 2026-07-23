@@ -171,7 +171,12 @@ export async function PUT(req: NextRequest) {
       await db
         .insert(userNotificationPreferences)
         .values({ userId: user.id, ...patch })
-        .onConflictDoUpdate({ target: userNotificationPreferences.userId, set: patch })
+        .onConflictDoUpdate({
+          target: userNotificationPreferences.userId,
+          // $onUpdateFn only fires for a plain .update() call, not the SET clause of an
+          // INSERT ... ON CONFLICT DO UPDATE — set it explicitly so it actually refreshes.
+          set: { ...patch, updatedAt: new Date().toISOString() },
+        })
     } catch (err) {
       console.error("[api/user/notification-preferences][PUT] failed to save preferences", {
         userId: user.id,

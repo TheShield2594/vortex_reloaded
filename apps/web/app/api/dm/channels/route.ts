@@ -49,17 +49,25 @@ export async function GET() {
           .select({ dmChannelId: dmChannelMembers.dmChannelId, userId: dmChannelMembers.userId })
           .from(dmChannelMembers)
           .where(inArray(dmChannelMembers.dmChannelId, channelIds)),
-        db
-          .select({
-            dmChannelId: directMessages.dmChannelId,
-            content: directMessages.content,
-            createdAt: directMessages.createdAt,
-            senderId: directMessages.senderId,
-          })
-          .from(directMessages)
-          .where(and(inArray(directMessages.dmChannelId, channelIds), isNull(directMessages.deletedAt)))
-          .orderBy(desc(directMessages.createdAt))
-          .limit(channelIds.length * 5),
+        // One newest-message query per channel, not a single global-limit query — a global
+        // `limit(channelIds.length * 5)` ordered across all channels combined can be entirely
+        // consumed by a few very active channels, leaving quieter channels with zero rows
+        // (and therefore no latestMessage) even though they do have messages.
+        Promise.all(
+          channelIds.map((id) =>
+            db
+              .select({
+                dmChannelId: directMessages.dmChannelId,
+                content: directMessages.content,
+                createdAt: directMessages.createdAt,
+                senderId: directMessages.senderId,
+              })
+              .from(directMessages)
+              .where(and(eq(directMessages.dmChannelId, id), isNull(directMessages.deletedAt)))
+              .orderBy(desc(directMessages.createdAt))
+              .limit(1)
+          )
+        ).then((rows) => rows.flat()),
         db
           .select({ dmChannelId: dmReadStates.dmChannelId, lastReadAt: dmReadStates.lastReadAt })
           .from(dmReadStates)
@@ -208,30 +216,25 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Create new channel
+    // Create the channel and add all members atomically — either both commit or neither does.
+    // better-sqlite3's transaction() is synchronous-only (see issue #4's spike), so the
+    // callback below uses .get()/.run() rather than awaited query builders.
     let channel: typeof dmChannels.$inferSelect
     try {
-      const [row] = await db
-        .insert(dmChannels)
-        .values({ name: name ?? null, isGroup, ownerId: user.id, isEncrypted: encrypted })
-        .returning()
-      if (!row) throw new Error("insert returned no row")
-      channel = row
-    } catch {
-      return NextResponse.json({ error: "Failed to create DM channel" }, { status: 500 })
-    }
+      channel = db.transaction((tx) => {
+        const row = tx
+          .insert(dmChannels)
+          .values({ name: name ?? null, isGroup, ownerId: user.id, isEncrypted: encrypted })
+          .returning()
+          .get()
 
-    // Add all members
-    const memberRows = allMembers.map((uid) => ({
-      dmChannelId: channel.id,
-      userId: uid,
-      addedBy: user.id,
-    }))
+        tx.insert(dmChannelMembers)
+          .values(allMembers.map((uid) => ({ dmChannelId: row.id, userId: uid, addedBy: user.id })))
+          .run()
 
-    try {
-      await db.insert(dmChannelMembers).values(memberRows)
+        return row
+      })
     } catch {
-      await db.delete(dmChannels).where(eq(dmChannels.id, channel.id))
       return NextResponse.json({ error: "Failed to create DM channel" }, { status: 500 })
     }
 

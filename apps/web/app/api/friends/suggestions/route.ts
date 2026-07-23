@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { and, desc, eq, like, or } from "drizzle-orm"
+import { desc, eq, like, or } from "drizzle-orm"
 import { createDb, friendships, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
-import { filterBlockedUserIds } from "@/lib/social-block-policy"
+import { filterBlockedUserIds, getBlockedUserIdsForViewer } from "@/lib/social-block-policy"
 import { toSnakeCase } from "@/lib/utils/case"
 
 const db = createDb()
@@ -26,25 +26,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch suggestions" }, { status: 500 })
     }
 
-    // Blocked-in-either-direction user ids. Inlined here (rather than the
-    // shared getBlockedUserIdsForViewer helper in lib/social-block-policy.ts,
-    // which still takes a supabase-js client) since this route no longer
-    // holds one — same derivation as that helper's deriveBlockedUserIds.
-    const blockedRows = await db
-      .select({ requesterId: friendships.requesterId, addresseeId: friendships.addresseeId })
-      .from(friendships)
-      .where(
-        and(
-          eq(friendships.status, "blocked"),
-          or(eq(friendships.requesterId, user.id), eq(friendships.addresseeId, user.id))
-        )
-      )
-
-    const blockedUserIds = new Set<string>()
-    for (const row of blockedRows) {
-      if (row.requesterId === user.id) blockedUserIds.add(row.addresseeId)
-      if (row.addresseeId === user.id) blockedUserIds.add(row.requesterId)
-    }
+    // Blocked-in-either-direction user ids.
+    const blockedUserIds = await getBlockedUserIdsForViewer(user.id)
 
     const excluded = new Set<string>([user.id, ...blockedUserIds])
     for (const row of relationshipRows) {

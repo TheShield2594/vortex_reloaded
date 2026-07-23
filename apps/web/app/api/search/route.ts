@@ -63,6 +63,22 @@ function parseSearchQuery(raw: string): { query: string; filters: SearchFilters 
   return { query: query.replace(/\s+/g, " ").trim(), filters }
 }
 
+/**
+ * FTS5's MATCH operand has its own query syntax (column filters, NEAR(),
+ * boolean operators, prefix `*`, quoting) — even bound as a parameter, the
+ * value is parsed as an FTS5 query, not literal text. Wrap every token in
+ * its own quoted phrase (doubling embedded quotes, FTS5's escape for a
+ * literal `"`) so user input can't be read as FTS5 syntax; tokens stay
+ * implicitly ANDed together, same as unquoted bareword tokens are today.
+ */
+function toFtsMatchQuery(query: string): string {
+  return query
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((token) => `"${token.replace(/"/g, '""')}"`)
+    .join(" ")
+}
+
 // Search within a single DM/group channel the caller is a member of.
 export async function GET(req: NextRequest) {
   try {
@@ -143,7 +159,7 @@ export async function GET(req: NextRequest) {
           ORDER BY bm25(direct_messages_fts)
           LIMIT ?
         `
-        dmMessages = db.$client.prepare(sqlText).all(query, ...params, limit) as DmSearchRow[]
+        dmMessages = db.$client.prepare(sqlText).all(toFtsMatchQuery(query), ...params, limit) as DmSearchRow[]
       } else {
         const sqlText = `
           SELECT dm.id, dm.dm_channel_id, dm.content, dm.created_at, dm.sender_id
@@ -155,7 +171,13 @@ export async function GET(req: NextRequest) {
         dmMessages = db.$client.prepare(sqlText).all(...params, limit) as DmSearchRow[]
       }
     } catch (dmError) {
-      log.error({ route: "/api/search", action: "dmSearch", dmChannelId, userId: user.id, error: dmError instanceof Error ? dmError.message : String(dmError) }, "DM search query failed")
+      const message = dmError instanceof Error ? dmError.message : String(dmError)
+      log.error({ route: "/api/search", action: "dmSearch", dmChannelId, userId: user.id, error: message }, "DM search query failed")
+      // An FTS5 syntax error means the (now-escaped) query still couldn't be parsed as a
+      // MATCH expression — a malformed search, not a server fault — vs. a genuine DB error.
+      if (/fts5:/i.test(message)) {
+        return NextResponse.json({ error: "Invalid search query" }, { status: 400 })
+      }
       return NextResponse.json({ error: "Internal server error" }, { status: 500 })
     }
 

@@ -1016,14 +1016,18 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
               content_type: file.type || "application/octet-stream",
             }),
           })
-          const insertedAtt = attachRes.ok ? await attachRes.json() as { id: string; filename: string; size: number; content_type: string } : null
           if (!attachRes.ok) {
             console.error("[dm file upload] failed to save attachment metadata:", await attachRes.text().catch(() => attachRes.statusText))
             cleanupUploadedFile()
+            // Metadata write failed — don't leave a message behind that claims an
+            // attachment ("📎 filename") but has no attachment metadata to back it.
+            await handleDelete(msg.id)
+            throw new Error("Failed to save attachment metadata")
           }
+          const insertedAtt = await attachRes.json() as { id: string; filename: string; size: number; content_type: string }
           setMessages((prev) => [...prev, {
             ...msg,
-            dm_attachments: insertedAtt ? [{ id: insertedAtt.id, filename: insertedAtt.filename, size: insertedAtt.size, content_type: insertedAtt.content_type }] : [],
+            dm_attachments: [{ id: insertedAtt.id, filename: insertedAtt.filename, size: insertedAtt.size, content_type: insertedAtt.content_type }],
           }])
         } catch (err) {
           cleanupUploadedFile()

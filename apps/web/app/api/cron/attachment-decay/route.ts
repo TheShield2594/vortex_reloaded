@@ -67,7 +67,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // Still mark as purged — the file may already be gone
       }
 
-      await db.update(attachments).set({ purgedAt: now }).where(eq(attachments.id, att.id))
+      try {
+        await db.update(attachments).set({ purgedAt: now }).where(eq(attachments.id, att.id))
+      } catch (updateError) {
+        console.error("[cron/attachment-decay] update failed", { attachmentId: att.id, error: updateError })
+        storageErrors++
+        continue
+      }
 
       purgedChannel++
     }

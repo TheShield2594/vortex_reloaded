@@ -6,13 +6,25 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { and, desc, eq } from "drizzle-orm"
 import { badgeDefinitions, createDb, userBadges } from "@vortex/db"
-import { requireAuth } from "@/lib/utils/api-helpers"
+import { verifyBearerToken } from "@/lib/utils/timing-safe"
 import { toSnakeCase } from "@/lib/utils/case"
 import type { BadgeDefinitionRow, UserBadgeRow } from "@/types/database"
 
 type UserBadgeWithDefinition = UserBadgeRow & { badge: BadgeDefinitionRow | null }
 
 const db = createDb()
+
+// POST/DELETE are for trusted server-side callers only (no admin/role concept
+// exists in this app) — reuses CRON_SECRET, the same shared secret already
+// used to authenticate the cron dispatcher's other trusted-caller-only routes.
+function requireServiceCaller(req: NextRequest): NextResponse | null {
+  const secret = process.env.CRON_SECRET
+  if (!secret) return NextResponse.json({ error: "Not configured" }, { status: 500 })
+  if (!verifyBearerToken(req.headers.get("authorization"), secret)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  return null
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,15 +63,15 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user, error: authError } = await requireAuth()
-    if (authError || !user) return authError ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const authError = requireServiceCaller(req)
+    if (authError) return authError
 
     const body = await req.json().catch(() => null)
     if (!body || typeof body !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
-    const { userId, badgeId } = body as { userId?: string; badgeId?: string }
+    const { userId, badgeId, awardedBy } = body as { userId?: string; badgeId?: string; awardedBy?: string }
     if (!userId || typeof userId !== "string") {
       return NextResponse.json({ error: "userId is required" }, { status: 400 })
     }
@@ -83,7 +95,7 @@ export async function POST(req: NextRequest) {
     try {
       const rows = await db
         .insert(userBadges)
-        .values({ userId, badgeId, awardedBy: user.id })
+        .values({ userId, badgeId, awardedBy: typeof awardedBy === "string" ? awardedBy : null })
         .returning()
       awarded = rows[0]
     } catch (insertError) {
@@ -113,8 +125,8 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { user, error: authError } = await requireAuth()
-    if (authError || !user) return authError ?? NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const authError = requireServiceCaller(req)
+    if (authError) return authError
 
     const { searchParams } = new URL(req.url)
     const userId = searchParams.get("userId")

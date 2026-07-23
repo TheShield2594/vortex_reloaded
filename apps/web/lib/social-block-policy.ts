@@ -5,9 +5,9 @@ const db = createDb()
 
 type FriendshipStatus = "pending" | "accepted" | "blocked"
 
-type FriendshipRow = {
-  requester_id: string
-  addressee_id: string
+export type FriendshipPair = {
+  requesterId: string
+  addresseeId: string
   status: FriendshipStatus
 }
 
@@ -33,21 +33,19 @@ export async function getBlockedUserIdsForViewer(
     throw new Error(`Failed to resolve block policy: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  const blocked = deriveBlockedUserIds(
-    userId,
-    rows.map((r) => ({ requester_id: r.requesterId, addressee_id: r.addresseeId, status: r.status }))
-  )
+  const blocked = deriveBlockedUserIds(userId, rows)
   if (uniqueCandidates.length === 0) return blocked
   return new Set(uniqueCandidates.filter((id) => blocked.has(id)))
 }
 
-export function deriveBlockedUserIds(userId: string, rows: FriendshipRow[]): Set<string> {
+/** Derives the set of user ids blocked relative to `userId` from a set of `blocked`-status friendship rows involving them. */
+export function deriveBlockedUserIds(userId: string, rows: FriendshipPair[]): Set<string> {
   const blocked = new Set<string>()
 
   for (const row of rows) {
     if (row.status !== "blocked") continue
-    if (row.requester_id === userId && row.addressee_id) blocked.add(row.addressee_id)
-    if (row.addressee_id === userId && row.requester_id) blocked.add(row.requester_id)
+    if (row.requesterId === userId && row.addresseeId) blocked.add(row.addresseeId)
+    if (row.addresseeId === userId && row.requesterId) blocked.add(row.requesterId)
   }
 
   return blocked

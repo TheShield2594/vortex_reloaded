@@ -241,15 +241,19 @@ export async function GET(
       reactions: reactionMap[m.id] ?? [],
     }))
 
-    // Mark as read
-    const nowIso = new Date().toISOString()
-    await db
-      .insert(dmReadStates)
-      .values({ userId: user.id, dmChannelId: channelId, lastReadAt: nowIso })
-      .onConflictDoUpdate({
-        target: [dmReadStates.userId, dmReadStates.dmChannelId],
-        set: { lastReadAt: nowIso },
-      })
+    // Mark as read — best-effort, must not turn a successful message fetch into a 500
+    try {
+      const nowIso = new Date().toISOString()
+      await db
+        .insert(dmReadStates)
+        .values({ userId: user.id, dmChannelId: channelId, lastReadAt: nowIso })
+        .onConflictDoUpdate({
+          target: [dmReadStates.userId, dmReadStates.dmChannelId],
+          set: { lastReadAt: nowIso },
+        })
+    } catch (err) {
+      console.error("[dm/channels/[channelId] GET] mark-as-read failed:", err)
+    }
 
     return NextResponse.json({
       channel: { ...toSnakeCase<Record<string, unknown>>(channel), members: toSnakeCase(members), partner: partner ? toSnakeCase(partner) : null },

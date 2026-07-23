@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse, after } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { and, asc, eq, gt, or } from "drizzle-orm"
 import { alias } from "drizzle-orm/sqlite-core"
 import { createDb, friendships, notifications, userNotificationPreferences, users } from "@vortex/db"
@@ -188,12 +188,12 @@ export async function POST(req: NextRequest) {
               })
               .returning()
             if (notif) {
-              after(() => publishGatewayEvent({
+              await publishGatewayEvent({
                 type: "notification.created",
                 channelId: `user:${target.id}`,
                 actorId: user.id,
                 data: toSnakeCase(notif),
-              }, { route: "/api/friends" }))
+              }, { route: "/api/friends" })
             }
             await sendPushToUser(target.id, {
               title: "Friend Request Accepted",
@@ -249,12 +249,12 @@ export async function POST(req: NextRequest) {
         })
         .returning()
       if (notif) {
-        after(() => publishGatewayEvent({
+        await publishGatewayEvent({
           type: "notification.created",
           channelId: `user:${target.id}`,
           actorId: user.id,
           data: toSnakeCase(notif),
-        }, { route: "/api/friends" }))
+        }, { route: "/api/friends" })
       }
 
       await sendPushToUser(target.id, {
@@ -338,12 +338,12 @@ export async function PATCH(req: NextRequest) {
           })
           .returning()
         if (notif) {
-          after(() => publishGatewayEvent({
+          await publishGatewayEvent({
             type: "notification.created",
             channelId: `user:${requesterId}`,
             actorId: user.id,
             data: toSnakeCase(notif),
-          }, { route: "/api/friends" }))
+          }, { route: "/api/friends" })
         }
 
         await sendPushToUser(requesterId, {

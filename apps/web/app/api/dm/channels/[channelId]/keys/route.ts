@@ -224,8 +224,14 @@ export async function POST(
     // Postgres's `prune_dm_channel_keys` cleanup ran off a statement-level
     // AFTER INSERT/UPDATE trigger on dm_channel_keys — SQLite has no
     // equivalent, so call the ported application-code helper directly after
-    // this write batch (single dm channel per request).
-    pruneDmChannelKeys(db, [channelId])
+    // this write batch (single dm channel per request). Best-effort: the key
+    // write above already committed, so a prune failure shouldn't turn a
+    // successful response into a 500.
+    try {
+      pruneDmChannelKeys(db, [channelId])
+    } catch (err) {
+      console.error("[dm/channels/[channelId]/keys POST] prune failed:", err)
+    }
 
     return NextResponse.json({ ok: true })
 

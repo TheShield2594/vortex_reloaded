@@ -4,8 +4,8 @@ import { deriveBlockedUserIds, filterBlockedUserIds } from "@/lib/social-block-p
 describe("social block policy transitions", () => {
   it("filters blocked users across search/mentions/suggestions surfaces", () => {
     const blocked = deriveBlockedUserIds("viewer", [
-      { requester_id: "viewer", addressee_id: "blocked-user", status: "blocked" },
-      { requester_id: "viewer", addressee_id: "friend", status: "accepted" },
+      { requesterId: "viewer", addresseeId: "blocked-user", status: "blocked" },
+      { requesterId: "viewer", addresseeId: "friend", status: "accepted" },
     ])
     expect(blocked.has("blocked-user")).toBe(true)
     expect(blocked.has("friend")).toBe(false)
@@ -19,10 +19,10 @@ describe("social block policy transitions", () => {
 
   it("allows users again after blocked -> accepted transition", () => {
     const before = deriveBlockedUserIds("viewer", [
-      { requester_id: "viewer", addressee_id: "target", status: "blocked" },
+      { requesterId: "viewer", addresseeId: "target", status: "blocked" },
     ])
     const after = deriveBlockedUserIds("viewer", [
-      { requester_id: "viewer", addressee_id: "target", status: "accepted" },
+      { requesterId: "viewer", addresseeId: "target", status: "accepted" },
     ])
 
     const candidates = [{ id: "target" }]
