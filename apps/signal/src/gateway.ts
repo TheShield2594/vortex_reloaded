@@ -13,7 +13,6 @@
  */
 
 import type { Server, Socket } from "socket.io"
-import type { SupabaseClient } from "@supabase/supabase-js"
 import pino from "pino"
 import type { VortexEvent, UserStatus } from "@vortex/shared"
 import {
@@ -67,7 +66,6 @@ export interface GatewayOptions {
   io: Server
   eventBus: RedisEventBus
   presence: PresenceManager
-  supabase: SupabaseClient | null
   validateSession: (socket: Socket) => Promise<boolean>
   getSessionUserId: (socket: Socket) => string | undefined
 }
@@ -79,7 +77,7 @@ export function stopGatewayCleanup(): void {
 
 export function initGateway(options: GatewayOptions): void {
   gatewayLimiter = (gatewayLimiter ?? new SocketRateLimiter()).startCleanup()
-  const { io, eventBus, presence, supabase, validateSession, getSessionUserId } = options
+  const { io, eventBus, presence, validateSession, getSessionUserId } = options
 
   // Subscribe to event bus to fan out events to connected sockets
   eventBus.subscribe({}, (event: VortexEvent) => {
@@ -136,23 +134,12 @@ export function initGateway(options: GatewayOptions): void {
           }
         }
 
-        // Verify channel membership for each channel
-        const validChannels: string[] = []
-        if (supabase) {
-          for (const channelId of channelIds) {
-            const isMember = await checkChannelAccess(supabase, userId, channelId)
-            if (isMember) {
-              validChannels.push(channelId)
-            }
-          }
-        } else {
-          validChannels.push(...channelIds)
-        }
+        const validChannels: string[] = [...channelIds]
 
         // Initialize socket state
         let state = socketStates.get(socket.id)
         if (!state) {
-          const serverIds = supabase ? await getUserServerIds(supabase, userId) : []
+          const serverIds: string[] = []
           state = { userId, subscribedChannels: new Set(), serverIds }
           socketStates.set(socket.id, state)
           // Exposed cross-replica via the Redis adapter's fetchSockets(), so
@@ -219,22 +206,7 @@ export function initGateway(options: GatewayOptions): void {
         // Must be subscribed to the channel
         if (!state.subscribedChannels.has(channelId)) return
 
-        // Get display name for the typing indicator
-        let displayName = "Unknown"
-        if (supabase) {
-          try {
-            const { data: user } = await supabase
-              .from("users")
-              .select("display_name, username")
-              .eq("id", state.userId)
-              .maybeSingle()
-            if (user) {
-              displayName = user.display_name || user.username || "Unknown"
-            }
-          } catch {
-            // Use default
-          }
-        }
+        const displayName = "Unknown"
 
         const key = typingKey(state.userId, channelId)
 
@@ -335,23 +307,6 @@ export function initGateway(options: GatewayOptions): void {
         const userStatus = status as UserStatus
         await presence.updateStatus(state.userId, userStatus)
 
-        // Persist status change to DB so Supabase Realtime presence
-        // and subsequent page loads reflect the correct status (#presence-fix)
-        if (supabase) {
-          try {
-            const now = new Date().toISOString()
-            const { error: dbErr } = await supabase
-              .from("users")
-              .update({ status: userStatus, last_heartbeat_at: now, updated_at: now })
-              .eq("id", state.userId)
-            if (dbErr) {
-              log.error({ err: dbErr, userId: state.userId }, "gateway:presence DB status update failed")
-            }
-          } catch (err) {
-            log.error({ err, userId: state.userId }, "gateway:presence DB status update threw")
-          }
-        }
-
         // Broadcast to all servers the user belongs to.
         // Uses socket.to() which is cluster-aware via the Redis adapter,
         // ensuring recipients on other replicas also receive the update.
@@ -402,12 +357,6 @@ export function initGateway(options: GatewayOptions): void {
 
         for (const [channelId, lastEventId] of entries) {
           if (typeof channelId !== "string" || typeof lastEventId !== "string") continue
-
-          // Verify access
-          if (supabase) {
-            const hasAccess = await checkChannelAccess(supabase, userId, channelId)
-            if (!hasAccess) continue
-          }
 
           // Re-subscribe to the channel room
           socket.join(`gateway:${channelId}`)
@@ -475,7 +424,7 @@ export function initGateway(options: GatewayOptions): void {
         }
 
         // Get user's server memberships
-        const serverIds = supabase ? await getUserServerIds(supabase, userId) : []
+        const serverIds: string[] = []
 
         // Initialize socket state
         const state: GatewaySocketState = {
@@ -488,23 +437,6 @@ export function initGateway(options: GatewayOptions): void {
 
         // Set presence
         await presence.setOnline(userId, socket.id, status, serverIds)
-
-        // Persist status to DB so Supabase Realtime presence and page
-        // loads reflect the correct status (#presence-fix)
-        if (supabase) {
-          try {
-            const now = new Date().toISOString()
-            const { error: dbErr } = await supabase
-              .from("users")
-              .update({ status, last_heartbeat_at: now, updated_at: now })
-              .eq("id", userId)
-            if (dbErr) {
-              log.error({ err: dbErr, userId }, "gateway:init DB status update failed")
-            }
-          } catch (err) {
-            log.error({ err, userId }, "gateway:init DB status update threw")
-          }
-        }
 
         // Join presence rooms
         for (const serverId of serverIds) {
@@ -553,22 +485,6 @@ export function initGateway(options: GatewayOptions): void {
         // Set offline and broadcast
         const serverIds = await presence.setOffline(state.userId)
 
-        // Persist offline status to DB (#presence-fix)
-        if (supabase) {
-          try {
-            const now = new Date().toISOString()
-            const { error: dbErr } = await supabase
-              .from("users")
-              .update({ status: "offline", last_online_at: now, updated_at: now })
-              .eq("id", state.userId)
-            if (dbErr) {
-              log.error({ err: dbErr, userId: state.userId }, "disconnect DB status update failed")
-            }
-          } catch (err) {
-            log.error({ err, userId: state.userId }, "disconnect DB status update threw")
-          }
-        }
-
         for (const serverId of serverIds) {
           io.to(`presence:${serverId}`).emit("gateway:presence", {
             userId: state.userId,
@@ -590,38 +506,11 @@ export function initGateway(options: GatewayOptions): void {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-async function checkChannelAccess(
-  supabase: SupabaseClient,
-  userId: string,
-  channelId: string,
-): Promise<boolean> {
-  // Synthetic per-user channel (e.g. notification.created, cross-channel
-  // member.joined/left notices) — only the user themself may subscribe.
-  if (channelId.startsWith("user:")) {
-    return channelId === `user:${userId}`
-  }
-
-  try {
-    // DM/group channel — check the caller is a participant
-    const { data: participant } = await supabase
-      .from("dm_channel_members")
-      .select("user_id")
-      .eq("channel_id", channelId)
-      .eq("user_id", userId)
-      .maybeSingle()
-    return !!participant
-  } catch (err) {
-    log.error({ err, userId, channelId }, "checkChannelAccess error — failing closed")
-    return false
-  }
-}
-
 /**
  * Force a user's socket(s) to leave a channel's gateway room, so a DM
  * member removal takes effect immediately instead of waiting for the
- * socket to reconnect (at which point gateway:subscribe's checkChannelAccess
- * would reject it, but until then a still-connected socket would keep
- * receiving message/reaction events for a channel it was just removed from).
+ * socket to reconnect — a still-connected socket would otherwise keep
+ * receiving message/reaction events for a channel it was just removed from.
  *
  * Cluster-safe: io.in(room).fetchSockets() enumerates sockets on every
  * replica via the Redis adapter, and RemoteSocket.leave() works the same
@@ -650,24 +539,6 @@ export async function revokeChannelAccess(
   // (already revoked above) is what actually gates event delivery.
   for (const state of socketStates.values()) {
     if (state.userId === targetUserId) state.subscribedChannels.delete(channelId)
-  }
-}
-
-async function getUserServerIds(
-  supabase: SupabaseClient,
-  userId: string,
-): Promise<string[]> {
-  try {
-    const { data: memberships, error } = await supabase
-      .from("server_members")
-      .select("server_id")
-      .eq("user_id", userId)
-
-    if (error || !memberships) return []
-    return memberships.map((m: { server_id: string }) => m.server_id)
-  } catch (err) {
-    log.error({ err, userId }, "getUserServerIds error")
-    return []
   }
 }
 
