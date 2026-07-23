@@ -26,6 +26,8 @@ export type VortexEventType =
   | "thread.created"
   | "thread.updated"
   | "notification.created"
+  | "notification.updated"
+  | "notification.deleted"
   | "voice.peer_joined"
   | "voice.peer_left"
   | "voice.state_changed"

@@ -56,7 +56,6 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
   const { playNotification } = useNotificationSound()
   const { prefs } = useNotificationPreferences(userId)
   const soundEnabledRef = useRef(prefs.sound_enabled)
-  const subIdRef = useRef(0)
   soundEnabledRef.current = prefs.sound_enabled
   const [open, setOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -101,11 +100,31 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
 
   useEffect(() => { loadNotifications() }, [loadNotifications])
 
-  // Gateway: listen for newly created notifications, delivered on the
-  // per-user channel (see apps/web/app/api/friends/route.ts's
-  // publishGatewayEvent("notification.created", ...) calls).
+  // Gateway: listen for newly created notifications, and read/dismiss state
+  // changes, all delivered on the per-user channel (see
+  // apps/web/app/api/friends/route.ts's and apps/web/app/api/notifications/
+  // route.ts's publishGatewayEvent(...) calls).
   useEffect(() => {
     const removeListener = gateway.addEventListener(`user:${userId}`, (event: VortexEvent) => {
+      if (event.type === "notification.updated") {
+        if (!isNotification(event.data)) return
+        const updated = event.data
+        setNotifications((prev) => {
+          const next = prev.map((n) => (n.id === updated.id ? updated : n))
+          setUnreadCount(next.filter((n) => !n.read).length)
+          return next
+        })
+        return
+      }
+
+      if (event.type === "notification.deleted") {
+        const old = event.data as { id?: string; read?: boolean } | undefined
+        if (!old?.id) return
+        setNotifications((prev) => prev.filter((n) => n.id !== old.id))
+        if (old.read === false) setUnreadCount((c) => Math.max(0, c - 1))
+        return
+      }
+
       if (event.type !== "notification.created") return
       if (!isNotification(event.data)) return
       const n = event.data
@@ -143,39 +162,6 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
     })
     return () => removeListener()
   }, [userId, gateway, playNotification])
-
-  // Supabase Realtime: keep read/dismiss state in sync across tabs.
-  useEffect(() => {
-    const subId = ++subIdRef.current
-    const ch = supabase
-      .channel(`notifications:${userId}:${subId}`)
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload: { new: unknown }) => {
-          if (!isNotification(payload.new)) return
-          const updated = payload.new
-          setNotifications((prev: Notification[]) => {
-            const next = prev.map((n: Notification) => (n.id === updated.id ? updated : n))
-            setUnreadCount(next.filter((n: Notification) => !n.read).length)
-            return next
-          })
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "notifications", filter: `user_id=eq.${userId}` },
-        (payload) => {
-          const old = payload.old as { id?: string; read?: boolean }
-          if (old.id) {
-            setNotifications((prev) => prev.filter((n) => n.id !== old.id))
-            if (old.read === false) setUnreadCount((c) => Math.max(0, c - 1))
-          }
-        }
-      )
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-  }, [userId, supabase])
 
   // Sync unread + mention counts to Zustand store (consumed by useTabUnreadTitle)
   useEffect(() => {
