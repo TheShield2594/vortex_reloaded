@@ -15,6 +15,7 @@ type EventListener = (event: VortexEvent) => void
 type TypingListener = (data: GatewayServerEvents["gateway:typing"]) => void
 type PresenceListener = (data: GatewayServerEvents["gateway:presence"]) => void
 type ReplayListener = (data: GatewayServerEvents["gateway:replay"]) => void
+type CallSignalListener = (data: GatewayServerEvents["gateway:call-signal"]) => void
 
 interface GatewayContextValue {
   status: GatewayStatus
@@ -22,11 +23,19 @@ interface GatewayContextValue {
   unsubscribe: (channelIds: string[]) => void
   sendTyping: (channelId: string, isTyping: boolean) => void
   sendPresence: (status: UserStatus) => void
+  sendCallSignal: (payload: {
+    channelId: string
+    type: "invite" | "cancel" | "accept" | "decline"
+    withVideo?: boolean
+    callerName?: string
+    callerAvatar?: string | null
+  }) => void
   getLastEventId: (channelId: string) => string | undefined
   addEventListener: (channelId: string, listener: EventListener) => () => void
   addTypingListener: (channelId: string, listener: TypingListener) => () => void
   addPresenceListener: (listener: PresenceListener) => () => void
   addReplayListener: (channelId: string, listener: ReplayListener) => () => void
+  addCallSignalListener: (channelId: string, listener: CallSignalListener) => () => void
 }
 
 const GatewayContext = createContext<GatewayContextValue | null>(null)
@@ -36,6 +45,7 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
   const typingListeners = useRef(new Map<string, Set<TypingListener>>())
   const presenceListeners = useRef(new Set<PresenceListener>())
   const replayListeners = useRef(new Map<string, Set<ReplayListener>>())
+  const callSignalListeners = useRef(new Map<string, Set<CallSignalListener>>())
 
   const handlers: GatewayEventHandlers = {
     onEvent(event) {
@@ -67,9 +77,17 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
         }
       }
     },
+    onCallSignal(data) {
+      const listeners = callSignalListeners.current.get(data.channelId)
+      if (listeners) {
+        for (const fn of listeners) {
+          try { fn(data) } catch { /* ignore */ }
+        }
+      }
+    },
   }
 
-  const { status, subscribe, unsubscribe, sendTyping, sendPresence, getLastEventId } =
+  const { status, subscribe, unsubscribe, sendTyping, sendPresence, sendCallSignal, getLastEventId } =
     useGateway(handlers)
 
   const addEventListener = useCallback((channelId: string, listener: EventListener) => {
@@ -116,17 +134,32 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const addCallSignalListener = useCallback((channelId: string, listener: CallSignalListener) => {
+    if (!callSignalListeners.current.has(channelId)) {
+      callSignalListeners.current.set(channelId, new Set())
+    }
+    callSignalListeners.current.get(channelId)!.add(listener)
+    return () => {
+      callSignalListeners.current.get(channelId)?.delete(listener)
+      if (callSignalListeners.current.get(channelId)?.size === 0) {
+        callSignalListeners.current.delete(channelId)
+      }
+    }
+  }, [])
+
   const value: GatewayContextValue = {
     status,
     subscribe,
     unsubscribe,
     sendTyping,
     sendPresence,
+    sendCallSignal,
     getLastEventId,
     addEventListener,
     addTypingListener,
     addPresenceListener,
     addReplayListener,
+    addCallSignalListener,
   }
 
   return (

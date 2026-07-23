@@ -32,6 +32,7 @@ export interface GatewayEventHandlers {
   onPresence?: (data: GatewayServerEvents["gateway:presence"]) => void
   onReplay?: (data: GatewayServerEvents["gateway:replay"]) => void
   onResumeComplete?: (data: GatewayServerEvents["gateway:resume-complete"]) => void
+  onCallSignal?: (data: GatewayServerEvents["gateway:call-signal"]) => void
 }
 
 interface GatewayState {
@@ -201,6 +202,10 @@ export function useGateway(handlers?: GatewayEventHandlers) {
           handlersRef.current?.onResumeComplete?.(data)
         })
 
+        socket.on("gateway:call-signal", (data: GatewayServerEvents["gateway:call-signal"]) => {
+          handlersRef.current?.onCallSignal?.(data)
+        })
+
         socket.on("error", (err: { message: string }) => {
           console.error("[gateway] server error:", err.message)
         })
@@ -311,6 +316,19 @@ export function useGateway(handlers?: GatewayEventHandlers) {
     socketRef.current?.emit("gateway:presence", { status: newStatus })
   }, [])
 
+  const sendCallSignal = useCallback(
+    (payload: {
+      channelId: string
+      type: "invite" | "cancel" | "accept" | "decline"
+      withVideo?: boolean
+      callerName?: string
+      callerAvatar?: string | null
+    }) => {
+      socketRef.current?.emit("gateway:call-signal", payload)
+    },
+    [],
+  )
+
   const getLastEventId = useCallback((channelId: string): string | undefined => {
     return stateRef.current.lastEventIds.get(channelId)
   }, [])
@@ -321,6 +339,7 @@ export function useGateway(handlers?: GatewayEventHandlers) {
     unsubscribe,
     sendTyping,
     sendPresence,
+    sendCallSignal,
     getLastEventId,
   }
 }

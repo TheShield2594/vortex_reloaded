@@ -20,6 +20,7 @@ import {
   MAX_REPLAY_EVENTS,
   TYPING_RATE_LIMIT,
   PRESENCE_RATE_LIMIT,
+  CALL_SIGNAL_RATE_LIMIT,
 } from "@vortex/shared"
 import type { RedisEventBus } from "./event-bus"
 import type { PresenceManager } from "./presence"
@@ -269,6 +270,48 @@ export function initGateway(options: GatewayOptions): void {
         })
       } catch (err) {
         log.error({ socketId: socket.id, err }, "gateway:typing error")
+      }
+    })
+
+    // ── Gateway: DM/group call ring signaling ─────────────────────────────
+    // Ephemeral invite/cancel/accept/decline handshake, relayed verbatim to
+    // the other subscriber(s) of the DM channel room. Not persisted — the
+    // call itself is transported over LiveKit once accepted.
+    socket.on("gateway:call-signal", async (data: unknown) => {
+      try {
+        if (typeof data !== "object" || data === null) return
+
+        const { channelId, type, withVideo, callerName, callerAvatar } = data as {
+          channelId?: unknown
+          type?: unknown
+          withVideo?: unknown
+          callerName?: unknown
+          callerAvatar?: unknown
+        }
+        if (typeof channelId !== "string" || !channelId) return
+
+        const validTypes = ["invite", "cancel", "accept", "decline"]
+        if (typeof type !== "string" || !validTypes.includes(type)) return
+
+        if (!gatewayLimiter!.check(socket.id, "call-signal", CALL_SIGNAL_RATE_LIMIT, 60_000)) return
+        if (!(await validateSession(socket))) return
+
+        const state = socketStates.get(socket.id)
+        if (!state) return
+
+        // Must be subscribed to the channel
+        if (!state.subscribedChannels.has(channelId)) return
+
+        socket.to(`gateway:${channelId}`).emit("gateway:call-signal", {
+          channelId,
+          type,
+          userId: state.userId,
+          withVideo: typeof withVideo === "boolean" ? withVideo : undefined,
+          callerName: typeof callerName === "string" ? callerName : undefined,
+          callerAvatar: typeof callerAvatar === "string" || callerAvatar === null ? callerAvatar : undefined,
+        })
+      } catch (err) {
+        log.error({ socketId: socket.id, err }, "gateway:call-signal error")
       }
     })
 
