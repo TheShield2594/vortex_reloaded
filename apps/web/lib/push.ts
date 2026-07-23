@@ -157,7 +157,7 @@ export async function sendPushToUser(
           .limit(1)
         const ntfySub = rows[0]
         if (ntfySub) {
-          await publishNtfy(ntfySub.topic, { title: payload.title, body: payload.body, url: payload.url })
+          await publishNtfy(ntfySub.topic, { title: payload.title, body: payload.body, url: payload.url, icon: payload.icon })
         }
       } catch (ntfyError) {
         console.error("sendPushToUser: ntfy publish failed", ntfyError instanceof Error ? ntfyError.message : ntfyError)

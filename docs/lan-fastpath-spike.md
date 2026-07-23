@@ -63,9 +63,15 @@ Concretely:
 - Once `connectionState === "connected"`, inspect the selected candidate
   pair (`RTCPeerConnection.getStats()` → `candidate-pair` with
   `nominated: true`) and confirm both local and remote candidates are
-  `host` type. Only then treat the channel as the LAN fast-path; anything
-  else (no connection, or connected via a candidate type that implies a
-  relay) means fall back to the normal gateway-relayed path silently.
+  `host` type. A `host`/`host` pair only means *a direct ICE path was
+  found* — it is not proof of L2 LAN adjacency or of being on the same
+  Tailscale tailnet (a `host` candidate is just any address bound to a
+  local/logical interface, tailnet or otherwise), so treat this purely as
+  "skip the relay for this connection," not as a claim about network
+  topology or privacy guarantees beyond "the relay didn't see this
+  traffic." Anything else (no connection, or connected via a candidate
+  type that implies a relay) means fall back to the normal
+  gateway-relayed path silently.
 - Detection is **outcome-based, not pre-checked**. There's no reliable way
   to ask "are we on the same LAN/tailnet?" from browser JS before
   attempting a connection — you find out by trying. This also naturally
@@ -96,24 +102,35 @@ event that's coming anyway.
    feature) — resolvable only by another instance of the same browser on
    the same LAN, and typically *not* resolvable across a Tailscale
    tailnet at all (mDNS doesn't route over WireGuard the way Tailscale
-   tunnels traffic). This may quietly kill the Tailscale case entirely
-   unless mDNS candidates are filtered out and only real interface
-   candidates are used — check current `RTCIceCandidatePolicy`/enterprise
-   policy support before assuming this is solvable purely in application
-   code.
+   tunnels traffic). This likely kills the Tailscale case entirely for
+   any client with mDNS obfuscation on, and there is no *application*-level
+   fix: `RTCIceTransportPolicy` only has two values, `"all"` and
+   `"relay"` — there is no "host, but skip mDNS" mode, and filtering out
+   `.local` candidates client-side doesn't recover the real IP behind
+   them, it just removes the candidate. Given that, treat mDNS-enabled
+   browsers/deployments as **unsupported** for this feature rather than
+   something to work around, and require a real two-device trial on an
+   actual Tailscale tailnet (not just a LAN) before this is ever
+   considered for default-on — don't assume it works from this write-up
+   alone.
 2. **No second machine to test against in this environment.** Everything
    above is derived from reading spec/API behavior and this repo's
    existing WebRTC code, not from an actual two-host LAN/tailnet trial.
    Treat it as a hypothesis to validate, not a verified design.
 3. **Group DMs.** Scope to 1:1 DMs only, or accept an O(n²) mesh for small
    groups — needs a product decision, not just an engineering one.
-4. **Peer identity.** The DataChannel is opened between two sockets that
-   already passed `validateSession`/channel-membership checks during
-   signaling, so authenticity rides on the existing gateway auth — no new
-   trust boundary, but worth an explicit test that a revoked channel
-   member's in-flight DataChannel gets torn down the same way
-   `revokeChannelAccess()` (`apps/signal/src/gateway.ts`) already handles
-   the relayed path.
+4. **Peer identity and revocation.** The DataChannel is opened between two
+   sockets that already passed `validateSession`/channel-membership
+   checks during *signaling* — but that only authorizes the handshake,
+   not the lifetime of the resulting connection. Gateway auth doesn't
+   automatically tear down an already-established `RTCDataChannel` when a
+   member is later removed from the channel. This has to be a hard
+   protocol requirement, not an optional test to add later:
+   `revokeChannelAccess()` (`apps/signal/src/gateway.ts`) must explicitly
+   close any live peer connection for the revoked member, and each side
+   must reject/ignore a DataChannel tied to a session it no longer
+   considers valid — matching, not weakening, the guarantee the relayed
+   path already gives for free.
 5. **Value check before building.** Cheapest first step: add telemetry to
    the *existing* LiveKit call path (it already runs ICE negotiation for
    every DM call) logging the selected candidate-pair type. If host-host

@@ -61,10 +61,12 @@ services:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: file:/data/vortex.db
       LIVEKIT_API_URL: http://livekit:7880
-      # Internal address of the `ntfy` service below — always set since ntfy
-      # ships in this stack by default (like Redis, it costs little to keep
-      # running). Per-user opt-in still happens in Settings → Notifications.
-      NTFY_SERVER_URL: http://ntfy:80
+      # Internal address of the `ntfy` service below — set by default since
+      # ntfy ships in this stack (like Redis, it costs little to keep
+      # running), but an operator-provided .env value still wins, e.g. to
+      # point at an external ntfy instance instead of the bundled one.
+      # Per-user opt-in still happens in Settings → Notifications.
+      NTFY_SERVER_URL: ${NTFY_SERVER_URL:-http://ntfy:80}
     volumes:
       - ./data:/data
     depends_on:

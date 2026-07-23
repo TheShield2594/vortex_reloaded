@@ -65,19 +65,49 @@ describe("isNtfyConfigured / publishNtfy", () => {
       title: "New message",
       body: "hello",
       url: "/channels/me/abc",
+      icon: "https://example.com/avatar.png",
     })
 
     expect(ok).toBe(true)
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe("http://ntfy:80/vortex-sometopic")
+    // Root URL, not `{server}/{topic}` — ntfy's JSON publish API routes on
+    // the body's `topic` field only when posted to the root.
+    expect(url).toBe("http://ntfy:80")
     const body = JSON.parse(init.body as string)
     expect(body).toMatchObject({
       topic: "vortex-sometopic",
       title: "New message",
       message: "hello",
       click: "/channels/me/abc",
+      icon: "https://example.com/avatar.png",
     })
+  })
+
+  it("includes an Authorization header when NTFY_ACCESS_TOKEN is set", async () => {
+    vi.stubEnv("NTFY_SERVER_URL", "http://ntfy:80")
+    vi.stubEnv("NTFY_ACCESS_TOKEN", "secret-token")
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true })
+    globalThis.fetch = fetchSpy as unknown as typeof fetch
+    const { publishNtfy } = await import("./ntfy")
+
+    await publishNtfy("vortex-sometopic", { title: "Hi", body: "there" })
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer secret-token")
+  })
+
+  it("omits the Authorization header when NTFY_ACCESS_TOKEN is unset", async () => {
+    vi.stubEnv("NTFY_SERVER_URL", "http://ntfy:80")
+    vi.stubEnv("NTFY_ACCESS_TOKEN", "")
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true })
+    globalThis.fetch = fetchSpy as unknown as typeof fetch
+    const { publishNtfy } = await import("./ntfy")
+
+    await publishNtfy("vortex-sometopic", { title: "Hi", body: "there" })
+
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
+    expect((init.headers as Record<string, string>).Authorization).toBeUndefined()
   })
 
   it("publishNtfy returns false when the server responds with an error status", async () => {

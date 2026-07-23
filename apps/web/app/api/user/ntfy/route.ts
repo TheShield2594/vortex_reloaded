@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { createDb, ntfySubscriptions } from "@vortex/db"
 import { requireAuth, parseJsonBody, apiError } from "@/lib/utils/api-helpers"
 import { generateNtfyTopic, isNtfyConfigured } from "@/lib/ntfy"
@@ -45,26 +45,23 @@ export async function POST() {
       return apiError("Self-hosted ntfy push is not configured on this server", 400)
     }
 
-    const existing = await db
-      .select({ topic: ntfySubscriptions.topic })
-      .from(ntfySubscriptions)
-      .where(eq(ntfySubscriptions.userId, user.id))
-      .limit(1)
-
-    if (existing[0]) {
-      await db
-        .update(ntfySubscriptions)
-        .set({ enabled: true })
-        .where(eq(ntfySubscriptions.userId, user.id))
-      return NextResponse.json({ topic: existing[0].topic, enabled: true })
-    }
-
-    let topic: string | null = null
-    for (let attempt = 0; attempt < TOPIC_GENERATION_RETRIES && !topic; attempt++) {
+    // Atomic upsert keyed on userId (the primary key) — two concurrent POSTs
+    // (double-click, multiple tabs) both hit this same statement instead of
+    // racing a separate "does a row exist" check against a later insert, so
+    // neither can see a stale "no row" read and fail on a PK conflict.
+    // A thrown error here can only be a genuine `topic` uniqueness collision
+    // (a different constraint), which is what's retried below.
+    let succeeded = false
+    for (let attempt = 0; attempt < TOPIC_GENERATION_RETRIES && !succeeded; attempt++) {
       try {
-        const candidate = generateNtfyTopic()
-        await db.insert(ntfySubscriptions).values({ userId: user.id, topic: candidate, enabled: true })
-        topic = candidate
+        await db
+          .insert(ntfySubscriptions)
+          .values({ userId: user.id, topic: generateNtfyTopic(), enabled: true })
+          .onConflictDoUpdate({
+            target: ntfySubscriptions.userId,
+            set: { enabled: true },
+          })
+        succeeded = true
       } catch (err) {
         // Unique constraint collision on `topic` — astronomically unlikely
         // (32 base36 chars) but retry rather than fail outright.
@@ -76,6 +73,17 @@ export async function POST() {
       }
     }
 
+    if (!succeeded) return NextResponse.json({ error: "Failed to enable ntfy push" }, { status: 500 })
+
+    // Re-read rather than trusting the just-generated candidate — on an
+    // upsert-into-existing-row, the persisted topic is whatever was already
+    // there, not the (discarded) candidate this call generated.
+    const rows = await db
+      .select({ topic: ntfySubscriptions.topic })
+      .from(ntfySubscriptions)
+      .where(eq(ntfySubscriptions.userId, user.id))
+      .limit(1)
+    const topic = rows[0]?.topic
     if (!topic) return NextResponse.json({ error: "Failed to enable ntfy push" }, { status: 500 })
 
     return NextResponse.json({ topic, enabled: true }, { status: 201 })
@@ -122,7 +130,7 @@ export async function DELETE() {
     if (authError) return authError
 
     const existing = await db
-      .select({ enabled: ntfySubscriptions.enabled })
+      .select({ topic: ntfySubscriptions.topic, enabled: ntfySubscriptions.enabled })
       .from(ntfySubscriptions)
       .where(eq(ntfySubscriptions.userId, user.id))
       .limit(1)
@@ -131,15 +139,34 @@ export async function DELETE() {
       return apiError("No ntfy subscription to rotate", 404)
     }
 
-    let topic: string | null = null
-    for (let attempt = 0; attempt < TOPIC_GENERATION_RETRIES && !topic; attempt++) {
+    // Conditional update on the topic just read, so a concurrent rotation
+    // (two tabs both clicking "rotate") can't silently overwrite the other's
+    // result — the loser's UPDATE matches zero rows (WHERE topic no longer
+    // matches) and re-reads the winner's topic instead of returning a value
+    // that's no longer what's persisted.
+    let previousTopic = existing[0].topic
+    let result: { topic: string; enabled: boolean } | null = null
+
+    for (let attempt = 0; attempt < TOPIC_GENERATION_RETRIES && !result; attempt++) {
       try {
-        const candidate = generateNtfyTopic()
-        await db
+        const updated = await db
           .update(ntfySubscriptions)
-          .set({ topic: candidate })
+          .set({ topic: generateNtfyTopic() })
+          .where(and(eq(ntfySubscriptions.userId, user.id), eq(ntfySubscriptions.topic, previousTopic)))
+          .returning({ topic: ntfySubscriptions.topic, enabled: ntfySubscriptions.enabled })
+
+        if (updated[0]) {
+          result = updated[0]
+          break
+        }
+
+        const current = await db
+          .select({ topic: ntfySubscriptions.topic, enabled: ntfySubscriptions.enabled })
+          .from(ntfySubscriptions)
           .where(eq(ntfySubscriptions.userId, user.id))
-        topic = candidate
+          .limit(1)
+        if (!current[0]) return apiError("No ntfy subscription to rotate", 404)
+        result = current[0]
       } catch (err) {
         const code = err && typeof err === "object" && "code" in err ? (err as { code?: unknown }).code : undefined
         if (code !== "SQLITE_CONSTRAINT_UNIQUE" || attempt === TOPIC_GENERATION_RETRIES - 1) {
@@ -149,9 +176,9 @@ export async function DELETE() {
       }
     }
 
-    if (!topic) return NextResponse.json({ error: "Failed to rotate ntfy topic" }, { status: 500 })
+    if (!result) return NextResponse.json({ error: "Failed to rotate ntfy topic" }, { status: 500 })
 
-    return NextResponse.json({ topic, enabled: existing[0].enabled })
+    return NextResponse.json(result)
   } catch (err) {
     log.error({ route: "/api/user/ntfy", action: "DELETE", error: err instanceof Error ? err.message : String(err) }, "DELETE error")
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

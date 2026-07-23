@@ -139,7 +139,7 @@ All configuration is via environment variables in `.env` and
 | `WEB_URL` | `http://web:3000` | Cron → Web connection |
 | `ALLOWED_ORIGINS` | From `NEXT_PUBLIC_APP_URL` | Signal server CORS |
 | `LIVEKIT_API_URL` | `http://livekit:7880` | Web → LiveKit server-side API calls (token minting itself needs no network call; this is for explicit room management) |
-| `NTFY_SERVER_URL` | `http://ntfy:80` | Web → ntfy server-side publish calls |
+| `NTFY_SERVER_URL` | `http://ntfy:80` | Web → ntfy server-side publish calls. This is only the *default* — an `NTFY_SERVER_URL` already set in `.env` takes precedence (e.g. to point at an external ntfy instance instead of the bundled `ntfy` service) |
 
 ### Optional
 
@@ -272,6 +272,10 @@ signal.example.com {
 livekit.example.com {
     reverse_proxy livekit:7880
 }
+
+ntfy.example.com {
+    reverse_proxy ntfy:80
+}
 ```
 
 **nginx:**
@@ -313,7 +317,30 @@ server {
         proxy_set_header Host $host;
     }
 }
+
+server {
+    listen 443 ssl;
+    server_name ntfy.example.com;
+
+    location / {
+        proxy_pass http://ntfy:80;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
 ```
+
+**ntfy over plaintext HTTP is not safe for an internet-facing deployment.**
+With `NTFY_ENABLE_LOGIN: "false"` (this stack's default), a subscription
+topic is effectively a bearer credential — anyone who can read the wire
+can read notification content and, potentially, the topic itself. `scripts/setup.sh`
+still defaults `NEXT_PUBLIC_NTFY_URL` to a plain `http://` URL (matching
+this same script's existing `ws://`-by-default pattern for LiveKit's
+public URL, TLS'd the same way via this reverse-proxy section rather than
+enforced in the script) — put ntfy behind the Caddy/nginx block above and
+switch `NEXT_PUBLIC_NTFY_URL` to `https://ntfy.example.com` before relying
+on it outside a trusted LAN/tailnet.
 
 If you front LiveKit with a domain like this, update `NEXT_PUBLIC_LIVEKIT_URL`
 to `wss://livekit.example.com` and re-run `docker compose up -d` — the UDP

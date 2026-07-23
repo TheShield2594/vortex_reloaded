@@ -46,18 +46,25 @@ export interface NtfyPayload {
   title: string
   body: string
   url?: string
+  icon?: string
 }
 
 /**
  * Publish a notification to a user's private ntfy topic.
  * Returns false (and logs) on any failure — callers treat ntfy as
  * best-effort, same as an individual Web Push subscription failing.
+ *
+ * Publishes to the server's *root* URL with `topic` in the JSON body, not
+ * `{server}/{topic}` — ntfy's JSON publish API is documented to route on
+ * the body's `topic` field only when the request targets the root
+ * (https://docs.ntfy.sh/publish/#publish-as-json); posting JSON to a
+ * topic-specific path is a different, plain-text-body endpoint.
  */
 export async function publishNtfy(topic: string, payload: NtfyPayload): Promise<boolean> {
   if (!NTFY_SERVER_URL) return false
 
   try {
-    const res = await fetch(`${NTFY_SERVER_URL.replace(/\/+$/, "")}/${encodeURIComponent(topic)}`, {
+    const res = await fetch(NTFY_SERVER_URL.replace(/\/+$/, "") || "/", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -72,12 +79,14 @@ export async function publishNtfy(topic: string, payload: NtfyPayload): Promise<
         // on a third-party wake-up channel for timely delivery.
         priority: 4,
         ...(payload.url ? { click: payload.url } : {}),
+        ...(payload.icon ? { icon: payload.icon } : {}),
       }),
       signal: AbortSignal.timeout(NTFY_PUBLISH_TIMEOUT_MS),
     })
 
     if (!res.ok) {
-      console.error(`publishNtfy: server responded ${res.status} for topic ${topic.slice(0, 14)}…`)
+      // Don't log any part of `topic` — it's a bearer credential (see module docstring).
+      console.error(`publishNtfy: server responded ${res.status}`)
       return false
     }
     return true
