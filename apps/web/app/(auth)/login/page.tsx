@@ -148,7 +148,11 @@ export default function LoginPage() {
 
   function redirectDestination(): string {
     const rd = searchParams.get("redirect")
-    return rd && rd.startsWith("/") && !rd.startsWith("//") ? rd : "/channels/me"
+    // Must be exactly one leading slash followed by a non-slash,
+    // non-backslash character — `//evil.com` and browser-normalized
+    // backslash variants like `/\evil.com` are both protocol-relative
+    // external redirects, not app-internal paths.
+    return rd && /^\/[^/\\]/.test(rd) ? rd : "/channels/me"
   }
 
   async function handleLogin(e: React.FormEvent) {

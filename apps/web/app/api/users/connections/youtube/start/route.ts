@@ -1,6 +1,5 @@
 import { randomBytes } from "crypto"
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { sanitizeNextPath } from "@/lib/auth/sanitize-redirect"
 
@@ -13,7 +12,6 @@ const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
  */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
