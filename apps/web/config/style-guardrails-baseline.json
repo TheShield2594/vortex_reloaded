@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T16:11:28.394Z",
+  "generatedAt": "2026-07-23T16:55:05.435Z",
   "rules": [
     {
       "id": "inline-style-color",
@@ -3970,46 +3970,52 @@
       "line": 402
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:394",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:380",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 394
+      "line": 380
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:405",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:391",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 405
+      "line": 391
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:415",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:401",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 415
+      "line": 401
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:432",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:418",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 432
+      "line": 418
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:435",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:421",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 435
+      "line": 421
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:442",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:428",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 442
+      "line": 428
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:454",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:440",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 454
+      "line": 440
+    },
+    {
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:460",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/notifications/notification-bell.tsx",
+      "line": 460
     },
     {
       "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:474",
@@ -4018,40 +4024,34 @@
       "line": 474
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:488",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:483",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 488
+      "line": 483
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:497",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:505",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 497
+      "line": 505
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:519",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:518",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 519
+      "line": 518
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:532",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:524",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 532
+      "line": 524
     },
     {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:538",
+      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:539",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 538
-    },
-    {
-      "key": "inline-style-color:apps/web/components/notifications/notification-bell.tsx:553",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/notifications/notification-bell.tsx",
-      "line": 553
+      "line": 539
     },
     {
       "key": "inline-style-color:apps/web/components/onboarding/onboarding-flow.tsx:50",

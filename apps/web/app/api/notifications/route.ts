@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+import { publishGatewayEvent } from "@/lib/gateway-publish"
 
 const NOTIFICATION_COLUMNS = "id, type, title, body, icon_url, server_id, channel_id, message_id, read, created_at"
 
@@ -60,16 +61,25 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       .from("notifications")
       .update({ read: true })
       .eq("user_id", user.id)
+      .eq("read", false)
 
     const trimmedId = typeof id === "string" ? id.trim() : undefined
     if (trimmedId) {
       query = query.eq("id", trimmedId)
-    } else {
-      query = query.eq("read", false)
     }
 
-    const { error } = await query
+    const { data: updated, error } = await query.select(NOTIFICATION_COLUMNS)
     if (error) return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 })
+
+    if (updated && updated.length > 0) {
+      after(() => Promise.all(updated.map((n) => publishGatewayEvent({
+        type: "notification.updated",
+        channelId: `user:${user.id}`,
+        actorId: user.id,
+        data: n,
+      }, { route: "/api/notifications" }))))
+    }
+
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -116,8 +126,18 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
       query = query.in("id", trimmedIds)
     }
 
-    const { error } = await query
+    const { data: deleted, error } = await query.select("id, read")
     if (error) return NextResponse.json({ error: "Failed to delete notifications" }, { status: 500 })
+
+    if (deleted && deleted.length > 0) {
+      after(() => Promise.all(deleted.map((n) => publishGatewayEvent({
+        type: "notification.deleted",
+        channelId: `user:${user.id}`,
+        actorId: user.id,
+        data: n,
+      }, { route: "/api/notifications" }))))
+    }
+
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
