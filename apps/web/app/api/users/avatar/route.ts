@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { detectMimeFromBytes } from "@/lib/attachment-validation"
 import { requireAuth } from "@/lib/utils/api-helpers"
+import { avatarsDir, removeAvatarVariants, writeUploadFile } from "@/lib/storage/local-storage"
 
 const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
 const ALLOWED_AVATAR_EXTS = ["jpg", "jpeg", "png", "gif", "webp"]
@@ -81,24 +82,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       "image/webp": "webp",
     }
     const ext = mimeToExt[detectedMime] ?? "png"
-    const storagePath = `${user.id}/avatar.${ext}`
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(storagePath, avatarFile, { upsert: true })
+    const storageKey = `${user.id}/avatar.${ext}`
 
-    if (uploadError) {
+    try {
+      // Remove any stale variant with a different extension so the served
+      // file always matches the freshly uploaded one.
+      await removeAvatarVariants(user.id, ALLOWED_AVATAR_EXTS)
+      const bytes = Buffer.from(await avatarFile.arrayBuffer())
+      await writeUploadFile(avatarsDir(), storageKey, bytes)
+    } catch {
       return NextResponse.json(
         { error: "Avatar upload failed" },
         { status: 500 },
       )
     }
 
-    // Get the public URL with cache-busting query param
-    const { data: urlData } = supabase.storage
-      .from("avatars")
-      .getPublicUrl(storagePath)
-
-    const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`
+    // Cache-busting query param since the URL path itself is stable per user
+    const avatarUrl = `/api/avatars/${storageKey}?t=${Date.now()}`
 
     // Update the user's avatar_url in the database
     const { data: updatedUser, error: dbError } = await supabase

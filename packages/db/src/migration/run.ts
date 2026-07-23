@@ -8,14 +8,16 @@ import { exportAuthSecrets } from "./auth-secrets-export"
 import { importAuthSecrets } from "./import-auth-secrets"
 import { resolveMigrationOutputDir } from "./output-dir"
 import { createPgPool } from "./pg-client"
+import { migrateStorage } from "./storage"
 
 /**
  * End-to-end orchestrator for the migration procedure in issue #7:
- * export -> import -> verify, with an optional auth-secrets pass.
+ * export -> import -> verify, with optional auth-secrets and storage passes.
  *
  * Usage:
  *   tsx src/migration/run.ts --dry-run                 # scratch copy, printed report, nothing kept
  *   tsx src/migration/run.ts --dry-run --auth-secrets   # + auth-secrets export
+ *   tsx src/migration/run.ts --storage                  # + avatars/attachments off Supabase Storage (issue #10)
  *   tsx src/migration/run.ts --target /data/vortex.db   # the real cutover — fresh file only
  *   tsx src/migration/run.ts                            # target defaults to DATABASE_URL (db-path.ts)
  *
@@ -29,6 +31,7 @@ async function main() {
   const args = process.argv.slice(2)
   const dryRun = args.includes("--dry-run")
   const withAuthSecrets = args.includes("--auth-secrets")
+  const withStorage = args.includes("--storage")
   const keep = args.includes("--keep")
   const targetArg = args.includes("--target") ? args[args.indexOf("--target") + 1] : undefined
 
@@ -48,14 +51,18 @@ async function main() {
   const outputDir = resolveMigrationOutputDir()
   const pool = createPgPool()
 
+  const totalSteps = 3 + (withAuthSecrets ? 2 : 0) + (withStorage ? 1 : 0)
+  let step = 0
+  const nextStep = () => `${++step}/${totalSteps}`
+
   try {
-    console.log(`\n== 1/${withAuthSecrets ? 5 : 3}: export ==`)
+    console.log(`\n== ${nextStep()}: export ==`)
     await exportAllTables(pool, outputDir)
 
-    console.log(`\n== 2/${withAuthSecrets ? 5 : 3}: import ==`)
+    console.log(`\n== ${nextStep()}: import ==`)
     await importAllTables(targetPath, outputDir)
 
-    console.log(`\n== 3/${withAuthSecrets ? 5 : 3}: verify ==`)
+    console.log(`\n== ${nextStep()}: verify ==`)
     const report = await verifyMigration(pool, targetPath)
     for (const t of report.tables) {
       const status = t.countMatches && t.sampleMismatches.length === 0 ? "OK" : "MISMATCH"
@@ -68,15 +75,23 @@ async function main() {
     }
 
     if (withAuthSecrets) {
-      console.log(`\n== 4/5: auth-secrets export ==`)
+      console.log(`\n== ${nextStep()}: auth-secrets export ==`)
       await exportAuthSecrets(pool, outputDir)
 
-      console.log(`\n== 5/5: auth-secrets import ==`)
+      console.log(`\n== ${nextStep()}: auth-secrets import ==`)
       const result = await importAuthSecrets(targetPath, outputDir)
       console.log(
         `  imported ${result.credentials} credential(s), ${result.totpFactors} TOTP factor(s), ` +
           `${result.oauthIdentities} OAuth identity(ies), ${result.passkeys} passkey(s)`
       )
+    }
+
+    if (withStorage) {
+      console.log(`\n== ${nextStep()}: storage (avatars/attachments off Supabase Storage) ==`)
+      const storageReport = await migrateStorage(targetPath)
+      console.log(`  avatars: ${storageReport.avatars.migrated} migrated, ${storageReport.avatars.failed} failed`)
+      console.log(`  attachments: ${storageReport.attachments.migrated} migrated, ${storageReport.attachments.failed} failed`)
+      console.log(`  dm_attachments: ${storageReport.dmAttachments.migrated} migrated, ${storageReport.dmAttachments.failed} failed`)
     }
 
     console.log(dryRun ? "\nDry run complete." : "\nMigration complete.")

@@ -994,23 +994,20 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         if (abortSignal?.aborted) throw new Error("Upload cancelled")
         const file = files[i]
 
-        const ext = file.name.split(".").pop()
-        const path = `dm-attachments/${channelId}/${Date.now()}.${ext}`
-        const { error: uploadError } = await supabase.storage
-          .from("attachments")
-          .upload(path, file, { upsert: true })
-        if (uploadError) throw new Error("File upload failed")
+        const uploadFormData = new FormData()
+        uploadFormData.append("file", file)
+        const uploadRes = await fetch(`/api/dm/channels/${channelId}/attachments`, {
+          method: "POST",
+          body: uploadFormData,
+          signal: abortSignal,
+        })
+        if (!uploadRes.ok) throw new Error("File upload failed")
         if (abortSignal?.aborted) throw new Error("Upload cancelled")
+        const uploaded = await uploadRes.json() as { key: string; filename: string; size: number; content_type: string }
 
         onUploadProgress?.(Math.round(((i + 0.5) / totalFiles) * 100))
 
-        const { data: signedData, error: signError } = await supabase.storage
-          .from("attachments")
-          .createSignedUrl(path, 60 * 60 * 24 * 7)
-        if (signError || !signedData?.signedUrl) throw new Error("Failed to create signed URL")
-
-        const signedUrl = signedData.signedUrl
-        const outbound = await encryptText(`[${file.name}](${signedUrl})`)
+        const outbound = await encryptText(`📎 ${file.name}`)
         const filePayload: { content: string; reply_to_id?: string } = { content: outbound }
         // Attach reply context to the first file message
         if (i === 0 && replyTo) filePayload.reply_to_id = replyTo.id
@@ -1021,7 +1018,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         const decay = computeDecay({ sizeBytes: file.size, uploadedAt: now })
         const { data: insertedAtt, error: attInsertError } = await untypedFrom(supabase, "dm_attachments").insert({
           dm_id: msg.id,
-          url: signedUrl,
+          url: uploaded.key,
           filename: file.name,
           size: file.size,
           content_type: file.type || "application/octet-stream",

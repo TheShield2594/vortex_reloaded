@@ -1,7 +1,10 @@
+import { createReadStream } from "node:fs"
+import { Readable } from "node:stream"
 import { NextRequest, NextResponse } from "next/server"
 import { requireAuth } from "@/lib/utils/api-helpers"
 import { maybeRenewExpiry } from "@vortex/shared"
 import { untypedFrom } from "@/lib/supabase/untyped-table"
+import { attachmentsDir, statUploadFile } from "@/lib/storage/local-storage"
 
 export async function GET(
   _request: NextRequest,
@@ -86,42 +89,27 @@ export async function GET(
         })
     }
 
-    // Extract the storage path from the URL and create a fresh signed URL
-    const storagePath = extractStoragePath(attachment.url)
-    if (!storagePath) {
-      return NextResponse.json({ error: "Invalid attachment URL" }, { status: 400 })
+    // attachment.url is a local storage key (relative path under the
+    // attachments upload dir), not an external URL — this route is now the
+    // access-control boundary AND the thing that serves the bytes.
+    const file = await statUploadFile(attachmentsDir(), attachment.url)
+    if (!file) {
+      return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    const { data: signedData, error: signError } = await supabase.storage
-      .from("attachments")
-      .createSignedUrl(storagePath, 3600) // 1 hour expiry
+    const stream = Readable.toWeb(createReadStream(file.path)) as ReadableStream
 
-    if (signError || !signedData?.signedUrl) {
-      console.error("dm-attachments/download: signing failed", { userId: user.id, attachmentId, error: signError?.message })
-      return NextResponse.json({ error: "Failed to generate signed URL" }, { status: 500 })
-    }
-
-    return NextResponse.redirect(signedData.signedUrl)
+    return new NextResponse(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": attachment.content_type || "application/octet-stream",
+        "Content-Length": String(file.size),
+        "Content-Disposition": `inline; filename="${encodeURIComponent(attachment.filename)}"`,
+        "Cache-Control": "private, max-age=3600",
+      },
+    })
   } catch (err) {
     console.error("dm-attachments/download: unexpected error", { error: err })
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
-  }
-}
-
-/** Extract the storage path from a Supabase storage URL */
-function extractStoragePath(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-    // Supabase storage URLs contain /object/public/bucketname/ or /object/sign/bucketname/
-    const match = parsed.pathname.match(/\/object\/(?:public|sign)\/attachments\/(.+)/)
-    if (match?.[1]) return decodeURIComponent(match[1])
-
-    // Also handle /storage/v1/object/ pattern
-    const altMatch = parsed.pathname.match(/\/storage\/v1\/object\/(?:public|sign)\/attachments\/(.+)/)
-    if (altMatch?.[1]) return decodeURIComponent(altMatch[1])
-
-    return null
-  } catch {
-    return null
   }
 }

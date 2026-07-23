@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { useConnectionsCallback } from "@/hooks/use-connections-callback"
 import { Loader2, Upload, Camera, ExternalLink, Link2, Check, Hash, Plus, Trash2, GripVertical, Globe, Users, Lock } from "lucide-react"
 import { SteamIcon, YouTubeIcon } from "@/components/icons/social-icons"
-import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { useAppStore } from "@/lib/stores/app-store"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { useToast } from "@/components/ui/use-toast"
@@ -25,7 +24,6 @@ export function ProfileSettingsPage({ user }: Props) {
   const { toast } = useToast()
   const router = useRouter()
 
-  const [supabase] = useState(() => createClientSupabaseClient())
   const { setCurrentUser } = useAppStore()
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -221,16 +219,15 @@ export function ProfileSettingsPage({ user }: Props) {
       let avatarUrl = user.avatar_url
 
       if (avatarFile) {
-        const ALLOWED_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp"])
-        const rawExt = avatarFile.name.split(".").pop()?.toLowerCase() ?? ""
-        const ext = ALLOWED_EXTS.has(rawExt) ? rawExt : "jpg"
-        const path = `${user.id}/avatar.${ext}`
-        const { error: uploadError } = await supabase.storage
-          .from("avatars")
-          .upload(path, avatarFile, { upsert: true })
-        if (uploadError) throw uploadError
-        const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(path)
-        avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`
+        const avatarFormData = new FormData()
+        avatarFormData.append("avatar", avatarFile)
+        const avatarRes = await fetch("/api/users/avatar", { method: "POST", body: avatarFormData })
+        if (!avatarRes.ok) {
+          const data = await avatarRes.json().catch(() => ({}))
+          throw new Error(data.error ?? "Avatar upload failed")
+        }
+        const updatedUser = await avatarRes.json()
+        avatarUrl = updatedUser.avatar_url
       }
 
       const res = await fetch("/api/users/profile", {

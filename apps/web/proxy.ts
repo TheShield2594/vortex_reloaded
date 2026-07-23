@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { auth } from "@/lib/auth/better-auth"
+import { MAX_ATTACHMENT_BYTES } from "@/lib/attachment-validation"
 
 // Next.js 16's proxy.ts (the middleware.ts successor) always runs on the
 // Node.js runtime unconditionally — unlike old Edge-only middleware.ts,
@@ -103,8 +104,14 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"])
 // Request body size limits (bytes). File-upload routes get a higher ceiling;
 // everything else caps at 1 MB which is generous for JSON payloads.
 const MAX_BODY_BYTES = 1 * 1024 * 1024         // 1 MB — JSON routes
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024       // 10 MB — file upload routes
-const UPLOAD_ROUTES = ["/api/users/avatar", "/api/share"]  // routes that accept formData
+// 1 MB of multipart overhead above the largest thing an upload route
+// accepts (DM attachments, MAX_ATTACHMENT_BYTES) — DM attachments used to
+// upload straight from the browser to Supabase Storage, bypassing this
+// proxy entirely; now that they route through our own server (issue #10),
+// this cap applies to them too.
+const MAX_UPLOAD_BYTES = MAX_ATTACHMENT_BYTES + 1 * 1024 * 1024
+const UPLOAD_ROUTE_PREFIXES = ["/api/users/avatar", "/api/share"]  // routes that accept formData
+const UPLOAD_ROUTE_SUFFIXES = ["/attachments"]  // dynamic route: /api/dm/channels/[channelId]/attachments
 
 /**
  * CSRF protection: verify that mutation requests to /api/* originate from our
@@ -182,7 +189,8 @@ export async function proxy(request: NextRequest) {
   if (pathname.startsWith("/api/") && MUTATION_METHODS.has(request.method)) {
     const raw = request.headers.get("content-length")
     const contentLength = raw === null ? 0 : /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN
-    const isUploadRoute = UPLOAD_ROUTES.some((route) => pathname.startsWith(route))
+    const isUploadRoute = UPLOAD_ROUTE_PREFIXES.some((route) => pathname.startsWith(route))
+      || UPLOAD_ROUTE_SUFFIXES.some((suffix) => pathname.endsWith(suffix))
     const limit = isUploadRoute ? MAX_UPLOAD_BYTES : MAX_BODY_BYTES
     if (!Number.isFinite(contentLength) || contentLength < 0 || contentLength > limit) {
       return applyCsp(
