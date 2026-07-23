@@ -1,14 +1,14 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { authClient } from "@/lib/auth/auth-client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
-import { Loader2 } from "lucide-react"
+import { Loader2, CheckCircle2, XCircle } from "lucide-react"
 import { VortexLogo } from "@/components/ui/vortex-logo"
 
 function friendlySignupError(message: string): string {
@@ -21,11 +21,52 @@ function friendlySignupError(message: string): string {
     return "Too many signup attempts. Please wait a moment and try again."
   if (lower.includes("invalid") && lower.includes("email"))
     return "Please enter a valid email address."
+  if (lower.includes("invite"))
+    return "That invite code isn't valid. Double-check it or ask whoever invited you for a new one."
   return message
+}
+
+type InviteStatus = { state: "idle" | "checking" | "valid" | "invalid"; message?: string }
+
+/** Debounced GET /api/invites/validate — pure UX feedback; the real gate is server-side at signup time. */
+function useInviteCodeCheck(code: string): InviteStatus {
+  const [status, setStatus] = useState<InviteStatus>({ state: "idle" })
+
+  useEffect(() => {
+    const trimmed = code.trim()
+    if (!trimmed) {
+      setStatus({ state: "idle" })
+      return
+    }
+    setStatus({ state: "checking" })
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/invites/validate?code=${encodeURIComponent(trimmed)}`)
+        const data = await res.json()
+        if (data.valid) {
+          setStatus({ state: "valid" })
+        } else {
+          const reasons: Record<string, string> = {
+            not_found: "Invite code not found",
+            revoked: "This invite has been revoked",
+            expired: "This invite has expired",
+            exhausted: "This invite has already been used",
+          }
+          setStatus({ state: "invalid", message: reasons[data.reason] ?? "Invalid invite code" })
+        }
+      } catch {
+        setStatus({ state: "idle" })
+      }
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [code])
+
+  return status
 }
 
 export default function RegisterPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -35,12 +76,21 @@ export default function RegisterPage() {
     displayName: "",
     password: "",
     confirmPassword: "",
+    // Prefilled from a shared invite link/QR (?invite=CODE) — see
+    // /settings/invites, which generates both.
+    inviteCode: searchParams.get("invite") ?? "",
   })
+  const inviteStatus = useInviteCodeCheck(form.inviteCode)
 
   async function handleRegister(e: React.FormEvent): Promise<void> {
     e.preventDefault()
 
     setFormError(null)
+
+    if (!form.inviteCode.trim()) {
+      toast({ variant: "destructive", title: "Invite code required", description: "Vortex is invite-only — ask an existing member for a code." })
+      return
+    }
 
     if (form.password !== form.confirmPassword) {
       toast({ variant: "destructive", title: "Passwords do not match" })
@@ -64,7 +114,13 @@ export default function RegisterPage() {
 
     setLoading(true)
     try {
-      const { error } = await authClient.signUp.email({
+      // inviteCode isn't a declared Better Auth field (it's consumed and
+      // discarded in databaseHooks.user.create.before, never persisted to
+      // the users table) — going through this intermediately-typed `payload`
+      // instead of an inline object literal avoids an excess-property type
+      // error while still putting the field on the wire, since Better
+      // Auth's client just JSON-serializes whatever it's given.
+      const payload = {
         email: form.email,
         password: form.password,
         // `name` is Better Auth's canonical field, mapped to the `username`
@@ -72,7 +128,9 @@ export default function RegisterPage() {
         // this app's username, not a display name.
         name: form.username.toLowerCase(),
         displayName: form.displayName || form.username,
-      })
+        inviteCode: form.inviteCode.trim(),
+      }
+      const { error } = await authClient.signUp.email(payload)
       if (error) throw new Error(error.message || "Registration failed")
 
       toast({
@@ -108,6 +166,38 @@ export default function RegisterPage() {
       </div>
 
       <form onSubmit={handleRegister} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="register-invite-code" className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--theme-text-secondary)' }}>
+            Invite Code <span style={{ color: 'var(--theme-danger)' }}>*</span>
+          </Label>
+          <div className="relative">
+            <Input
+              id="register-invite-code"
+              type="text"
+              value={form.inviteCode}
+              onChange={(e) => setForm({ ...form, inviteCode: e.target.value.toUpperCase() })}
+              placeholder="ABCD1234"
+              required
+              className="auth-input h-10 border pr-9 uppercase tracking-wider"
+            />
+            {inviteStatus.state === "valid" && (
+              <CheckCircle2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--theme-success, #22c55e)' }} />
+            )}
+            {inviteStatus.state === "invalid" && (
+              <XCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--theme-danger)' }} />
+            )}
+            {inviteStatus.state === "checking" && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin" style={{ color: 'var(--theme-text-secondary)' }} />
+            )}
+          </div>
+          {inviteStatus.state === "invalid" && (
+            <p className="text-xs" style={{ color: 'var(--theme-danger)' }}>{inviteStatus.message}</p>
+          )}
+          <p className="text-xs" style={{ color: 'var(--theme-text-faint)' }}>
+            Vortex is invite-only. Ask an existing member for a code, or use a shared invite link.
+          </p>
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="register-email" className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--theme-text-secondary)' }}>
             Email <span style={{ color: 'var(--theme-danger)' }}>*</span>
@@ -195,7 +285,7 @@ export default function RegisterPage() {
 
         <Button
           type="submit"
-          disabled={loading}
+          disabled={loading || inviteStatus.state === "invalid"}
           className="auth-btn-accent w-full h-11 font-medium mt-2 border-0"
         >
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

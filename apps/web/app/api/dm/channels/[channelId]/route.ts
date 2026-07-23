@@ -70,6 +70,7 @@ export async function GET(
       isEncrypted: boolean
       encryptionKeyVersion: number
       encryptionMembershipEpoch: number
+      encryptionScheme: typeof dmChannels.$inferSelect["encryptionScheme"]
       themePreset: typeof dmChannels.$inferSelect["themePreset"]
     } | undefined
     let memberRows: Array<{ userId: string }>
@@ -86,6 +87,7 @@ export async function GET(
             isEncrypted: dmChannels.isEncrypted,
             encryptionKeyVersion: dmChannels.encryptionKeyVersion,
             encryptionMembershipEpoch: dmChannels.encryptionMembershipEpoch,
+            encryptionScheme: dmChannels.encryptionScheme,
             themePreset: dmChannels.themePreset,
           })
           .from(dmChannels)

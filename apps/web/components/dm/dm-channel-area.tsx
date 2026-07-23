@@ -31,6 +31,16 @@ import { useChatScroll } from "@/components/chat/hooks/use-chat-scroll"
 import { MessageInput } from "@/components/chat/message-input"
 import { useShallow } from "zustand/react/shallow"
 import { decryptDmContent, encryptDmContent, exportPublicKey, fingerprintFromPublicKey, generateConversationKey, generateDeviceKeyPair, importPublicKey, parseEncryptedEnvelope, unwrapConversationKey, wrapConversationKey } from "@/lib/dm-encryption"
+import { isValidOlmCiphertext, parseOlmEnvelope, type OlmKeyBundle } from "@/lib/olm-protocol"
+import {
+  ensureOutboundSession,
+  ensureOlmIdentity,
+  encryptTo as olmEncryptTo,
+  decryptFrom as olmDecryptFrom,
+  hasSessionWith,
+  saveOwnPlaintext,
+  loadOwnPlaintext,
+} from "@/lib/olm-protocol-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useLocalSearch } from "@/hooks/use-local-search"
 const DmLocalSearchModal = lazy(() => import("@/components/modals/dm-local-search-modal").then((m) => ({ default: m.DmLocalSearchModal })))
@@ -90,6 +100,7 @@ interface Channel {
   owner_id: string | null
   is_encrypted?: boolean
   encryption_key_version?: number
+  encryption_scheme?: "legacy-ecdh" | "olm"
   theme_preset?: string | null
   members: User[]
   partner: User | null
@@ -378,6 +389,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   const [conversationKey, setConversationKey] = useState<Uint8Array | null>(null)
   const [deviceFingerprint, setDeviceFingerprint] = useState<string | null>(null)
   const [deviceId, setDeviceId] = useState<string | null>(null)
+  const [olmDeviceId, setOlmDeviceId] = useState<string | null>(null)
   const [pendingNewMessageCount, setPendingNewMessageCount] = useState(0)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -551,6 +563,84 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     return nextKey
   }, [currentUserId, ensureDeviceIdentity])
 
+  // Olm identity setup — independent of the legacy-ecdh device
+  // above (different keypair, different purpose). Registers this device's
+  // Olm identity + prekey bundle with the server the first time it's ever
+  // seen; a no-op on every later call.
+  const ensureOlmReady = useCallback(async () => {
+    const { identity, publish } = await ensureOlmIdentity(currentUserId)
+    if (publish) {
+      const res = await fetch("/api/dm/olm/keys/device", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(publish),
+      })
+      if (!res.ok) throw new Error("Failed to register Olm device")
+    }
+    setOlmDeviceId(identity.deviceId)
+    return identity
+  }, [currentUserId])
+
+  // Encrypts plaintext for every *other* device across every member of the
+  // channel (including the sender's own other devices, so sent messages
+  // stay readable from them) — one pairwise Olm session/ciphertext per
+  // device, no group ratchet (see issue #3). Devices with no reachable
+  // session are skipped rather than failing the whole send, matching how
+  // multi-device Signal messaging degrades when one of a user's devices is offline.
+  const encryptOlmText = useCallback(async (channelInfo: Channel, plaintext: string): Promise<string> => {
+    const identity = await ensureOlmReady()
+
+    const memberIds = channelInfo.members.map((m) => m.id)
+    const rosters = await Promise.all(memberIds.map(async (userId) => {
+      const res = await fetch(`/api/dm/olm/keys/devices/${userId}`)
+      if (!res.ok) return { userId, devices: [] as Array<{ device_id: string }> }
+      const data = await res.json()
+      return { userId, devices: (data.devices ?? []) as Array<{ device_id: string }> }
+    }))
+
+    const targets = rosters.flatMap((r) =>
+      r.devices
+        .filter((d) => !(r.userId === currentUserId && d.device_id === identity.deviceId))
+        .map((d) => ({ userId: r.userId, deviceId: d.device_id }))
+    )
+
+    const ciphertexts: Record<string, { type: 0 | 1; body: string }> = {}
+    for (const target of targets) {
+      try {
+        if (!(await hasSessionWith(target))) {
+          const claimRes = await fetch("/api/dm/olm/keys/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ targetUserId: target.userId, targetDeviceId: target.deviceId }),
+          })
+          if (!claimRes.ok) continue
+          const claimed = await claimRes.json()
+          const bundle: OlmKeyBundle = {
+            curve25519IdentityKey: claimed.curve25519_identity_key,
+            ed25519IdentityKey: claimed.ed25519_identity_key,
+            keyId: claimed.key_id,
+            publicKey: claimed.public_key,
+            signature: claimed.signature,
+            isFallback: claimed.is_fallback,
+          }
+          await ensureOutboundSession(target.userId, target.deviceId, bundle)
+        }
+        const ciphertext = await olmEncryptTo(target.userId, target.deviceId, plaintext)
+        ciphertexts[`${target.userId}:${target.deviceId}`] = ciphertext
+      } catch (err) {
+        // Best-effort per device — one unreachable/untrusted device
+        // shouldn't block delivery to the rest.
+        console.error(`[olm-protocol] failed to encrypt for ${target.userId}:${target.deviceId}`, err)
+      }
+    }
+
+    if (Object.keys(ciphertexts).length === 0) {
+      throw new Error("No reachable devices to encrypt this message for")
+    }
+
+    return JSON.stringify({ kind: "dm-olm", v: 1, senderDeviceId: identity.deviceId, ciphertexts })
+  }, [currentUserId, ensureOlmReady])
+
   const { typingUsers, onKeystroke, onSent } = useGatewayTyping(channelId, currentUserId, currentDisplayName)
 
   const loadMessages = useCallback(async (before?: string) => {
@@ -564,7 +654,13 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
       }
       const data = await res.json()
       setChannel(data.channel)
-      if (data.channel?.is_encrypted) await ensureConversationKey(data.channel)
+      if (data.channel?.is_encrypted) {
+        if (data.channel.encryption_scheme === "olm") {
+          await ensureOlmReady()
+        } else {
+          await ensureConversationKey(data.channel)
+        }
+      }
       if (before) {
         setMessages((prev) => [...(data.messages ?? []), ...prev])
       } else {
@@ -574,7 +670,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     } catch {
       if (!before) setLoadError(true)
     }
-  }, [channelId, ensureConversationKey])
+  }, [channelId, ensureConversationKey, ensureOlmReady])
 
   useEffect(() => {
     loadMessages()
@@ -701,9 +797,24 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     }
   }, [messages, isAtBottom, currentUserId, scrollToBottom])
 
-  // Realtime subscription
+  // Clears stale decrypted content when the active channel isn't encrypted
+  // at all — plaintext channels render msg.content directly and never
+  // consult decryptedContent, but a prior encrypted channel may have left
+  // entries behind. Both decrypt-path effects below only ever run (and
+  // populate this) when channel.is_encrypted is true, so they can't race
+  // this reset.
   useEffect(() => {
-    if (!channel?.is_encrypted || !conversationKey) {
+    if (channel?.is_encrypted) return
+    decryptedRef.current = {}
+    setDecryptedContent({})
+  }, [channel?.id, channel?.is_encrypted])
+
+  // Realtime subscription — legacy-ecdh decrypt path (shared per-channel
+  // conversation key; see the Olm effect below for the newer
+  // pairwise-per-device scheme).
+  useEffect(() => {
+    if (!channel?.is_encrypted || channel.encryption_scheme === "olm") return
+    if (!conversationKey) {
       decryptedRef.current = {}
       setDecryptedContent({})
       return
@@ -744,7 +855,81 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     })()
 
     return () => { cancelled = true }
-  }, [channel?.id, channel?.is_encrypted, conversationKey, messages])
+  }, [channel?.id, channel?.is_encrypted, channel?.encryption_scheme, conversationKey, messages])
+
+  // Olm decrypt path — one pairwise Olm session per sender
+  // device (see issue #3: no group sender-key ratchet). A message this
+  // device itself just sent has no entry for itself in the envelope by
+  // design (see encryptOlmText) — handleDmSend seeds decryptedContent
+  // for those optimistically, so this effect only ever needs to decrypt
+  // messages that actually came from someone else's session.
+  useEffect(() => {
+    if (!channel?.is_encrypted || channel.encryption_scheme !== "olm") return
+
+    let cancelled = false
+    ;(async () => {
+      const identity = await ensureOlmReady()
+      const next = { ...decryptedRef.current }
+      let changed = false
+
+      for (const msg of messages) {
+        const cached = next[msg.id]
+        if (cached && !cached.failed) continue
+
+        const envelope = parseOlmEnvelope(msg.content)
+        if (!envelope) {
+          next[msg.id] = { text: "Unable to decrypt this message", failed: true }
+          changed = true
+          continue
+        }
+
+        const mine = envelope.ciphertexts[`${currentUserId}:${identity.deviceId}`]
+        if (!mine || !isValidOlmCiphertext(mine)) {
+          // Our own sent messages never carry a ciphertext for our own
+          // device (see encryptOlmText) — recover the plaintext from the
+          // local cache saveOwnPlaintext wrote when we sent it, instead of
+          // reporting it as undecryptable.
+          const ownPlaintext = msg.sender_id === currentUserId ? await loadOwnPlaintext(msg.id) : null
+          next[msg.id] = ownPlaintext !== null
+            ? { text: ownPlaintext, failed: false }
+            : { text: "Not available on this device", failed: true }
+          changed = true
+          continue
+        }
+
+        try {
+          const senderTarget = { userId: msg.sender_id, deviceId: envelope.senderDeviceId }
+          let identityHint: { curve25519IdentityKey: string; ed25519IdentityKey: string } | undefined
+          if (!(await hasSessionWith(senderTarget))) {
+            // Establishing a session with this sender device for the first
+            // time — resolve its claimed identity from the directory so
+            // it's pinned/verified the same way an outbound contact would
+            // be (see olmDecryptFrom's create_inbound_from check), instead
+            // of blindly trusting whatever identity the PreKey message
+            // itself embeds.
+            const dirRes = await fetch(`/api/dm/olm/keys/devices/${msg.sender_id}`)
+            if (dirRes.ok) {
+              const dir = await dirRes.json()
+              const entry = (dir.devices ?? []).find((d: { device_id: string }) => d.device_id === envelope.senderDeviceId)
+              if (entry) {
+                identityHint = { curve25519IdentityKey: entry.curve25519_identity_key, ed25519IdentityKey: entry.ed25519_identity_key }
+              }
+            }
+          }
+          next[msg.id] = { text: await olmDecryptFrom(msg.sender_id, envelope.senderDeviceId, mine, identityHint), failed: false }
+        } catch {
+          next[msg.id] = { text: "Unable to decrypt this message", failed: true }
+        }
+        changed = true
+      }
+
+      if (!changed || cancelled) return
+      decryptedRef.current = next
+      setDecryptedContent(next)
+    })()
+
+    return () => { cancelled = true }
+  }, [channel?.id, channel?.is_encrypted, channel?.encryption_scheme, currentUserId, messages, ensureOlmReady])
 
   // Reset the indexed-IDs tracker whenever the active channel changes so that
   // the new channel's messages are fully re-indexed from scratch.
@@ -965,9 +1150,27 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
 
     const encryptText = async (plaintext: string): Promise<string> => {
       if (!channel?.is_encrypted) return plaintext
+      if (channel.encryption_scheme === "olm") return encryptOlmText(channel, plaintext)
       const key = conversationKey ?? await ensureConversationKey(channel)
       if (!key) throw new Error("Missing encryption key")
       return JSON.stringify(await encryptDmContent(plaintext, key, channel.encryption_key_version ?? 1))
+    }
+
+    // Olm has no shared symmetric channel key the sender could
+    // use to decrypt their own just-sent message, and by design the
+    // envelope carries no ciphertext entry for the sending device itself
+    // (see encryptOlmText) — seed the local decrypted-content cache
+    // directly with the plaintext we already have in hand instead of
+    // routing it through the decrypt effect. Also persisted to IndexedDB
+    // (saveOwnPlaintext) since decryptedContent is in-memory only and would
+    // otherwise be unrecoverable after a reload (see the Olm decrypt effect,
+    // which falls back to loadOwnPlaintext for our own messages).
+    const seedOwnPlaintext = (id: string, plaintext: string) => {
+      if (channel?.is_encrypted && channel.encryption_scheme === "olm") {
+        decryptedRef.current = { ...decryptedRef.current, [id]: { text: plaintext, failed: false } }
+        setDecryptedContent(decryptedRef.current)
+        saveOwnPlaintext(id, plaintext).catch(() => {})
+      }
     }
 
     // Handle file attachments (each sent as a separate message)
@@ -998,12 +1201,14 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         onUploadProgress?.(Math.round(((i + 0.5) / totalFiles) * 100))
 
         try {
-          const outbound = await encryptText(`📎 ${file.name}`)
+          const captionPlaintext = `📎 ${file.name}`
+          const outbound = await encryptText(captionPlaintext)
           const filePayload: { content: string; reply_to_id?: string } = { content: outbound }
           // Attach reply context to the first file message
           if (i === 0 && replyTo) filePayload.reply_to_id = replyTo.id
           const msg = await sendDmPayload(filePayload)
           if (!msg) throw new Error("Failed to send file")
+          seedOwnPlaintext(msg.id, captionPlaintext)
 
           const attachRes = await fetch(`/api/dm/channels/${channelId}/attachments`, {
             method: "PATCH",
@@ -1046,11 +1251,12 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
       if (replyTo && (!files || files.length === 0)) payload.reply_to_id = replyTo.id
       const msg = await sendDmPayload(payload)
       if (!msg) throw new Error("Failed to send message")
+      seedOwnPlaintext(msg.id, text)
       setMessages((prev) => [...prev, msg])
     }
 
     setReplyTo(null)
-  }, [channelId, channel, conversationKey, ensureConversationKey, replyTo, sendDmPayload])
+  }, [channelId, channel, conversationKey, ensureConversationKey, encryptOlmText, replyTo, sendDmPayload])
 
   async function handleEditSave(messageId: string) {
     if (!editContent.trim()) return
@@ -1260,7 +1466,9 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
           <div className="font-semibold text-sm md:text-base text-white truncate">{displayName}</div>
           {channel.is_encrypted && (
             <div className="text-xs truncate" style={{ color: "var(--theme-text-muted)" }}>
-              End-to-end encrypted • Device fingerprint: {deviceFingerprint ?? "verifying…"}
+              {channel.encryption_scheme === "olm"
+                ? <>End-to-end encrypted (Olm) • Device {olmDeviceId ? olmDeviceId.slice(0, 8) : "verifying…"}</>
+                : <>End-to-end encrypted • Device fingerprint: {deviceFingerprint ?? "verifying…"}</>}
             </div>
           )}
         </div>

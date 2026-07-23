@@ -113,6 +113,20 @@ const nextConfig = {
   serverExternalPackages: ['better-sqlite3'],
   webpack: (config, { isServer }) => {
     if (!isServer) {
+      // @matrix-org/olm's UMD build (lib/olm-protocol.ts's dynamic
+      // import("@matrix-org/olm")) branches on `typeof require === "function"`
+      // to support both Node and browser, but webpack still statically sees
+      // the `require("fs")`/`require("path")` calls in that Node branch and
+      // tries to resolve them for the client bundle — neither is polyfilled
+      // (or needed; that branch never runs in the browser), so the build
+      // fails with "Module not found: Can't resolve 'fs'" otherwise. `false`
+      // tells webpack to stub these out instead of erroring.
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+      }
+
       // Split heavy client-side dependencies into separate chunks
       // so the initial bundle stays small on low-end mobile devices
       config.optimization.splitChunks = {

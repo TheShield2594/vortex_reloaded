@@ -42,6 +42,7 @@ export async function GET() {
             isEncrypted: dmChannels.isEncrypted,
             encryptionKeyVersion: dmChannels.encryptionKeyVersion,
             encryptionMembershipEpoch: dmChannels.encryptionMembershipEpoch,
+            encryptionScheme: dmChannels.encryptionScheme,
           })
           .from(dmChannels)
           .where(inArray(dmChannels.id, channelIds)),
@@ -136,6 +137,7 @@ export async function GET() {
         ownerId: ch.ownerId,
         updatedAt: ch.updatedAt,
         isEncrypted: ch.isEncrypted,
+        encryptionScheme: ch.encryptionScheme,
         members,
         partner,
         latestMessage: latest ? { ...latest, content: ch.isEncrypted ? "Encrypted message" : latest.content } : null,
@@ -224,7 +226,17 @@ export async function POST(req: NextRequest) {
       channel = db.transaction((tx) => {
         const row = tx
           .insert(dmChannels)
-          .values({ name: name ?? null, isGroup, ownerId: user.id, isEncrypted: encrypted })
+          .values({
+            name: name ?? null,
+            isGroup,
+            ownerId: user.id,
+            isEncrypted: encrypted,
+            // Every newly-created encrypted channel uses Olm (Matrix.org's
+            // Double Ratchet implementation, not Signal's own codebase) —
+            // "legacy-ecdh" only exists on channels created before this
+            // migration and is never assigned going forward (see issue #1).
+            ...(encrypted ? { encryptionScheme: "olm" as const } : {}),
+          })
           .returning()
           .get()
 

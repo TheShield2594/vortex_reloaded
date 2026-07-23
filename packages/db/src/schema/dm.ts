@@ -31,6 +31,17 @@ export const dmChannels = sqliteTable(
     isEncrypted: integer("is_encrypted", { mode: "boolean" }).notNull().default(false),
     encryptionKeyVersion: integer("encryption_key_version").notNull().default(1),
     encryptionMembershipEpoch: integer("encryption_membership_epoch").notNull().default(0),
+    /**
+     * Which E2EE scheme this channel's `directMessages.content` envelopes
+     * use. New encrypted channels are always created as "olm" (Matrix.org's
+     * Double Ratchet implementation — see apps/web/app/api/dm/channels/route.ts)
+     * — "legacy-ecdh" (the static per-device ECDH+AES-GCM wrap in
+     * lib/dm-encryption.ts) only exists on channels created before this
+     * migration and is never assigned to a new channel going forward.
+     */
+    encryptionScheme: text("encryption_scheme", { enum: ["legacy-ecdh", "olm"] })
+      .notNull()
+      .default("legacy-ecdh"),
     themePreset: text("theme_preset", {
       enum: [
         "twilight",
@@ -59,6 +70,10 @@ export const dmChannels = sqliteTable(
         'frost', 'clarity', 'velvet-dusk', 'terminal', 'sakura-blossom',
         'frosthearth', 'night-city-neural'
       )`
+    ),
+    check(
+      "dm_channels_encryption_scheme_check",
+      sql`${table.encryptionScheme} in ('legacy-ecdh', 'olm')`
     ),
   ]
 )
@@ -249,3 +264,69 @@ export const userDeviceKeys = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.userId, table.deviceId] })]
 )
+
+/**
+ * Olm (Matrix.org's Double Ratchet implementation — not Signal's own
+ * codebase/protocol, see issue #1's discussion) device identity — one row
+ * per (user, device), independent of `userDeviceKeys` (the legacy-ecdh
+ * scheme's device table). `curve25519IdentityKey`/`ed25519IdentityKey` come
+ * straight from `Olm.Account.identity_keys()`; `fallback*` is the device's
+ * current Olm fallback key (functions like Signal's signed prekey — a
+ * long-lived key used to establish a session once one-time keys are
+ * exhausted). Both the fallback key and every one-time key in
+ * `olmOneTimeKeys` are signed with the device's ed25519 identity key
+ * (`Olm.Account.sign`) so a session initiator can verify authenticity
+ * independent of server trust — see apps/web/lib/olm-protocol.ts's
+ * `signBundle`/`verifyBundleSignature`.
+ */
+export const olmDeviceIdentities = sqliteTable(
+  "olm_device_identities",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceId: text("device_id").notNull(),
+    curve25519IdentityKey: text("curve25519_identity_key").notNull(),
+    ed25519IdentityKey: text("ed25519_identity_key").notNull(),
+    fallbackKeyId: text("fallback_key_id").notNull(),
+    fallbackPublicKey: text("fallback_public_key").notNull(),
+    fallbackSignature: text("fallback_signature").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.deviceId] })]
+)
+
+/**
+ * One-time prekeys for X3DH-style Olm session establishment. Each row is
+ * claimed at most once via apps/web/app/api/dm/olm/keys/claim/route.ts's
+ * atomic select-then-mark-consumed — reusing an Olm one-time key breaks the
+ * forward-secrecy guarantee it exists to provide.
+ *
+ * Claiming sets `consumedAt` rather than deleting the row. A hard delete
+ * would free up the (userId, deviceId, keyId) primary key slot, and
+ * apps/web/app/api/dm/olm/keys/device/route.ts's publish endpoint inserts
+ * with `onConflictDoNothing()` — so a replayed/duplicate publish request
+ * carrying an already-claimed keyId would silently resurrect it as
+ * claimable again. Leaving a consumed tombstone in place keeps that primary
+ * key permanently occupied, so the conflict (and no-op) always wins instead.
+ */
+export const olmOneTimeKeys = sqliteTable(
+  "olm_one_time_keys",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    deviceId: text("device_id").notNull(),
+    keyId: text("key_id").notNull(),
+    publicKey: text("public_key").notNull(),
+    signature: text("signature").notNull(),
+    consumedAt: text("consumed_at"),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.deviceId, table.keyId] }),
+    index("olm_one_time_keys_claim_idx").on(table.userId, table.deviceId, table.consumedAt, table.createdAt),
+  ]
+)
+

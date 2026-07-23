@@ -12,6 +12,7 @@ import {
   Keyboard,
   Volume2,
   Accessibility,
+  UserPlus,
 } from "lucide-react"
 import type { UserRow } from "@/types/database"
 import { authClient } from "@/lib/auth/auth-client"
@@ -33,6 +34,7 @@ const NAV_SECTIONS = [
       { href: "/settings/notifications", label: "Notifications", icon: Bell },
       { href: "/settings/voice", label: "Voice & Video", icon: Volume2 },
       { href: "/settings/security", label: "Security & Privacy", icon: Shield },
+      { href: "/settings/invites", label: "Invites", icon: UserPlus },
       { href: "/settings/keybinds", label: "Keybinds", icon: Keyboard, hideOnMobile: true },
     ],
   },

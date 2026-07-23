@@ -8,6 +8,20 @@
       "when": 1784772998106,
       "tag": "0000_initial_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784842608862,
+      "tag": "0001_strong_slayback",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784845417170,
+      "tag": "0002_harsh_doctor_faustus",
+      "breakpoints": true
     }
   ]
 }
