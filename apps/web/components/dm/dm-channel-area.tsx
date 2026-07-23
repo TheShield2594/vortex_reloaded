@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { createClientSupabaseClient } from "@/lib/supabase/client"
 import { Room, RoomEvent, createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, type RemoteParticipant, type RemoteTrack } from "livekit-client"
 import { createEqTrackProcessor, type EqTrackProcessor } from "@/lib/voice/eq-track-processor"
+import { buildSpatialAudioGraph, type SpatialAudioGraph } from "@/lib/voice/spatial-audio-graph"
 import { useVoiceAudioStore } from "@/lib/stores/voice-audio-store"
 import { EqSettingsPanel } from "@/components/dm/eq-settings-panel"
 import { setActiveDmChannel } from "@/lib/notification-manager"
@@ -1942,11 +1943,18 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
   const intentionalDisconnectRef = useRef(false)
   const eqProcessorRef = useRef<EqTrackProcessor | null>(null)
   const eqButtonRef = useRef<HTMLButtonElement>(null)
+  const spatialAudioContextRef = useRef<AudioContext | null>(null)
+  const spatialGraphsRef = useRef<Record<string, SpatialAudioGraph>>({})
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({})
   const [status, setStatus] = useState<"connecting" | "connected" | "failed">("connecting")
   const [failReason, setFailReason] = useState("")
   const [showEqPanel, setShowEqPanel] = useState(false)
   const isGroupCall = participants.length > 1
+  const spatialAudioEnabled = useVoiceAudioStore(
+    (state) => state.getEffectiveSettings(currentUserId).spatialAudioEnabled
+  )
+  const participantMixes = useVoiceAudioStore((state) => state.participantMixByServer[channelId] ?? {})
+  const getParticipantMix = useVoiceAudioStore((state) => state.getParticipantMix)
 
   const statusMeta: Record<typeof status, { label: string; detail: string; tone: string; bg: string }> = {
     connecting: {
@@ -2075,6 +2083,60 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId, currentUserId, withVideo, isGroupCall])
 
+  // Spatial audio: only meaningful once there's more than one remote voice to
+  // tell apart, so it's scoped to group calls. Builds a gain/pan graph per
+  // participant into a shared AudioContext, keyed off the remoteStreams that
+  // TrackSubscribed/TrackUnsubscribed already maintain.
+  useEffect(() => {
+    if (!isGroupCall || !spatialAudioEnabled) {
+      Object.values(spatialGraphsRef.current).forEach((graph) => graph.cleanup())
+      spatialGraphsRef.current = {}
+      if (spatialAudioContextRef.current) {
+        spatialAudioContextRef.current.close().catch(() => {})
+        spatialAudioContextRef.current = null
+      }
+      return
+    }
+
+    const AudioCtx =
+      window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioCtx) return
+
+    const audioContext = spatialAudioContextRef.current ?? new AudioCtx()
+    spatialAudioContextRef.current = audioContext
+    if (audioContext.state === "suspended") audioContext.resume().catch(() => {})
+
+    for (const participantId of Object.keys(spatialGraphsRef.current)) {
+      if (!(participantId in remoteStreams)) {
+        spatialGraphsRef.current[participantId].cleanup()
+        delete spatialGraphsRef.current[participantId]
+      }
+    }
+
+    for (const [participantId, stream] of Object.entries(remoteStreams)) {
+      const mix = getParticipantMix(channelId, participantId)
+      const existing = spatialGraphsRef.current[participantId]
+      if (existing) {
+        existing.updateMix(mix)
+      } else if (stream.getAudioTracks().length > 0) {
+        spatialGraphsRef.current[participantId] = buildSpatialAudioGraph(audioContext, stream, mix)
+      }
+    }
+  }, [isGroupCall, spatialAudioEnabled, remoteStreams, participantMixes, channelId, getParticipantMix])
+
+  // Belt-and-suspenders teardown on unmount — the effect above already tears
+  // down on isGroupCall/spatialAudioEnabled flipping, but not on unmount itself.
+  useEffect(() => {
+    return () => {
+      Object.values(spatialGraphsRef.current).forEach((graph) => graph.cleanup())
+      spatialGraphsRef.current = {}
+      if (spatialAudioContextRef.current) {
+        spatialAudioContextRef.current.close().catch(() => {})
+        spatialAudioContextRef.current = null
+      }
+    }
+  }, [])
+
   const { toggleMute, toggleVideo } = useCallMediaToggles({
     muted,
     videoOff,
@@ -2178,6 +2240,8 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
                 participant={participant}
                 stream={remoteStreams[participant.id] ?? null}
                 withVideo={withVideo}
+                channelId={channelId}
+                spatialAudioEnabled={spatialAudioEnabled}
               />
             ))}
           </div>
@@ -2251,10 +2315,28 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
 }
 
 /** One participant's tile in a group call grid — video, or an avatar placeholder while audio-only/connecting. */
-function GroupCallTile({ participant, stream, withVideo }: { participant: User; stream: MediaStream | null; withVideo: boolean }) {
+function GroupCallTile({
+  participant,
+  stream,
+  withVideo,
+  channelId,
+  spatialAudioEnabled,
+}: {
+  participant: User
+  stream: MediaStream | null
+  withVideo: boolean
+  channelId: string
+  spatialAudioEnabled: boolean
+}) {
   const name = participant.display_name || participant.username
   const connected = !!stream
+  const mix = useVoiceAudioStore((state) => state.getParticipantMix(channelId, participant.id))
+  const setParticipantVolume = useVoiceAudioStore((state) => state.setParticipantVolume)
+  const setParticipantPan = useVoiceAudioStore((state) => state.setParticipantPan)
 
+  // When spatial audio is routing this participant's stream through its own
+  // gain/pan graph into the call's AudioContext, mute the raw element so its
+  // audio doesn't also play unprocessed and double up.
   return (
     <div
       className="relative rounded-xl overflow-hidden flex flex-col items-center justify-center aspect-video"
@@ -2262,14 +2344,14 @@ function GroupCallTile({ participant, stream, withVideo }: { participant: User; 
     >
       {withVideo && (
         <video
-          ref={(el) => { if (el) el.srcObject = stream }}
+          ref={(el) => { if (el) { el.srcObject = stream; el.muted = spatialAudioEnabled } }}
           autoPlay
           playsInline
           className={cn("absolute inset-0 w-full h-full object-cover", !connected && "hidden")}
         />
       )}
       {!withVideo && (
-        <audio ref={(el) => { if (el) el.srcObject = stream }} autoPlay playsInline />
+        <audio ref={(el) => { if (el) { el.srcObject = stream; el.muted = spatialAudioEnabled } }} autoPlay playsInline />
       )}
       {(!withVideo || !connected) && (
         <div className="flex flex-col items-center gap-2 p-3">
@@ -2284,6 +2366,39 @@ function GroupCallTile({ participant, stream, withVideo }: { participant: User; 
           {!connected && (
             <span className="text-[10px]" style={{ color: "var(--theme-text-muted)" }}>Connecting…</span>
           )}
+        </div>
+      )}
+      {spatialAudioEnabled && connected && (
+        <div
+          className="absolute bottom-1 left-1 right-1 flex flex-col gap-0.5 px-2 py-1 rounded-md"
+          style={{ background: "rgba(0,0,0,0.55)" }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] w-6 shrink-0" style={{ color: "var(--theme-text-secondary)" }}>Vol</span>
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.05}
+              value={mix.volume}
+              onChange={(event) => setParticipantVolume(channelId, participant.id, Number(event.target.value))}
+              aria-label={`${name} volume`}
+              className="w-full h-3"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] w-6 shrink-0" style={{ color: "var(--theme-text-secondary)" }}>Pan</span>
+            <input
+              type="range"
+              min={-1}
+              max={1}
+              step={0.05}
+              value={mix.pan ?? 0}
+              onChange={(event) => setParticipantPan(channelId, participant.id, Number(event.target.value))}
+              aria-label={`${name} pan`}
+              className="w-full h-3"
+            />
+          </div>
         </div>
       )}
     </div>
