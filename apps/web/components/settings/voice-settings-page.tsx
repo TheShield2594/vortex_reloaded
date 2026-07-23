@@ -2,8 +2,6 @@
 
 import { Mic, Video, Volume2, Headphones } from "lucide-react"
 
-const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL
-
 export function VoiceSettingsPage() {
   return (
     <div className="space-y-8">
@@ -26,22 +24,20 @@ export function VoiceSettingsPage() {
           style={{ background: "var(--theme-bg-secondary)", border: "1px solid var(--theme-bg-tertiary)" }}
         >
           <div className="flex items-center gap-2">
-            <Headphones className="w-5 h-5" style={{ color: LIVEKIT_URL ? "var(--theme-success)" : "var(--theme-accent)" }} />
+            <Headphones className="w-5 h-5" style={{ color: "var(--theme-success)" }} />
             <p className="font-semibold" style={{ color: "var(--theme-text-primary)" }}>
-              {LIVEKIT_URL ? "Livekit SFU (scalable)" : "WebRTC P2P"}
+              LiveKit SFU
             </p>
           </div>
           <p className="text-sm" style={{ color: "var(--theme-text-muted)" }}>
-            {LIVEKIT_URL
-              ? `Connected to SFU at ${LIVEKIT_URL}. Supports large groups with no P2P limits.`
-              : "Using peer-to-peer WebRTC. Best for groups up to 6. Set NEXT_PUBLIC_LIVEKIT_URL to enable the SFU."}
+            Calls connect through a LiveKit media server, so voice and video scale to group calls without a peer-to-peer mesh.
           </p>
         </div>
       </section>
 
       <div className="grid grid-cols-2 gap-4">
         {[
-          { icon: Mic, label: "Microphone", description: "Device selection and audio pipeline settings are available in the voice channel panel during a call." },
+          { icon: Mic, label: "Microphone", description: "EQ, presets, and gain are adjustable live from the settings button in the call controls during a voice call." },
           { icon: Video, label: "Camera", description: "Select your camera and resolution when starting a video stream." },
           { icon: Volume2, label: "Speaker", description: "Output device selection is available during an active voice session." },
         ].map(({ icon: Icon, label, description }) => (
@@ -60,7 +56,8 @@ export function VoiceSettingsPage() {
       </div>
 
       <p className="text-xs" style={{ color: "var(--theme-text-muted)" }}>
-        Advanced audio settings (EQ, noise gate, compressor) are accessible from the voice channel panel.
+        Advanced audio settings (EQ, presets, gain, bypass) live in the settings panel opened from the gear
+        button in the call controls — changes apply instantly and are saved to your profile for next time.
       </p>
     </div>
   )
