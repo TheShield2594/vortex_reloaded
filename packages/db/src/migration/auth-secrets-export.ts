@@ -82,10 +82,15 @@ export interface AuthSecretsCounts {
 export async function exportAuthSecrets(pool: Pool, outputDir: string = resolveMigrationOutputDir()): Promise<AuthSecretsCounts> {
   const dir = path.join(outputDir, "auth-secrets")
 
+  // Not filtered to `encrypted_password IS NOT NULL` — magic-link-only and
+  // OAuth-only signups have no password but still need their
+  // email/emailVerified backfilled onto `users`, or they land in SQLite
+  // with `email = NULL` and can't sign in via magic link post-migration.
+  // import-auth-secrets.ts only creates a `credential` account row when
+  // passwordHash is present; the email/verified backfill runs for every row.
   const { rows: users } = await pool.query(
     `SELECT id, email, encrypted_password, email_confirmed_at IS NOT NULL AS email_verified
      FROM auth.users
-     WHERE encrypted_password IS NOT NULL
      ORDER BY id`
   )
   writeSecretFile(
@@ -95,10 +100,11 @@ export async function exportAuthSecrets(pool: Pool, outputDir: string = resolveM
         userId: u.id,
         email: u.email,
         emailVerified: u.email_verified,
-        // bcrypt — verify with bcrypt.compare() in the Credentials
-        // authorize() callback, not Better Auth's native password verifier.
+        // bcrypt — verify with bcrypt.compare() via Better Auth's
+        // emailAndPassword.password.verify, not its native password
+        // verifier. Null for magic-link-only / OAuth-only users.
         passwordHash: u.encrypted_password,
-        passwordHashAlgorithm: "bcrypt",
+        passwordHashAlgorithm: u.encrypted_password ? "bcrypt" : null,
       })
     )
   )

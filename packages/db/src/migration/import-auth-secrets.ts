@@ -25,8 +25,10 @@ interface CredentialRow {
   userId: string
   email: string
   emailVerified: boolean
-  passwordHash: string
-  passwordHashAlgorithm: string
+  // Null for magic-link-only / OAuth-only users — auth-secrets-export.ts
+  // exports every `auth.users` row now, not just ones with a password.
+  passwordHash: string | null
+  passwordHashAlgorithm: string | null
 }
 
 interface TotpFactorRow {
@@ -76,7 +78,10 @@ export async function importAuthSecrets(
   outputDir: string = resolveMigrationOutputDir()
 ): Promise<ImportAuthSecretsResult> {
   const dir = path.join(outputDir, "auth-secrets")
-  const now = new Date().toISOString()
+  // accounts.created_at/updated_at and passkeys.created_at are
+  // betterAuthTimestamp() columns (integer, epoch seconds) — not the ISO
+  // string `users.createdAt`/`updatedAt` use.
+  const now = Math.floor(Date.now() / 1000)
 
   const [credentials, totpFactors, oauthIdentities, passkeyRows] = await Promise.all([
     readNdjson<CredentialRow>(path.join(dir, "credentials.ndjson")),
@@ -108,11 +113,17 @@ export async function importAuthSecrets(
 
     const importCredentials = sqlite.transaction((rows: CredentialRow[]) => {
       for (const row of rows) {
+        // Every row backfills email/emailVerified — magic-link-only and
+        // OAuth-only users have no password but still need these set, or
+        // they can't sign in via magic link (or show an email) post-cutover.
+        updateUserEmail.run(row.email, row.emailVerified ? 1 : 0, row.userId)
+
         // bcrypt is the only algorithm this script (or emailAndPassword.password.verify
         // in apps/web/lib/auth/better-auth.ts) knows how to carry over — see
-        // auth-secrets-export.ts's module comment.
-        if (row.passwordHashAlgorithm !== "bcrypt") continue
-        updateUserEmail.run(row.email, row.emailVerified ? 1 : 0, row.userId)
+        // auth-secrets-export.ts's module comment. Rows with no password hash
+        // (magic-link-only / OAuth-only signups) get no `credential` account
+        // row at all — OAuth identities are linked separately via importOAuth.
+        if (row.passwordHashAlgorithm !== "bcrypt" || !row.passwordHash) continue
         insertAccount.run(randomUUID(), row.userId, row.userId, "credential", row.passwordHash, now, now)
       }
     })
