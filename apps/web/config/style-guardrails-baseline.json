@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-23T14:12:17.907Z",
+  "generatedAt": "2026-07-23T15:14:05.627Z",
   "rules": [
     {
       "id": "inline-style-color",
@@ -2176,160 +2176,154 @@
       "line": 79
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1213",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1213
-    },
-    {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1214",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
       "line": 1214
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1218",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1215",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1218
+      "line": 1215
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1228",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1219",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1228
+      "line": 1219
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1230",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1229",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1230
+      "line": 1229
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1247",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1231",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1247
+      "line": 1231
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1251",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1248",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1251
+      "line": 1248
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1256",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1252",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1256
+      "line": 1252
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1263",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1257",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1263
+      "line": 1257
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1269",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1264",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1269
+      "line": 1264
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1277",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1270",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1277
+      "line": 1270
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1285",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1278",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1285
+      "line": 1278
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1295",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1286",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1295
+      "line": 1286
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1313",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1296",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1313
+      "line": 1296
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1323",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1314",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1323
+      "line": 1314
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1374",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1324",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1374
+      "line": 1324
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1386",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1375",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1386
+      "line": 1375
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1392",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1387",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1392
+      "line": 1387
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1398",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1393",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1398
+      "line": 1393
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1455",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1399",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1455
+      "line": 1399
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1458",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1456",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1458
+      "line": 1456
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1473",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1459",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1473
+      "line": 1459
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1481",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1474",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1481
+      "line": 1474
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1484",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1482",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1484
+      "line": 1482
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1502",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1485",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1502
+      "line": 1485
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1504",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1503",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1504
+      "line": 1503
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1505",
@@ -2338,34 +2332,34 @@
       "line": 1505
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1524",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1506",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1524
+      "line": 1506
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1535",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1525",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1535
+      "line": 1525
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1541",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1536",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1541
+      "line": 1536
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1551",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1542",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1551
+      "line": 1542
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1555",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1552",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1555
+      "line": 1552
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1556",
@@ -2374,22 +2368,16 @@
       "line": 1556
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:156",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1557",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 156
+      "line": 1557
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1564",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1565",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1564
-    },
-    {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1566",
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1566
+      "line": 1565
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1567",
@@ -2398,10 +2386,16 @@
       "line": 1567
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1571",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1568",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1571
+      "line": 1568
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:157",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 157
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1572",
@@ -2410,16 +2404,16 @@
       "line": 1572
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1587",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1573",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1587
+      "line": 1573
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1589",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1588",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1589
+      "line": 1588
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1590",
@@ -2428,10 +2422,10 @@
       "line": 1590
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1595",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1591",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1595
+      "line": 1591
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1596",
@@ -2440,286 +2434,310 @@
       "line": 1596
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1622",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1597",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1622
+      "line": 1597
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1638",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1623",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1638
+      "line": 1623
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1642",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1639",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1642
+      "line": 1639
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1644",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1643",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1644
+      "line": 1643
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1650",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1645",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1650
+      "line": 1645
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1661",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1651",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1661
+      "line": 1651
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1666",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1662",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1666
+      "line": 1662
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1671",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1667",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1671
+      "line": 1667
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1705",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1672",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1705
+      "line": 1672
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1716",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1706",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1716
+      "line": 1706
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1728",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1717",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1728
+      "line": 1717
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1738",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1729",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1738
+      "line": 1729
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1759",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1739",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1759
+      "line": 1739
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:176",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1760",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 176
+      "line": 1760
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1780",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:177",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1780
+      "line": 177
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1789",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1781",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1789
+      "line": 1781
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1807",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1790",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1807
+      "line": 1790
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1816",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1808",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1816
+      "line": 1808
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1826",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1817",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1826
+      "line": 1817
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1841",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1827",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1841
+      "line": 1827
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1860",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1842",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 1860
+      "line": 1842
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:194",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:1861",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 194
+      "line": 1861
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2105",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:195",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2105
+      "line": 195
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2124",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:215",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2124
+      "line": 215
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2127",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2167",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2127
+      "line": 2167
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2133",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2186",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2133
+      "line": 2186
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2135",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2189",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2135
+      "line": 2189
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:214",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2195",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 214
+      "line": 2195
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2146",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2197",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2146
+      "line": 2197
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2155",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2208",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2155
+      "line": 2208
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2157",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:221",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2157
+      "line": 221
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2160",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2217",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2160
+      "line": 2217
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2171",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2219",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2171
+      "line": 2219
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2191",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2222",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2191
+      "line": 2222
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:220",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2233",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 220
+      "line": 2233
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2202",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:225",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2202
+      "line": 225
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2213",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2255",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2213
+      "line": 2255
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2232",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2266",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2232
+      "line": 2266
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:224",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2277",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 224
+      "line": 2277
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2242",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2296",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2242
+      "line": 2296
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2261",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2306",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2261
+      "line": 2306
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2276",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2343",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2276
+      "line": 2343
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2283",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:235",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2283
+      "line": 235
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2285",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2358",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 2285
+      "line": 2358
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:234",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2365",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 234
+      "line": 2365
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:253",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2367",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 253
+      "line": 2367
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:275",
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2374",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 275
+      "line": 2374
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2377",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 2377
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:2390",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 2390
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:254",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 254
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/dm-channel-area.tsx:276",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/dm-channel-area.tsx",
+      "line": 276
     },
     {
       "key": "inline-style-color:apps/web/components/dm/dm-list.tsx:303",
@@ -2824,10 +2842,16 @@
       "line": 170
     },
     {
-      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:180",
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:178",
       "ruleId": "inline-style-color",
       "file": "apps/web/components/dm/eq-settings-panel.tsx",
-      "line": 180
+      "line": 178
+    },
+    {
+      "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:188",
+      "ruleId": "inline-style-color",
+      "file": "apps/web/components/dm/eq-settings-panel.tsx",
+      "line": 188
     },
     {
       "key": "inline-style-color:apps/web/components/dm/eq-settings-panel.tsx:71",
@@ -7180,28 +7204,28 @@
       "line": 828
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:156",
+      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:157",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 156
+      "line": 157
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:194",
+      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:195",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 194
+      "line": 195
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:253",
+      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:254",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 253
+      "line": 254
     },
     {
-      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:275",
+      "key": "inline-style-radius-shadow:apps/web/components/dm/dm-channel-area.tsx:276",
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/dm/dm-channel-area.tsx",
-      "line": 275
+      "line": 276
     },
     {
       "key": "inline-style-radius-shadow:apps/web/components/layout/mobile-bottom-tab-bar.tsx:45",

@@ -175,6 +175,14 @@ export function EqSettingsPanel({ userId, onClose, anchorRef, processorRef }: Eq
           />
           Auto-bypass on CPU constraint
         </label>
+        <label className="flex items-center gap-2 text-xs" style={{ color: "var(--theme-text-secondary)" }}>
+          <input
+            type="checkbox"
+            checked={settings.spatialAudioEnabled}
+            onChange={(event) => setProfileSettings(userId, { ...settings, spatialAudioEnabled: event.target.checked })}
+          />
+          Spatial audio in group calls (per-speaker volume/pan)
+        </label>
       </div>
 
       <p className="text-[10px]" style={{ color: "var(--theme-text-faint)" }}>
