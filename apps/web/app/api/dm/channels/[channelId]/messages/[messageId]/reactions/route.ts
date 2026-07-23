@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse, after } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, eq, isNull } from "drizzle-orm"
+import { createDb, directMessages, dmChannelMembers, dmReactions } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
-import { untypedFrom } from "@/lib/supabase/untyped-table"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
+
+const db = createDb()
 
 interface Body {
   emoji?: string
@@ -17,32 +19,43 @@ function normalizeEmoji(raw: string | undefined): string | null {
 }
 
 async function verifyMembershipAndMessage(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   channelId: string,
   messageId: string,
   userId: string
-): Promise<{ error: NextResponse | null; message: { id: string; sender_id: string } | null }> {
+): Promise<{ error: NextResponse | null; message: { id: string; senderId: string } | null }> {
   // Verify the user is a member of this DM channel
-  const { data: membership, error: membershipError } = await supabase
-    .from("dm_channel_members")
-    .select("user_id")
-    .eq("dm_channel_id", channelId)
-    .eq("user_id", userId)
-    .maybeSingle()
-
-  if (membershipError) return { error: NextResponse.json({ error: "Failed to verify membership" }, { status: 500 }), message: null }
+  let membership: { userId: string } | undefined
+  try {
+    const rows = await db
+      .select({ userId: dmChannelMembers.userId })
+      .from(dmChannelMembers)
+      .where(and(eq(dmChannelMembers.dmChannelId, channelId), eq(dmChannelMembers.userId, userId)))
+      .limit(1)
+    membership = rows[0]
+  } catch {
+    return { error: NextResponse.json({ error: "Failed to verify membership" }, { status: 500 }), message: null }
+  }
   if (!membership) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }), message: null }
 
   // Verify the message exists in this channel
-  const { data: message, error: messageError } = await supabase
-    .from("direct_messages")
-    .select("id, sender_id")
-    .eq("id", messageId)
-    .eq("dm_channel_id", channelId)
-    .is("deleted_at", null)
-    .maybeSingle()
+  let message: { id: string; senderId: string } | undefined
+  try {
+    const rows = await db
+      .select({ id: directMessages.id, senderId: directMessages.senderId })
+      .from(directMessages)
+      .where(
+        and(
+          eq(directMessages.id, messageId),
+          eq(directMessages.dmChannelId, channelId),
+          isNull(directMessages.deletedAt)
+        )
+      )
+      .limit(1)
+    message = rows[0]
+  } catch {
+    return { error: NextResponse.json({ error: "Failed to fetch message" }, { status: 500 }), message: null }
+  }
 
-  if (messageError) return { error: NextResponse.json({ error: "Failed to fetch message" }, { status: 500 }), message: null }
   if (!message) return { error: NextResponse.json({ error: "Message not found" }, { status: 404 }), message: null }
 
   return { error: null, message }
@@ -55,7 +68,6 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { channelId, messageId } = await params
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -63,22 +75,21 @@ export async function POST(
     const emoji = normalizeEmoji(body.emoji)
     if (!emoji) return NextResponse.json({ error: "emoji required" }, { status: 400 })
 
-    const { error: verifyError, message } = await verifyMembershipAndMessage(supabase, channelId, messageId, user.id)
+    const { error: verifyError, message } = await verifyMembershipAndMessage(channelId, messageId, user.id)
     if (verifyError) return verifyError
     if (!message) return NextResponse.json({ error: "Message not found" }, { status: 404 })
 
-    if (await isBlockedBetweenUsers(supabase, user.id, message.sender_id)) {
+    if (await isBlockedBetweenUsers(user.id, message.senderId)) {
       return NextResponse.json({ error: "Cannot react due to block state" }, { status: 403 })
     }
 
-    const { error } = await untypedFrom(supabase, "dm_reactions")
-      .upsert(
-        { dm_id: messageId, user_id: user.id, emoji },
-        { onConflict: "dm_id,user_id,emoji", ignoreDuplicates: true }
-      )
-
-    if (error) {
-      console.error("[dm reactions POST] upsert error:", { messageId, userId: user.id, emoji, code: error.code, message: error.message })
+    try {
+      await db
+        .insert(dmReactions)
+        .values({ dmId: messageId, userId: user.id, emoji })
+        .onConflictDoNothing({ target: [dmReactions.dmId, dmReactions.userId, dmReactions.emoji] })
+    } catch (err) {
+      console.error("[dm reactions POST] upsert error:", { messageId, userId: user.id, emoji, error: err instanceof Error ? err.message : String(err) })
       return NextResponse.json({ error: "Failed to add reaction" }, { status: 500 })
     }
 
@@ -103,7 +114,6 @@ export async function DELETE(
 ): Promise<NextResponse> {
   try {
     const { channelId, messageId } = await params
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -111,17 +121,15 @@ export async function DELETE(
     const emoji = normalizeEmoji(body.emoji)
     if (!emoji) return NextResponse.json({ error: "emoji required" }, { status: 400 })
 
-    const { error: verifyError } = await verifyMembershipAndMessage(supabase, channelId, messageId, user.id)
+    const { error: verifyError } = await verifyMembershipAndMessage(channelId, messageId, user.id)
     if (verifyError) return verifyError
 
-    const { error } = await untypedFrom(supabase, "dm_reactions")
-      .delete()
-      .eq("dm_id", messageId)
-      .eq("user_id", user.id)
-      .eq("emoji", emoji)
-
-    if (error) {
-      console.error("[dm reactions DELETE] delete error:", { messageId, userId: user.id, emoji, code: error.code, message: error.message })
+    try {
+      await db
+        .delete(dmReactions)
+        .where(and(eq(dmReactions.dmId, messageId), eq(dmReactions.userId, user.id), eq(dmReactions.emoji, emoji)))
+    } catch (err) {
+      console.error("[dm reactions DELETE] delete error:", { messageId, userId: user.id, emoji, error: err instanceof Error ? err.message : String(err) })
       return NextResponse.json({ error: "Failed to remove reaction" }, { status: 500 })
     }
 

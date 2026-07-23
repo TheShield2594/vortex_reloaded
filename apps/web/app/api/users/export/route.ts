@@ -1,18 +1,29 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { desc, eq, or } from "drizzle-orm"
+import { createDb, directMessages, friendships, userNotificationPreferences, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+import { toSnakeCase } from "@/lib/utils/case"
+import type { Database } from "@/types/database"
+
+type UserNotificationPreferencesRow = Database["public"]["Tables"]["user_notification_preferences"]["Row"]
+
+const db = createDb()
 
 /**
  * GET /api/users/export
  *
  * GDPR data export — returns a JSON file containing all user-owned data:
- * profile, messages, DMs, friend list, server memberships, notification preferences.
+ * profile, DMs, friend list, notification preferences.
+ *
+ * Server/channel messaging (`messages`, `server_members`, message `reactions`)
+ * was retired entirely during the SQLite migration (issue #36) — those
+ * tables no longer exist anywhere in this stack, so those sections are
+ * always empty rather than querying a data source that's gone.
  *
  * Rate limited: one export per 24 hours via client-side gating + server check.
  */
 export async function GET() {
   try {
-  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await getBetterAuthUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -29,97 +40,86 @@ export async function GET() {
   }
 
   // Gather all user-owned data in parallel
-  const [
-    profileResult,
-    messagesResult,
-    dmMessagesResult,
-    friendsResult,
-    serversResult,
-    notifPrefsResult,
-    reactionsResult,
-  ] = await Promise.all([
-    // Profile
-    supabase
-      .from("users")
-      .select("id, username, display_name, bio, avatar_url, banner_color, status, status_message, status_emoji, custom_tag, onboarding_completed_at, created_at")
-      .eq("id", userId)
-      .single(),
-    // Server messages (last 10k for practical limits)
-    supabase
-      .from("messages")
-      .select("id, channel_id, content, created_at, edited_at, deleted_at")
-      .eq("author_id", userId)
-      .is("deleted_at", null)
-      .order("created_at", { ascending: false })
-      .limit(10000),
-    // DM messages (last 10k)
-    supabase
-      .from("direct_messages")
-      .select("id, dm_channel_id, content, created_at")
-      .eq("sender_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(10000),
-    // Friends
-    supabase
-      .from("friendships")
-      .select("id, requester_id, addressee_id, status, created_at")
-      .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`),
-    // Server memberships
-    supabase
-      .from("server_members")
-      .select("server_id, joined_at, servers(name)")
-      .eq("user_id", userId),
-    // Notification preferences
-    supabase
-      .from("user_notification_preferences")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    // Reactions
-    supabase
-      .from("reactions")
-      .select("id, message_id, emoji, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(5000),
-  ])
-
-  // Check for query errors
-  const queryErrors = [
-    profileResult.error && `profile: ${profileResult.error.message}`,
-    messagesResult.error && `messages: ${messagesResult.error.message}`,
-    dmMessagesResult.error && `direct_messages: ${dmMessagesResult.error.message}`,
-    friendsResult.error && `friendships: ${friendsResult.error.message}`,
-    serversResult.error && `server_memberships: ${serversResult.error.message}`,
-    notifPrefsResult.error && `notification_preferences: ${notifPrefsResult.error.message}`,
-    reactionsResult.error && `reactions: ${reactionsResult.error.message}`,
-  ].filter(Boolean)
-
-  if (queryErrors.length > 0) {
+  let profileRows, dmMessagesRows, friendsRows, notifPrefsRows
+  try {
+    ;[profileRows, dmMessagesRows, friendsRows, notifPrefsRows] = await Promise.all([
+      // Profile
+      db
+        .select({
+          id: users.id,
+          username: users.username,
+          displayName: users.displayName,
+          bio: users.bio,
+          avatarUrl: users.avatarUrl,
+          bannerColor: users.bannerColor,
+          status: users.status,
+          statusMessage: users.statusMessage,
+          statusEmoji: users.statusEmoji,
+          customTag: users.customTag,
+          onboardingCompletedAt: users.onboardingCompletedAt,
+          createdAt: users.createdAt,
+        })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1),
+      // DM messages (last 10k)
+      db
+        .select({
+          id: directMessages.id,
+          dmChannelId: directMessages.dmChannelId,
+          content: directMessages.content,
+          createdAt: directMessages.createdAt,
+        })
+        .from(directMessages)
+        .where(eq(directMessages.senderId, userId))
+        .orderBy(desc(directMessages.createdAt))
+        .limit(10000),
+      // Friends
+      db
+        .select({
+          id: friendships.id,
+          requesterId: friendships.requesterId,
+          addresseeId: friendships.addresseeId,
+          status: friendships.status,
+          createdAt: friendships.createdAt,
+        })
+        .from(friendships)
+        .where(or(eq(friendships.requesterId, userId), eq(friendships.addresseeId, userId))),
+      // Notification preferences
+      db
+        .select()
+        .from(userNotificationPreferences)
+        .where(eq(userNotificationPreferences.userId, userId))
+        .limit(1),
+    ])
+  } catch {
     return NextResponse.json(
       { error: "Failed to gather export data" },
       { status: 500 }
     )
   }
 
+  const profile = profileRows[0]
+  const notifPrefs = notifPrefsRows[0]
+
   const exportData = {
     exported_at: new Date().toISOString(),
     user_id: userId,
-    profile: profileResult.data ?? null,
+    profile: profile ? toSnakeCase(profile) : null,
     messages: {
-      count: messagesResult.data?.length ?? 0,
-      items: messagesResult.data ?? [],
+      count: 0,
+      items: [] as unknown[],
     },
     direct_messages: {
-      count: dmMessagesResult.data?.length ?? 0,
-      items: dmMessagesResult.data ?? [],
+      count: dmMessagesRows.length,
+      items: toSnakeCase(dmMessagesRows),
     },
-    friendships: friendsResult.data ?? [],
-    server_memberships: serversResult.data ?? [],
-    notification_preferences: notifPrefsResult.data ?? null,
+    friendships: toSnakeCase(friendsRows),
+    server_memberships: [] as unknown[],
+    notification_preferences: notifPrefs ? toSnakeCase<UserNotificationPreferencesRow>(notifPrefs) : null,
     reactions: {
-      count: reactionsResult.data?.length ?? 0,
-      items: reactionsResult.data ?? [],
+      count: 0,
+      items: [] as unknown[],
     },
   }
 

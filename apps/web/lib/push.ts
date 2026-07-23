@@ -1,7 +1,10 @@
 import webpush from "web-push"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, eq, inArray, ne } from "drizzle-orm"
+import { createDb, dmChannelMembers, pushSubscriptions, userNotificationPreferences } from "@vortex/db"
 import { resolveNotification } from "@/lib/notification-resolver"
 import { isInQuietHours } from "@/lib/quiet-hours"
+
+const db = createDb()
 
 // VAPID keys — set these env vars (generate once with: npx web-push generate-vapid-keys)
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? ""
@@ -60,37 +63,53 @@ export async function sendPushToUser(
     }
     ensureVapid()
 
-    const supabase = await createServerSupabaseClient()
-
     // Check quiet hours — suppress push if the user is in their scheduled DND window
     if (!skipQuietHours) {
-      const { data: quietPrefs, error: quietError } = await supabase
-        .from("user_notification_preferences")
-        .select("quiet_hours_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone")
-        .eq("user_id", userId)
-        .maybeSingle()
+      let quietPrefs: {
+        quietHoursEnabled: boolean
+        quietHoursStart: string
+        quietHoursEnd: string
+        quietHoursTimezone: string
+      } | undefined
 
-      if (quietError) {
-        console.error("Failed to fetch quiet hours preferences:", quietError.message)
+      try {
+        const rows = await db
+          .select({
+            quietHoursEnabled: userNotificationPreferences.quietHoursEnabled,
+            quietHoursStart: userNotificationPreferences.quietHoursStart,
+            quietHoursEnd: userNotificationPreferences.quietHoursEnd,
+            quietHoursTimezone: userNotificationPreferences.quietHoursTimezone,
+          })
+          .from(userNotificationPreferences)
+          .where(eq(userNotificationPreferences.userId, userId))
+          .limit(1)
+        quietPrefs = rows[0]
+      } catch (quietError) {
+        console.error("Failed to fetch quiet hours preferences:", quietError instanceof Error ? quietError.message : quietError)
         // Continue sending — fail open rather than suppressing notifications
       }
 
       if (quietPrefs && isInQuietHours(
-        quietPrefs.quiet_hours_enabled,
-        quietPrefs.quiet_hours_start,
-        quietPrefs.quiet_hours_end,
-        quietPrefs.quiet_hours_timezone,
+        quietPrefs.quietHoursEnabled,
+        quietPrefs.quietHoursStart,
+        quietPrefs.quietHoursEnd,
+        quietPrefs.quietHoursTimezone,
       )) {
         return // suppress during quiet hours
       }
     }
 
-    const { data: subs } = await supabase
-      .from("push_subscriptions")
-      .select("id, endpoint, p256dh, auth")
-      .eq("user_id", userId)
+    const subs = await db
+      .select({
+        id: pushSubscriptions.id,
+        endpoint: pushSubscriptions.endpoint,
+        p256dh: pushSubscriptions.p256dh,
+        auth: pushSubscriptions.auth,
+      })
+      .from(pushSubscriptions)
+      .where(eq(pushSubscriptions.userId, userId))
 
-    if (!subs?.length) return
+    if (!subs.length) return
 
     const results = await Promise.allSettled(
       subs.map((sub: { id: string; endpoint: string; p256dh: string; auth: string }) =>
@@ -102,11 +121,9 @@ export async function sendPushToUser(
           const statusCode = (err as { statusCode?: number }).statusCode
           // 410 = subscription expired; clean it up
           if (statusCode === 410 || statusCode === 404) {
-            const { error: deleteError } = await supabase
-              .from("push_subscriptions")
-              .delete()
-              .eq("id", sub.id)
-            if (deleteError) {
+            try {
+              await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id))
+            } catch (deleteError) {
               console.error(`sendPushToUser: failed to remove stale subscription ${sub.id}`, deleteError)
             }
           } else {
@@ -130,6 +147,15 @@ export async function sendPushToUser(
 /**
  * Send a push notification to all other members of a DM/group channel.
  * Respects notification_settings (muted/mentions-only) and quiet hours.
+ *
+ * NOTE: the old Postgres `notification_settings` table (per server/channel/
+ * thread overrides) was dropped along with the servers/channels/threads
+ * tables it pointed at — this app is DM-only now and has no Drizzle schema
+ * for it (see packages/db/src/schema/notifications.ts). The only rows that
+ * could ever apply here were global (all-scope-null) overrides looked up
+ * with serverId/channelId/threadId all null; since there is no longer any
+ * store for those overrides, this always resolves as "no override found",
+ * matching the old fail-open behavior when that query errored.
  */
 export async function sendPushToChannel(opts: {
   dmChannelId: string
@@ -148,14 +174,12 @@ export async function sendPushToChannel(opts: {
 
   const { dmChannelId, senderName, senderAvatarUrl, content, mentionedIds = [], excludeUserId } = opts
   const mentionedSet = new Set(mentionedIds)
-  const supabase = await createServerSupabaseClient()
 
-  const { data: members } = await supabase
-    .from("dm_channel_members")
-    .select("user_id")
-    .eq("dm_channel_id", dmChannelId)
-    .neq("user_id", excludeUserId)
-  let memberIds: string[] = members?.map((m: { user_id: string }) => m.user_id) ?? []
+  const members = await db
+    .select({ userId: dmChannelMembers.userId })
+    .from(dmChannelMembers)
+    .where(and(eq(dmChannelMembers.dmChannelId, dmChannelId), ne(dmChannelMembers.userId, excludeUserId)))
+  let memberIds: string[] = members.map((m) => m.userId)
 
   if (!memberIds.length) return
 
@@ -170,27 +194,42 @@ export async function sendPushToChannel(opts: {
   // ── Batch quiet-hours check ──────────────────────────────────────
   // Filter out members who are in their scheduled DND window so we
   // don't need per-user quiet-hours queries in sendPushToUser.
-  const { data: quietHoursPrefs, error: quietHoursError } = await supabase
-    .from("user_notification_preferences")
-    .select("user_id, quiet_hours_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone")
-    .in("user_id", memberIds)
-    .eq("quiet_hours_enabled", true)
-
-  if (quietHoursError) {
+  let quietHoursPrefs: {
+    userId: string
+    quietHoursEnabled: boolean
+    quietHoursStart: string
+    quietHoursEnd: string
+    quietHoursTimezone: string
+  }[] = []
+  try {
+    quietHoursPrefs = await db
+      .select({
+        userId: userNotificationPreferences.userId,
+        quietHoursEnabled: userNotificationPreferences.quietHoursEnabled,
+        quietHoursStart: userNotificationPreferences.quietHoursStart,
+        quietHoursEnd: userNotificationPreferences.quietHoursEnd,
+        quietHoursTimezone: userNotificationPreferences.quietHoursTimezone,
+      })
+      .from(userNotificationPreferences)
+      .where(and(
+        inArray(userNotificationPreferences.userId, memberIds),
+        eq(userNotificationPreferences.quietHoursEnabled, true)
+      ))
+  } catch (quietHoursError) {
     // Fail open — deliver notifications rather than silently suppressing
     console.error("sendPushToChannel: failed to fetch quiet hours", {
       action: "batch-quiet-hours",
       recipientCount: memberIds.length,
       dmChannelId,
-      error: quietHoursError.message,
+      error: quietHoursError instanceof Error ? quietHoursError.message : quietHoursError,
     })
-  } else if (quietHoursPrefs?.length) {
+  }
+
+  if (quietHoursPrefs.length) {
     const quietUserIds = new Set(
       quietHoursPrefs
-        .filter((p: { user_id: string; quiet_hours_enabled: boolean; quiet_hours_start: string | null; quiet_hours_end: string | null; quiet_hours_timezone: string | null }) =>
-          isInQuietHours(p.quiet_hours_enabled, p.quiet_hours_start, p.quiet_hours_end, p.quiet_hours_timezone)
-        )
-        .map((p: { user_id: string }) => p.user_id)
+        .filter((p) => isInQuietHours(p.quietHoursEnabled, p.quietHoursStart, p.quietHoursEnd, p.quietHoursTimezone))
+        .map((p) => p.userId)
     )
     if (quietUserIds.size > 0) {
       memberIds = memberIds.filter((uid: string) => !quietUserIds.has(uid))
@@ -199,31 +238,28 @@ export async function sendPushToChannel(opts: {
 
   if (!memberIds.length) return
 
-  // Fetch global (DM-scoped) notification settings for these members
+  // Per-channel/server/thread notification overrides no longer exist as a
+  // data source (see function doc comment above) — always resolve as empty,
+  // same as the old fail-open path when that lookup errored.
   type SettingsRow = { user_id: string; mode: "all" | "mentions" | "muted"; server_id?: string | null; channel_id?: string | null; thread_id?: string | null }
-  const { data: settingsData, error: settingsError } = await supabase
-    .from("notification_settings")
-    .select("user_id, mode, server_id, channel_id, thread_id")
-    .in("user_id", memberIds)
-    .is("server_id", null)
-    .is("channel_id", null)
-    .is("thread_id", null)
-  if (settingsError) {
-    console.error("sendPushToChannel: failed to fetch settings", { action: "batch-settings", scope: "global", recipientCount: memberIds.length, error: settingsError.message })
-  }
-  const settings = (settingsData ?? []) as SettingsRow[]
+  const settings: SettingsRow[] = []
 
   // Fetch global notification type preferences so mention opt-outs are respected
-  const { data: globalTypePrefs, error: globalTypePrefsError } = await supabase
-    .from("user_notification_preferences")
-    .select("user_id, mention_notifications")
-    .in("user_id", memberIds)
-  if (globalTypePrefsError) {
-    console.error("sendPushToChannel: failed to fetch type preferences", { action: "type-prefs", recipientCount: memberIds.length, error: globalTypePrefsError.message })
+  let globalTypePrefs: { userId: string; mentionNotifications: boolean }[] = []
+  try {
+    globalTypePrefs = await db
+      .select({
+        userId: userNotificationPreferences.userId,
+        mentionNotifications: userNotificationPreferences.mentionNotifications,
+      })
+      .from(userNotificationPreferences)
+      .where(inArray(userNotificationPreferences.userId, memberIds))
+  } catch (globalTypePrefsError) {
+    console.error("sendPushToChannel: failed to fetch type preferences", { action: "type-prefs", recipientCount: memberIds.length, error: globalTypePrefsError instanceof Error ? globalTypePrefsError.message : globalTypePrefsError })
   }
   interface TypePref { user_id: string; mention_notifications: boolean | null }
   const globalTypePrefMap = new Map<string, TypePref>(
-    (globalTypePrefs ?? []).map((p: TypePref) => [p.user_id, p])
+    globalTypePrefs.map((p) => [p.userId, { user_id: p.userId, mention_notifications: p.mentionNotifications }])
   )
 
   const notificationTitle = senderName

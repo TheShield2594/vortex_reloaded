@@ -390,26 +390,26 @@ export const auth = betterAuth({
           const SUPPORTED = ["github", "twitch", "reddit"] as const
           const provider = SUPPORTED.find((p) => p === account.providerId)
           if (!provider) return
-          // `user_connections` (profile "connected accounts" display) still
-          // lives in Supabase Postgres, not the new `accounts` table this
-          // row was just written to — see the split-brain note in
-          // lib/utils/api-helpers.ts's requireAuth(). Best-effort only:
-          // Better Auth's account-create hook doesn't expose the OAuth
-          // provider's profile fields (username/avatar/profile URL), only
-          // token/account-id data, so this can't populate the same display
-          // fields the old Supabase-linkIdentity flow did.
+          // Best-effort only: Better Auth's account-create hook doesn't
+          // expose the OAuth provider's profile fields (username/avatar/
+          // profile URL), only token/account-id data, so this can't
+          // populate the same display fields the old Supabase-linkIdentity
+          // flow did.
           try {
-            const { createServiceRoleClient } = await import("@/lib/supabase/server")
-            const supabase = await createServiceRoleClient()
-            await supabase.from("user_connections").upsert(
-              {
-                user_id: account.userId,
+            const { createDb, userConnections } = await import("@vortex/db")
+            const db = createDb()
+            await db
+              .insert(userConnections)
+              .values({
+                userId: account.userId,
                 provider,
-                provider_user_id: account.accountId,
+                providerUserId: account.accountId,
                 metadata: { linked_via: "better-auth" },
-              },
-              { onConflict: "user_id,provider" }
-            )
+              })
+              .onConflictDoUpdate({
+                target: [userConnections.userId, userConnections.provider],
+                set: { providerUserId: account.accountId, metadata: { linked_via: "better-auth" } },
+              })
           } catch (err) {
             log.error({ err: err instanceof Error ? err.message : String(err), userId: account.userId, provider: account.providerId }, "Failed to sync user_connections after OAuth link")
           }

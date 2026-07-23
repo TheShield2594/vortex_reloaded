@@ -1,14 +1,28 @@
 import { NextRequest, NextResponse, after } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, count, desc, eq, inArray } from "drizzle-orm"
+import { createDb, notifications } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
+import { toSnakeCase } from "@/lib/utils/case"
 
-const NOTIFICATION_COLUMNS = "id, type, title, body, icon_url, server_id, channel_id, message_id, read, created_at"
+const db = createDb()
+
+const NOTIFICATION_COLUMNS = {
+  id: notifications.id,
+  type: notifications.type,
+  title: notifications.title,
+  body: notifications.body,
+  iconUrl: notifications.iconUrl,
+  serverId: notifications.serverId,
+  channelId: notifications.channelId,
+  messageId: notifications.messageId,
+  read: notifications.read,
+  createdAt: notifications.createdAt,
+}
 
 // GET /api/notifications — fetch notifications for the current user
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -19,24 +33,21 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const countOnly = searchParams.get("countOnly") === "true"
     if (countOnly) {
-      const { count, error: countError } = await supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .eq("read", false)
-      if (countError) return NextResponse.json({ error: "Failed to fetch unread count" }, { status: 500 })
-      return NextResponse.json({ unreadCount: count ?? 0 })
+      const [row] = await db
+        .select({ value: count() })
+        .from(notifications)
+        .where(and(eq(notifications.userId, user.id), eq(notifications.read, false)))
+      return NextResponse.json({ unreadCount: row?.value ?? 0 })
     }
 
-    const { data, error } = await supabase
-      .from("notifications")
+    const rows = await db
       .select(NOTIFICATION_COLUMNS)
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
+      .from(notifications)
+      .where(eq(notifications.userId, user.id))
+      .orderBy(desc(notifications.createdAt))
       .limit(limit)
 
-    if (error) return NextResponse.json({ error: "Failed to fetch notifications" }, { status: 500 })
-    return NextResponse.json({ notifications: data ?? [] })
+    return NextResponse.json({ notifications: toSnakeCase(rows) })
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -46,7 +57,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 // Body: { id?: string } — if id is provided mark that one; otherwise mark all unread as read
 export async function PATCH(req: NextRequest): Promise<NextResponse> {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -57,22 +67,21 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "id must be a non-empty string" }, { status: 400 })
     }
 
-    let query = supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("user_id", user.id)
-      .eq("read", false)
-
     const trimmedId = typeof id === "string" ? id.trim() : undefined
+    const conditions = [eq(notifications.userId, user.id), eq(notifications.read, false)]
     if (trimmedId) {
-      query = query.eq("id", trimmedId)
+      conditions.push(eq(notifications.id, trimmedId))
     }
 
-    const { data: updated, error } = await query.select(NOTIFICATION_COLUMNS)
-    if (error) return NextResponse.json({ error: "Failed to update notifications" }, { status: 500 })
+    const updated = await db
+      .update(notifications)
+      .set({ read: true })
+      .where(and(...conditions))
+      .returning(NOTIFICATION_COLUMNS)
 
-    if (updated && updated.length > 0) {
-      after(() => Promise.all(updated.map((n) => publishGatewayEvent({
+    if (updated.length > 0) {
+      const snakeUpdated = toSnakeCase<Record<string, unknown>[]>(updated)
+      after(() => Promise.all(snakeUpdated.map((n) => publishGatewayEvent({
         type: "notification.updated",
         channelId: `user:${user.id}`,
         actorId: user.id,
@@ -93,7 +102,6 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
 // - neither: error (prevent accidental mass deletion)
 export async function DELETE(req: NextRequest): Promise<NextResponse> {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -110,27 +118,27 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "id or ids required" }, { status: 400 })
     }
 
-    let query = supabase
-      .from("notifications")
-      .delete()
-      .eq("user_id", user.id)
-
     const trimmedDeleteId = typeof id === "string" ? id.trim() : undefined
     const trimmedIds = Array.isArray(ids) ? ids.map((s: string) => s.trim()).filter(Boolean) : undefined
+
+    const conditions = [eq(notifications.userId, user.id)]
     if (trimmedDeleteId) {
-      query = query.eq("id", trimmedDeleteId)
+      conditions.push(eq(notifications.id, trimmedDeleteId))
     } else if (trimmedIds) {
       if (trimmedIds.length === 0) {
         return NextResponse.json({ error: "No valid IDs provided" }, { status: 400 })
       }
-      query = query.in("id", trimmedIds)
+      conditions.push(inArray(notifications.id, trimmedIds))
     }
 
-    const { data: deleted, error } = await query.select("id, read")
-    if (error) return NextResponse.json({ error: "Failed to delete notifications" }, { status: 500 })
+    const deleted = await db
+      .delete(notifications)
+      .where(and(...conditions))
+      .returning({ id: notifications.id, read: notifications.read })
 
-    if (deleted && deleted.length > 0) {
-      after(() => Promise.all(deleted.map((n) => publishGatewayEvent({
+    if (deleted.length > 0) {
+      const snakeDeleted = toSnakeCase<Record<string, unknown>[]>(deleted)
+      after(() => Promise.all(snakeDeleted.map((n) => publishGatewayEvent({
         type: "notification.deleted",
         channelId: `user:${user.id}`,
         actorId: user.id,

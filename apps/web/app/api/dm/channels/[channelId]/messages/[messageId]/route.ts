@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, eq } from "drizzle-orm"
+import { createDb, directMessages } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+import { toSnakeCase } from "@/lib/utils/case"
+
+const db = createDb()
 
 // PATCH /api/dm/channels/[channelId]/messages/[messageId] — edit a DM message
 export async function PATCH(
@@ -9,7 +13,6 @@ export async function PATCH(
 ) {
   try {
     const { channelId, messageId } = await params
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -19,18 +22,27 @@ export async function PATCH(
       return NextResponse.json({ error: "Content required" }, { status: 400 })
     }
 
-    const { data, error } = await supabase
-      .from("direct_messages")
-      .update({ content: content.trim(), edited_at: new Date().toISOString() })
-      .eq("id", messageId)
-      .eq("sender_id", user.id)
-      .eq("dm_channel_id", channelId)
-      .select()
-      .single()
+    let data: typeof directMessages.$inferSelect | undefined
+    try {
+      const rows = await db
+        .update(directMessages)
+        .set({ content: content.trim(), editedAt: new Date().toISOString() })
+        .where(
+          and(
+            eq(directMessages.id, messageId),
+            eq(directMessages.senderId, user.id),
+            eq(directMessages.dmChannelId, channelId)
+          )
+        )
+        .returning()
+      data = rows[0]
+    } catch {
+      return NextResponse.json({ error: "Message not found or not editable" }, { status: 404 })
+    }
 
-    if (error || !data) return NextResponse.json({ error: "Message not found or not editable" }, { status: 404 })
+    if (!data) return NextResponse.json({ error: "Message not found or not editable" }, { status: 404 })
 
-    return NextResponse.json(data)
+    return NextResponse.json(toSnakeCase(data))
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
@@ -43,20 +55,27 @@ export async function DELETE(
 ) {
   try {
     const { channelId, messageId } = await params
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { data, error } = await supabase
-      .from("direct_messages")
-      .update({ deleted_at: new Date().toISOString(), content: null })
-      .eq("id", messageId)
-      .eq("sender_id", user.id)
-      .eq("dm_channel_id", channelId)
-      .select("id")
-      .single()
+    let data: { id: string } | undefined
+    try {
+      const rows = await db
+        .update(directMessages)
+        .set({ deletedAt: new Date().toISOString(), content: null })
+        .where(
+          and(
+            eq(directMessages.id, messageId),
+            eq(directMessages.senderId, user.id),
+            eq(directMessages.dmChannelId, channelId)
+          )
+        )
+        .returning({ id: directMessages.id })
+      data = rows[0]
+    } catch {
+      return NextResponse.json({ error: "Failed to delete message" }, { status: 500 })
+    }
 
-    if (error) return NextResponse.json({ error: "Failed to delete message" }, { status: 500 })
     if (!data) return NextResponse.json({ error: "Message not found" }, { status: 404 })
 
     return NextResponse.json({ ok: true })

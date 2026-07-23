@@ -1,13 +1,19 @@
 import { Suspense } from "react"
 import { redirect } from "next/navigation"
+import { eq } from "drizzle-orm"
 
 export const dynamic = "force-dynamic"
-import { createServerSupabaseClient, getAuthUser } from "@/lib/supabase/server"
+import { createDb, users } from "@vortex/db"
+import { getAuthUser } from "@/lib/supabase/server"
+import { toSnakeCase } from "@/lib/utils/case"
+import type { UserRow } from "@/types/database"
 import { AppProvider } from "@/components/layout/app-provider"
 import { ChannelsShell } from "@/components/layout/channels-shell"
 import { MobileBottomTabBar } from "@/components/layout/mobile-bottom-tab-bar"
 import { OnboardingGate } from "@/components/onboarding/onboarding-gate"
 import { perfTimer } from "@/lib/perf"
+
+const db = createDb()
 
 /** Skeleton shown while the channels layout streams server data. */
 function ChannelsLayoutSkeleton(): React.ReactElement {
@@ -37,10 +43,7 @@ async function ChannelsLayoutContent({ children }: { children: React.ReactNode }
   const rootTimer = perfTimer("channels-layout total")
   try {
     const authTimer = perfTimer("channels-layout auth")
-    const [supabase, { data: { user }, error }] = await Promise.all([
-      createServerSupabaseClient(),
-      getAuthUser(),
-    ])
+    const { data: { user }, error } = await getAuthUser()
     authTimer.end()
 
     if (error || !user) {
@@ -49,14 +52,11 @@ async function ChannelsLayoutContent({ children }: { children: React.ReactNode }
 
     // Fetch user profile
     const profileTimer = perfTimer("channels-layout profile")
-    const { data: profile, error: profileError } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .single()
+    const [row] = await db.select().from(users).where(eq(users.id, user.id)).limit(1)
     profileTimer.end()
 
-    if (profileError || !profile) redirect("/login")
+    if (!row) redirect("/login")
+    const profile = toSnakeCase<UserRow>(row)
 
     rootTimer.end()
 

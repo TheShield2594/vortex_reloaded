@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { eq } from "drizzle-orm"
+import { createDb, userNotificationPreferences } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+import { toSnakeCase } from "@/lib/utils/case"
 import type { UserNotificationPreferences } from "@vortex/shared"
+
+const db = createDb()
 
 const DEFAULTS: UserNotificationPreferences = {
   mention_notifications: true,
@@ -25,26 +29,46 @@ const DEFAULTS: UserNotificationPreferences = {
 // GET /api/user/notification-preferences
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { data, error } = await supabase
-      .from("user_notification_preferences")
-      .select("mention_notifications, reply_notifications, friend_request_notifications, server_invite_notifications, system_notifications, sound_enabled, notification_volume, suppress_everyone, suppress_role_mentions, quiet_hours_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone, push_notifications, show_message_preview, show_unread_badge")
-      .eq("user_id", user.id)
-      .maybeSingle()
+    const selectColumns = {
+      mentionNotifications: userNotificationPreferences.mentionNotifications,
+      replyNotifications: userNotificationPreferences.replyNotifications,
+      friendRequestNotifications: userNotificationPreferences.friendRequestNotifications,
+      serverInviteNotifications: userNotificationPreferences.serverInviteNotifications,
+      systemNotifications: userNotificationPreferences.systemNotifications,
+      soundEnabled: userNotificationPreferences.soundEnabled,
+      notificationVolume: userNotificationPreferences.notificationVolume,
+      suppressEveryone: userNotificationPreferences.suppressEveryone,
+      suppressRoleMentions: userNotificationPreferences.suppressRoleMentions,
+      quietHoursEnabled: userNotificationPreferences.quietHoursEnabled,
+      quietHoursStart: userNotificationPreferences.quietHoursStart,
+      quietHoursEnd: userNotificationPreferences.quietHoursEnd,
+      quietHoursTimezone: userNotificationPreferences.quietHoursTimezone,
+      pushNotifications: userNotificationPreferences.pushNotifications,
+      showMessagePreview: userNotificationPreferences.showMessagePreview,
+      showUnreadBadge: userNotificationPreferences.showUnreadBadge,
+    }
 
-    if (error) {
+    let rows: Array<Record<string, unknown>>
+    try {
+      rows = await db
+        .select(selectColumns)
+        .from(userNotificationPreferences)
+        .where(eq(userNotificationPreferences.userId, user.id))
+        .limit(1)
+    } catch (err) {
       console.error("[api/user/notification-preferences][GET] failed to load preferences", {
         userId: user.id,
         action: "load_preferences",
-        error: error.message,
+        error: err instanceof Error ? err.message : String(err),
       })
       return NextResponse.json({ error: "Failed to load notification preferences" }, { status: 500 })
     }
 
-    return NextResponse.json(data ?? DEFAULTS)
+    const row = rows[0]
+    return NextResponse.json(row ? toSnakeCase<UserNotificationPreferences>(row) : DEFAULTS)
   } catch (err) {
     console.error("[api/user/notification-preferences][GET] unexpected error:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -54,7 +78,6 @@ export async function GET() {
 // PUT /api/user/notification-preferences
 export async function PUT(req: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -80,13 +103,28 @@ export async function PUT(req: NextRequest) {
       "show_unread_badge",
     ] as const
 
-    const patch: Record<string, boolean | string | number> = {}
+    const BOOL_KEY_TO_COLUMN = {
+      mention_notifications: "mentionNotifications",
+      reply_notifications: "replyNotifications",
+      friend_request_notifications: "friendRequestNotifications",
+      server_invite_notifications: "serverInviteNotifications",
+      system_notifications: "systemNotifications",
+      sound_enabled: "soundEnabled",
+      suppress_everyone: "suppressEveryone",
+      suppress_role_mentions: "suppressRoleMentions",
+      quiet_hours_enabled: "quietHoursEnabled",
+      push_notifications: "pushNotifications",
+      show_message_preview: "showMessagePreview",
+      show_unread_badge: "showUnreadBadge",
+    } as const
+
+    const patch: Partial<typeof userNotificationPreferences.$inferInsert> = {}
     for (const key of BOOL_KEYS) {
       if (key in body) {
         if (typeof body[key] !== "boolean") {
           return NextResponse.json({ error: `${key} must be a boolean` }, { status: 400 })
         }
-        patch[key] = body[key] as boolean
+        patch[BOOL_KEY_TO_COLUMN[key]] = body[key] as boolean
       }
     }
 
@@ -96,7 +134,7 @@ export async function PUT(req: NextRequest) {
       if (typeof vol !== "number" || !Number.isFinite(vol) || vol < 0 || vol > 1) {
         return NextResponse.json({ error: "notification_volume must be a number between 0 and 1" }, { status: 400 })
       }
-      patch.notification_volume = vol
+      patch.notificationVolume = vol
     }
 
     // Validate quiet hours time fields (HH:MM or HH:MM:SS format)
@@ -106,7 +144,8 @@ export async function PUT(req: NextRequest) {
         if (typeof body[key] !== "string" || !TIME_RE.test(body[key] as string)) {
           return NextResponse.json({ error: `${key} must be HH:MM or HH:MM:SS format` }, { status: 400 })
         }
-        patch[key] = body[key] as string
+        if (key === "quiet_hours_start") patch.quietHoursStart = body[key] as string
+        else patch.quietHoursEnd = body[key] as string
       }
     }
 
@@ -121,25 +160,23 @@ export async function PUT(req: NextRequest) {
       } catch {
         return NextResponse.json({ error: "quiet_hours_timezone must be a valid IANA timezone string" }, { status: 400 })
       }
-      patch.quiet_hours_timezone = tz
+      patch.quietHoursTimezone = tz
     }
 
     if (Object.keys(patch).length === 0) {
       return NextResponse.json({ error: "No valid fields provided" }, { status: 400 })
     }
 
-    const { error } = await supabase
-      .from("user_notification_preferences")
-      .upsert(
-        { user_id: user.id, ...patch, updated_at: new Date().toISOString() },
-        { onConflict: "user_id" }
-      )
-
-    if (error) {
+    try {
+      await db
+        .insert(userNotificationPreferences)
+        .values({ userId: user.id, ...patch })
+        .onConflictDoUpdate({ target: userNotificationPreferences.userId, set: patch })
+    } catch (err) {
       console.error("[api/user/notification-preferences][PUT] failed to save preferences", {
         userId: user.id,
         action: "save_preferences",
-        error: error.message,
+        error: err instanceof Error ? err.message : String(err),
       })
       return NextResponse.json({ error: "Failed to save notification preferences" }, { status: 500 })
     }

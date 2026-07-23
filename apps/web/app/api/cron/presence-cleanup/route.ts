@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServiceRoleClient } from "@/lib/supabase/server"
+import { and, inArray, isNull, lt, or } from "drizzle-orm"
+import { createDb, users } from "@vortex/db"
 import { PRESENCE_STALE_THRESHOLD_MS } from "@vortex/shared"
 import { verifyBearerToken } from "@/lib/utils/timing-safe"
+
+const db = createDb()
 
 /**
  * GET /api/cron/presence-cleanup
@@ -33,7 +36,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const supabase = await createServiceRoleClient()
     const now = new Date()
     const staleThreshold = new Date(now.getTime() - PRESENCE_STALE_THRESHOLD_MS).toISOString()
 
@@ -42,17 +44,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // and still heartbeat to maintain their session.
     // NULL last_heartbeat_at means the user was set online before the heartbeat
     // system was deployed — treat as stale.
-    const { data: staleUsers, error: queryError } = await supabase
-      .from("users")
-      .select("id, status, last_heartbeat_at")
-      .in("status", ["online", "idle", "dnd"])
-      .or(`last_heartbeat_at.is.null,last_heartbeat_at.lt.${staleThreshold}`)
-      .limit(500)
-
-    if (queryError) {
+    let staleUsers: { id: string; status: string; lastHeartbeatAt: string | null }[]
+    try {
+      staleUsers = await db
+        .select({ id: users.id, status: users.status, lastHeartbeatAt: users.lastHeartbeatAt })
+        .from(users)
+        .where(
+          and(
+            inArray(users.status, ["online", "idle", "dnd"]),
+            or(isNull(users.lastHeartbeatAt), lt(users.lastHeartbeatAt, staleThreshold))
+          )
+        )
+        .limit(500)
+    } catch (queryError) {
       console.error("presence-cleanup: query failed", {
         route: "cron/presence-cleanup",
-        error: queryError.message,
+        error: queryError instanceof Error ? queryError.message : queryError,
       })
       return NextResponse.json({ error: "Query failed" }, { status: 500 })
     }
@@ -72,26 +79,31 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const BATCH_SIZE = 50
     for (let i = 0; i < staleIds.length; i += BATCH_SIZE) {
       const batch = staleIds.slice(i, i + BATCH_SIZE)
-      const { count, error: updateError } = await supabase
-        .from("users")
-        .update({
-          status: "offline" as const,
-          updated_at: now.toISOString(),
-          last_online_at: now.toISOString(),
-        }, { count: "exact" })
-        .in("id", batch)
-        .or(`last_heartbeat_at.is.null,last_heartbeat_at.lt.${staleThreshold}`)
-
-      if (updateError) {
+      try {
+        const rows = await db
+          .update(users)
+          .set({
+            status: "offline" as const,
+            updatedAt: now,
+            lastOnlineAt: now.toISOString(),
+          })
+          .where(
+            and(
+              inArray(users.id, batch),
+              or(isNull(users.lastHeartbeatAt), lt(users.lastHeartbeatAt, staleThreshold))
+            )
+          )
+          .returning({ id: users.id })
+        cleanedCount += rows.length
+      } catch (updateError) {
         console.error("presence-cleanup: update failed", {
           route: "cron/presence-cleanup",
-          error: updateError.message,
+          error: updateError instanceof Error ? updateError.message : updateError,
           batchIndex: i,
         })
         // Continue with remaining batches rather than aborting
         continue
       }
-      cleanedCount += count ?? 0
     }
 
     console.log("presence-cleanup: marked users offline", {

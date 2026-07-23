@@ -1,8 +1,11 @@
 import { webcrypto } from "node:crypto"
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { desc, eq } from "drizzle-orm"
+import { createDb, userDeviceKeys } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
-import { untypedFrom, untypedRpc } from "@/lib/supabase/untyped-table"
+import { toSnakeCase } from "@/lib/utils/case"
+
+const db = createDb()
 
 const DEVICE_LIMIT = 20
 
@@ -36,22 +39,27 @@ async function isValidP256SpkiPublicKey(publicKey: string): Promise<boolean> {
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { data, error, count } = await untypedFrom(supabase, "user_device_keys")
-      .select("device_id, public_key, updated_at", { count: "exact" })
-      .eq("user_id", user.id)
-      .order("updated_at", { ascending: false })
-      .limit(DEVICE_LIMIT)
+    let allRows: Array<{ deviceId: string; publicKey: string; updatedAt: string }>
+    try {
+      allRows = await db
+        .select({ deviceId: userDeviceKeys.deviceId, publicKey: userDeviceKeys.publicKey, updatedAt: userDeviceKeys.updatedAt })
+        .from(userDeviceKeys)
+        .where(eq(userDeviceKeys.userId, user.id))
+        .orderBy(desc(userDeviceKeys.updatedAt))
+    } catch {
+      return NextResponse.json({ error: "Failed to fetch device keys" }, { status: 500 })
+    }
 
-    if (error) return NextResponse.json({ error: "Failed to fetch device keys" }, { status: 500 })
+    const total = allRows.length
+    const data = allRows.slice(0, DEVICE_LIMIT)
 
     return NextResponse.json({
-      devices: data ?? [],
-      truncated: (count ?? 0) > DEVICE_LIMIT,
-      total: count ?? (data?.length ?? 0),
+      devices: toSnakeCase(data),
+      truncated: total > DEVICE_LIMIT,
+      total,
     })
 
   } catch (err) {
@@ -62,7 +70,6 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -78,21 +85,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid device public key" }, { status: 400 })
     }
 
-    const { data, error } = await untypedRpc(supabase, "upsert_user_device_key", {
-      p_device_id: deviceId,
-      p_public_key: publicKey,
-      p_device_limit: DEVICE_LIMIT,
-    })
-
-    if (error) {
-      if (error.message?.includes("device_limit_reached")) {
+    // The per-user device cap (default 20, matching DEVICE_LIMIT here) that
+    // Postgres enforced with a count-then-insert check inside the
+    // `upsert_user_device_key` SECURITY DEFINER RPC is now enforced by a
+    // `user_device_keys_cap_before_insert` BEFORE INSERT trigger (see
+    // packages/db/src/sql/fts5-and-triggers.sql) — it fires even when this
+    // statement resolves as an ON CONFLICT DO UPDATE, so upserting an
+    // *existing* device's key never counts against the cap, only genuinely
+    // new devices do. The trigger raises with the same
+    // "device_limit_reached" message the old RPC did, which better-sqlite3
+    // surfaces as a thrown Error we can match on below.
+    const nowIso = new Date().toISOString()
+    try {
+      await db
+        .insert(userDeviceKeys)
+        .values({ userId: user.id, deviceId, publicKey, updatedAt: nowIso })
+        .onConflictDoUpdate({
+          target: [userDeviceKeys.userId, userDeviceKeys.deviceId],
+          set: { publicKey, updatedAt: nowIso },
+        })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes("device_limit_reached")) {
         return NextResponse.json({ error: `Device limit reached (${DEVICE_LIMIT})` }, { status: 409 })
       }
       return NextResponse.json({ error: "Failed to register device key" }, { status: 500 })
-    }
-
-    if (data !== true) {
-      return NextResponse.json({ error: "Device key upsert failed" }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true })

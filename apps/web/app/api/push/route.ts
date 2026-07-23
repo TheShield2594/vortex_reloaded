@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, eq } from "drizzle-orm"
+import { createDb, pushSubscriptions } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+
+const db = createDb()
 
 // POST /api/push — save a push subscription
 export async function POST(req: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -15,20 +17,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid subscription" }, { status: 400 })
     }
 
-    const { error } = await supabase
-      .from("push_subscriptions")
-      .upsert(
-        {
-          user_id: user.id,
+    try {
+      await db
+        .insert(pushSubscriptions)
+        .values({
+          userId: user.id,
           endpoint,
           p256dh: keys.p256dh,
           auth: keys.auth,
-          user_agent: req.headers.get("user-agent"),
-        },
-        { onConflict: "user_id,endpoint" }
-      )
-
-    if (error) return NextResponse.json({ error: "Failed to save subscription" }, { status: 500 })
+          userAgent: req.headers.get("user-agent"),
+        })
+        .onConflictDoUpdate({
+          target: [pushSubscriptions.userId, pushSubscriptions.endpoint],
+          set: {
+            p256dh: keys.p256dh,
+            auth: keys.auth,
+            userAgent: req.headers.get("user-agent"),
+          },
+        })
+    } catch {
+      return NextResponse.json({ error: "Failed to save subscription" }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true })
   } catch {
@@ -39,7 +48,6 @@ export async function POST(req: NextRequest) {
 // DELETE /api/push — remove a push subscription
 export async function DELETE(req: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -48,13 +56,13 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "endpoint required" }, { status: 400 })
     }
 
-    const { error } = await supabase
-      .from("push_subscriptions")
-      .delete()
-      .eq("user_id", user.id)
-      .eq("endpoint", endpoint)
-
-    if (error) return NextResponse.json({ error: "Failed to remove subscription" }, { status: 500 })
+    try {
+      await db
+        .delete(pushSubscriptions)
+        .where(and(eq(pushSubscriptions.userId, user.id), eq(pushSubscriptions.endpoint, endpoint)))
+    } catch {
+      return NextResponse.json({ error: "Failed to remove subscription" }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true })
   } catch {

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { eq } from "drizzle-orm"
+import { createDb, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { sanitizeBannerColor } from "@/lib/banner-color"
+import { toSnakeCase } from "@/lib/utils/case"
 import type { UserRow } from "@/types/database"
+
+const db = createDb()
 
 type ProfileUpdatePayload = Partial<Pick<UserRow,
   "display_name" | "username" | "bio" | "custom_tag" | "status_message" | "status_emoji" | "status_expires_at" | "status" | "banner_color" | "avatar_url" | "appearance_settings"
@@ -10,7 +14,6 @@ type ProfileUpdatePayload = Partial<Pick<UserRow,
 
 export async function PATCH(request: Request) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -77,18 +80,37 @@ export async function PATCH(request: Request) {
       }
     }
 
-    const { data, error } = await supabase
-      .from("users")
-      .update(updatePayload)
-      .eq("id", user.id)
-      .select()
-      .single()
+    const updateValues: Partial<typeof users.$inferInsert> = {}
+    if (updatePayload.display_name !== undefined) updateValues.displayName = updatePayload.display_name
+    if (updatePayload.username !== undefined) updateValues.username = updatePayload.username
+    if (updatePayload.bio !== undefined) updateValues.bio = updatePayload.bio
+    if (updatePayload.custom_tag !== undefined) updateValues.customTag = updatePayload.custom_tag
+    if (updatePayload.status_message !== undefined) updateValues.statusMessage = updatePayload.status_message
+    if (updatePayload.status_emoji !== undefined) updateValues.statusEmoji = updatePayload.status_emoji
+    if (updatePayload.status_expires_at !== undefined) updateValues.statusExpiresAt = updatePayload.status_expires_at
+    if (updatePayload.status !== undefined) updateValues.status = updatePayload.status
+    if (updatePayload.banner_color !== undefined) updateValues.bannerColor = updatePayload.banner_color
+    if (updatePayload.avatar_url !== undefined) updateValues.avatarUrl = updatePayload.avatar_url
+    if (updatePayload.appearance_settings !== undefined) updateValues.appearanceSettings = updatePayload.appearance_settings
 
-    if (error) {
+    let row: typeof users.$inferSelect | undefined
+    try {
+      if (Object.keys(updateValues).length > 0) {
+        const rows = await db.update(users).set(updateValues).where(eq(users.id, user.id)).returning()
+        row = rows[0]
+      } else {
+        const rows = await db.select().from(users).where(eq(users.id, user.id)).limit(1)
+        row = rows[0]
+      }
+    } catch {
       return NextResponse.json({ error: "Failed to update profile" }, { status: 500 })
     }
 
-    return NextResponse.json(data)
+    if (!row) {
+      return NextResponse.json({ error: "Failed to update profile" }, { status: 500 })
+    }
+
+    return NextResponse.json(toSnakeCase<UserRow>(row))
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }

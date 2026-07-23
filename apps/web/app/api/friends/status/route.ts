@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, eq, or } from "drizzle-orm"
+import { createDb, friendships } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+
+const db = createDb()
 
 // GET /api/friends/status?userId=<id>
 // Returns { status: "none" | "friends" | "pending_sent" | "pending_received" | "blocked", friendshipId?: string }
 export async function GET(req: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -18,21 +20,33 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ status: "self" })
     }
 
-    const { data: row, error } = await supabase
-      .from("friendships")
-      .select("id, status, requester_id, addressee_id")
-      .or(
-        `and(requester_id.eq.${user.id},addressee_id.eq.${targetUserId}),and(requester_id.eq.${targetUserId},addressee_id.eq.${user.id})`
-      )
-      .maybeSingle()
-
-    if (error) return NextResponse.json({ error: "Failed to fetch status" }, { status: 500 })
+    let row: { id: string; status: string; requesterId: string; addresseeId: string } | undefined
+    try {
+      const rows = await db
+        .select({
+          id: friendships.id,
+          status: friendships.status,
+          requesterId: friendships.requesterId,
+          addresseeId: friendships.addresseeId,
+        })
+        .from(friendships)
+        .where(
+          or(
+            and(eq(friendships.requesterId, user.id), eq(friendships.addresseeId, targetUserId)),
+            and(eq(friendships.requesterId, targetUserId), eq(friendships.addresseeId, user.id))
+          )
+        )
+        .limit(1)
+      row = rows[0]
+    } catch {
+      return NextResponse.json({ error: "Failed to fetch status" }, { status: 500 })
+    }
 
     if (!row) {
       return NextResponse.json({ status: "none" })
     }
 
-    const isRequester = row.requester_id === user.id
+    const isRequester = row.requesterId === user.id
 
     if (row.status === "accepted") {
       return NextResponse.json({ status: "friends", friendshipId: row.id })

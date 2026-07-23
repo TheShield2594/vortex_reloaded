@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { and, asc, eq } from "drizzle-orm"
+import { createDb, userConnections } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
-import { isUserConnectionsTableMissing, USER_CONNECTIONS_SETUP_HINT } from "@/lib/supabase/user-connections-errors"
+import { toSnakeCase } from "@/lib/utils/case"
+import type { Database } from "@/types/database"
+
+type UserConnectionRow = Database["public"]["Tables"]["user_connections"]["Row"]
+
+const db = createDb()
 
 const MANUAL_PROVIDERS = ["github", "x", "twitch", "reddit", "website"] as const
 type ManualProvider = (typeof MANUAL_PROVIDERS)[number]
@@ -13,24 +19,30 @@ function normalizeProviderUserId(provider: string, value: string) {
 
 export async function GET() {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-    const { data, error } = await supabase
-      .from("user_connections")
-      .select("id, provider, provider_user_id, username, display_name, profile_url, metadata, created_at")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true })
-
-    if (error) {
-      if (isUserConnectionsTableMissing(error)) {
-        return NextResponse.json({ error: USER_CONNECTIONS_SETUP_HINT }, { status: 503 })
-      }
-      console.error("Failed to load connections", { userId: user.id, error: error.message })
+    let rows
+    try {
+      rows = await db
+        .select({
+          id: userConnections.id,
+          provider: userConnections.provider,
+          providerUserId: userConnections.providerUserId,
+          username: userConnections.username,
+          displayName: userConnections.displayName,
+          profileUrl: userConnections.profileUrl,
+          metadata: userConnections.metadata,
+          createdAt: userConnections.createdAt,
+        })
+        .from(userConnections)
+        .where(eq(userConnections.userId, user.id))
+        .orderBy(asc(userConnections.createdAt))
+    } catch (err) {
+      console.error("Failed to load connections", { userId: user.id, error: err instanceof Error ? err.message : String(err) })
       return NextResponse.json({ error: "Failed to load connections" }, { status: 500 })
     }
-    return NextResponse.json({ connections: data ?? [] })
+    return NextResponse.json({ connections: toSnakeCase<UserConnectionRow[]>(rows) })
   } catch (err) {
     console.error("GET /api/users/connections error", { error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -39,7 +51,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -63,31 +74,40 @@ export async function POST(request: Request) {
     const providerUserId = normalizeProviderUserId(provider, body.username || profileUrl)
     if (!providerUserId) return NextResponse.json({ error: "username is required" }, { status: 422 })
 
-    const { data, error } = await supabase
-      .from("user_connections")
-      .upsert({
-        user_id: user.id,
-        provider,
-        provider_user_id: providerUserId,
-        username: body.username?.trim() || providerUserId,
-        display_name: body.display_name?.trim() || null,
-        profile_url: profileUrl,
-        metadata: {},
-      }, { onConflict: "user_id,provider" })
-      .select("id, provider, provider_user_id, username, display_name, profile_url, metadata, created_at")
-      .single()
+    let row: typeof userConnections.$inferSelect | undefined
+    try {
+      const rows = await db
+        .insert(userConnections)
+        .values({
+          userId: user.id,
+          provider,
+          providerUserId,
+          username: body.username?.trim() || providerUserId,
+          displayName: body.display_name?.trim() || null,
+          profileUrl,
+          metadata: {},
+        })
+        .onConflictDoUpdate({
+          target: [userConnections.userId, userConnections.provider],
+          set: {
+            providerUserId,
+            username: body.username?.trim() || providerUserId,
+            displayName: body.display_name?.trim() || null,
+            profileUrl,
+            metadata: {},
+          },
+        })
+        .returning()
+      row = rows[0]
+    } catch (err) {
+      console.error("Failed to save connection", { userId: user.id, provider, error: err instanceof Error ? err.message : String(err) })
+      return NextResponse.json({ error: "Failed to save connection" }, { status: 500 })
+    }
 
-    if (error) {
-      if (isUserConnectionsTableMissing(error)) {
-        return NextResponse.json({ error: USER_CONNECTIONS_SETUP_HINT }, { status: 503 })
-      }
-      console.error("Failed to save connection", { userId: user.id, provider, error: error.message })
+    if (!row) {
       return NextResponse.json({ error: "Failed to save connection" }, { status: 500 })
     }
-    if (!data) {
-      return NextResponse.json({ error: "Failed to save connection" }, { status: 500 })
-    }
-    return NextResponse.json({ connection: data })
+    return NextResponse.json({ connection: toSnakeCase<UserConnectionRow>(row) })
   } catch (err) {
     console.error("POST /api/users/connections error", { error: err instanceof Error ? err.message : String(err) })
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -96,7 +116,6 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -104,17 +123,12 @@ export async function DELETE(request: Request) {
     const id = searchParams.get("id")
     if (!id) return NextResponse.json({ error: "id is required" }, { status: 422 })
 
-    const { error } = await supabase
-      .from("user_connections")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", user.id)
-
-    if (error) {
-      if (isUserConnectionsTableMissing(error)) {
-        return NextResponse.json({ error: USER_CONNECTIONS_SETUP_HINT }, { status: 503 })
-      }
-      console.error("Failed to delete connection", { userId: user.id, connectionId: id, error: error.message })
+    try {
+      await db
+        .delete(userConnections)
+        .where(and(eq(userConnections.id, id), eq(userConnections.userId, user.id)))
+    } catch (err) {
+      console.error("Failed to delete connection", { userId: user.id, connectionId: id, error: err instanceof Error ? err.message : String(err) })
       return NextResponse.json({ error: "Failed to delete connection" }, { status: 500 })
     }
     return NextResponse.json({ ok: true })

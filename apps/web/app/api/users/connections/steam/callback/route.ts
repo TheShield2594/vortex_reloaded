@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { createDb, userConnections } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
-import { isUserConnectionsTableMissing } from "@/lib/supabase/user-connections-errors"
+
+const db = createDb()
 
 async function verifySteamAssertion(searchParams: URLSearchParams) {
   const verificationParams = new URLSearchParams(searchParams)
@@ -92,7 +93,6 @@ export async function GET(request: Request) {
   try {
     const state = url.searchParams.get("state")
 
-    const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await getBetterAuthUser()
 
     if (authError || !user) {
@@ -118,23 +118,41 @@ export async function GET(request: Request) {
 
     const steamProfile = await fetchSteamProfile(steamId)
 
-    const { error } = await supabase
-      .from("user_connections")
-      .upsert({
-        user_id: user.id,
-        provider: "steam",
-        provider_user_id: steamId,
-        username: steamProfile.displayName || steamId,
-        display_name: steamProfile.displayName || `Steam #${steamId}`,
-        profile_url: `https://steamcommunity.com/profiles/${steamId}`,
-        metadata: {
-          linked_via: "openid",
-          ...(steamProfile.gameCount !== null ? { game_count: steamProfile.gameCount } : {}),
-          ...(steamProfile.avatarUrl ? { avatar_url: steamProfile.avatarUrl } : {}),
-        },
-      }, { onConflict: "user_id,provider" })
+    const metadata = {
+      linked_via: "openid",
+      ...(steamProfile.gameCount !== null ? { game_count: steamProfile.gameCount } : {}),
+      ...(steamProfile.avatarUrl ? { avatar_url: steamProfile.avatarUrl } : {}),
+    }
 
-    const status = !error ? "steam_linked" : isUserConnectionsTableMissing(error) ? "connections_storage_unavailable" : "steam_save_failed"
+    let saveFailed = false
+    try {
+      await db
+        .insert(userConnections)
+        .values({
+          userId: user.id,
+          provider: "steam",
+          providerUserId: steamId,
+          username: steamProfile.displayName || steamId,
+          displayName: steamProfile.displayName || `Steam #${steamId}`,
+          profileUrl: `https://steamcommunity.com/profiles/${steamId}`,
+          metadata,
+        })
+        .onConflictDoUpdate({
+          target: [userConnections.userId, userConnections.provider],
+          set: {
+            providerUserId: steamId,
+            username: steamProfile.displayName || steamId,
+            displayName: steamProfile.displayName || `Steam #${steamId}`,
+            profileUrl: `https://steamcommunity.com/profiles/${steamId}`,
+            metadata,
+          },
+        })
+    } catch (err) {
+      console.error("Failed to save Steam connection", { userId: user.id, error: err instanceof Error ? err.message : String(err) })
+      saveFailed = true
+    }
+
+    const status = !saveFailed ? "steam_linked" : "steam_save_failed"
     const response = NextResponse.redirect(buildRedirect(url, nextPath, status))
     response.cookies.delete("steam_oauth_state")
     return response
