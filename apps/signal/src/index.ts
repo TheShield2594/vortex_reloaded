@@ -24,7 +24,6 @@ const socketLimiter = new SocketRateLimiter().startCleanup()
 // Rate limit presets (limit, windowMs)
 const RATE_LIMITS = {
   joinRoom:      { limit: 10, windowMs: 60_000 },   // 10 joins/min
-  signaling:     { limit: 100, windowMs: 60_000 },   // 100 offer/answer/ice per min
   voiceState:    { limit: 60, windowMs: 60_000 },    // 60 state changes/min
 } as const
 
@@ -932,96 +931,6 @@ io.on("connection", (socket: Socket) => {
     } catch (err) {
       logger.error({ socketId: socket.id, err }, "join-room handler error")
       socket.emit("error", { message: "Internal server error" })
-    }
-  })
-
-  // ─── WebRTC Signaling ───────────────────────────────────────────────────────
-
-  /** Verify sender and recipient are in the same channel before relaying */
-  async function validateSignalingPeer(to: string): Promise<boolean> {
-    try {
-      // Re-validate session token periodically
-      if (!(await validateSession(socket))) {
-        logger.warn({ socketId: socket.id }, "signaling rejected — session invalid")
-        return false
-      }
-      const senderRoom = await findPeerRoom(socket.id)
-      if (!senderRoom) return false
-      const recipientPeer = await rooms.getPeer(senderRoom.channelId, to)
-      return !!recipientPeer
-    } catch (err) {
-      logger.error({ socketId: socket.id, to, err }, "validateSignalingPeer failed")
-      return false
-    }
-  }
-
-  socket.on("offer", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { to, offer } = payload as { to?: unknown; offer?: unknown }
-      if (typeof to !== "string" || !to || !offer) return
-      if (!checkSocketRate(socket.id, "signaling")) return
-      if (!(await validateSignalingPeer(to))) return
-      io.to(to).emit("offer", { from: socket.id, offer })
-    } catch (err) {
-      logger.error({ socketId: socket.id, event: "offer", err }, "signaling handler error")
-    }
-  })
-
-  socket.on("answer", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { to, answer } = payload as { to?: unknown; answer?: unknown }
-      if (typeof to !== "string" || !to || !answer) return
-      if (!checkSocketRate(socket.id, "signaling")) return
-      if (!(await validateSignalingPeer(to))) return
-      io.to(to).emit("answer", { from: socket.id, answer })
-    } catch (err) {
-      logger.error({ socketId: socket.id, event: "answer", err }, "signaling handler error")
-    }
-  })
-
-  // Accept a single ICE candidate (backwards-compatible)
-  socket.on("ice-candidate", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { to, candidate } = payload as { to?: unknown; candidate?: unknown }
-      if (typeof to !== "string" || !to || !candidate) return
-      if (!checkSocketRate(socket.id, "signaling")) return
-      if (!(await validateSignalingPeer(to))) return
-      io.to(to).emit("ice-candidate", { from: socket.id, candidate })
-    } catch (err) {
-      logger.error({ socketId: socket.id, event: "ice-candidate", err }, "signaling handler error")
-    }
-  })
-
-  // Accept a batch of ICE candidates (3-5x fewer signaling messages during call setup).
-  // Clients collect candidates over a 100ms window and send them as a single array.
-  const MAX_ICE_CANDIDATES = 50
-  socket.on("ice-candidates-batch", async (payload: unknown) => {
-    try {
-      if (typeof payload !== "object" || payload === null) return
-      const { to, candidates } = payload as { to?: unknown; candidates?: unknown }
-      if (typeof to !== "string" || !to) return
-      if (!Array.isArray(candidates) || candidates.length === 0) return
-      if (!checkSocketRate(socket.id, "signaling")) return
-      if (!(await validateSignalingPeer(to))) return
-      // Validate and cap batch size to prevent abuse.
-      // Each ICE candidate must have candidate, sdpMid, and sdpMLineIndex.
-      const validated = candidates
-        .slice(0, MAX_ICE_CANDIDATES)
-        .filter((c): c is Record<string, unknown> => {
-          if (typeof c !== "object" || c === null) return false
-          const entry = c as Record<string, unknown>
-          if (typeof entry.candidate !== "string" && entry.candidate !== null) return false
-          if (typeof entry.sdpMid !== "string" && entry.sdpMid !== null) return false
-          if (typeof entry.sdpMLineIndex !== "number") return false
-          return true
-        })
-      if (validated.length === 0) return
-      io.to(to).emit("ice-candidates-batch", { from: socket.id, candidates: validated })
-    } catch (err) {
-      logger.error({ socketId: socket.id, event: "ice-candidates-batch", err }, "signaling handler error")
     }
   })
 

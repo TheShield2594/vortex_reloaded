@@ -1,6 +1,6 @@
 # 05 — Voice & WebRTC
 
-> Covers: voice channel join/leave, mute/deafen, screen share, voice grid layout, compact voice bar, voice stats, voice consent, voice recording/transcription/summary, voice settings, WebRTC signaling.
+> Covers: voice channel join/leave, mute/deafen, screen share, voice grid layout, compact voice bar, voice stats, voice consent, voice recording/transcription/summary, voice settings.
 
 **Components under test:**
 - `voice-channel.tsx`, `voice-channel-lazy.tsx`, `compact-voice-bar.tsx`
@@ -8,7 +8,7 @@
 - `voice-transcript-viewer.tsx`, `voice-summary-card.tsx`, `voice-recap-card.tsx`
 - `vortex-recap-indicator.tsx`, `incoming-call-ui.tsx`
 - `voice-settings-page.tsx` (settings)
-- Hooks: `use-push-to-talk.ts`, `use-voice.ts` (referenced in project)
+- Hooks: `use-push-to-talk.ts`
 - API: `/api/servers/[serverId]/channels/[channelId]/voice-token`
 - API: `/api/voice/sessions`, `/api/voice/sessions/[id]/consent`, `/api/voice/sessions/[id]/end`
 - API: `/api/voice/sessions/[id]/transcript`, `/api/voice/sessions/[id]/summary`
@@ -137,21 +137,3 @@
 | 6 | should toggle echo cancellation | Enable/disable | Setting saved |
 | 7 | should toggle automatic gain control | Enable/disable | Setting saved |
 | 8 | should persist settings across sessions | Change settings → reload | Settings retained |
-
----
-
-## 5.8 WebRTC Signaling
-
-### `webrtc-signaling.spec.ts`
-
-> These tests verify Socket.IO signaling events. Use mock Socket.IO or intercept WebSocket frames.
-
-| # | Test | Steps | Expected |
-|---|------|-------|----------|
-| 1 | should authenticate on socket connection | Connect to signal server | Auth token validated |
-| 2 | should exchange SDP offer/answer | User A joins → User B joins | SDP exchange occurs |
-| 3 | should exchange ICE candidates | Peer connection establishing | ICE candidates forwarded |
-| 4 | should handle peer disconnect | User B leaves | User A notified; cleans up |
-| 5 | should validate signaling message fields | Send malformed signal | Message rejected |
-| 6 | should clean up room membership on disconnect | Socket disconnects | User removed from voice room |
-| 7 | should re-validate auth on sensitive events | Emit event after token expiry | Event rejected |
