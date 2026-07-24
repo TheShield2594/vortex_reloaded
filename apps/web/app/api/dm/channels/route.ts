@@ -4,6 +4,7 @@ import { createDb, directMessages, dmChannelMembers, dmChannels, dmReadStates, u
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
 import { toSnakeCase } from "@/lib/utils/case"
+import { recordMembershipEvent } from "@/lib/membership-log"
 
 const db = createDb()
 
@@ -260,6 +261,30 @@ export async function POST(req: NextRequest) {
         actorId: user.id,
         data: { channelId: channel.id },
       }, { route: "/api/dm/channels" }))
+    }
+
+    // Issue #40: founding members of a group also belong in the signed
+    // membership log — otherwise "who added whom, when" would only ever
+    // cover later additions via the [channelId]/members route, missing how
+    // most groups actually get their initial roster. Unsigned (this route
+    // doesn't collect an Olm signature from the creator per founding
+    // member), same as any client-less write to the log.
+    if (isGroup) {
+      after(() =>
+        Promise.all(
+          allMembers
+            .filter((memberId) => memberId !== user.id)
+            .map((memberId) =>
+              recordMembershipEvent({
+                dmChannelId: channel.id,
+                action: "member_added",
+                actorId: user.id,
+                targetId: memberId,
+                clientSignature: null,
+              })
+            )
+        ).catch((err) => console.error("[dm/channels POST] membership log failed:", err))
+      )
     }
 
     return NextResponse.json({ id: channel.id, existing: false }, { status: 201 })

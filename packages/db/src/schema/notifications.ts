@@ -10,6 +10,10 @@ import { users } from "./users"
  * servers/channels/messages tables — kept as plain (no-FK) columns since
  * `notifications` itself stays live, but nothing will populate them going
  * forward (DM/friend-request/system notifications never used them).
+ * Issue #40's `verify_prompt` type is the one exception: it repurposes
+ * `channel_id` for the dm_channels id the nudge relates to and `message_id`
+ * for the other user's id (the safety-number counterpart to verify with) —
+ * see apps/web/app/api/dm/channels/[channelId]/members/route.ts.
  *
  * Postgres had two overlapping unread indexes
  * (`notifications_unread_idx` on `(user_id, read)` and
@@ -27,7 +31,7 @@ export const notifications = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     type: text("type", {
-      enum: ["mention", "reply", "friend_request", "server_invite", "system"],
+      enum: ["mention", "reply", "friend_request", "server_invite", "system", "verify_prompt"],
     }).notNull(),
     title: text("title").notNull(),
     body: text("body"),
@@ -45,7 +49,7 @@ export const notifications = sqliteTable(
       .where(sql`${table.read} = 0`),
     check(
       "notifications_type_check",
-      sql`${table.type} in ('mention', 'reply', 'friend_request', 'server_invite', 'system')`
+      sql`${table.type} in ('mention', 'reply', 'friend_request', 'server_invite', 'system', 'verify_prompt')`
     ),
   ]
 )

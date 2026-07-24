@@ -1,6 +1,7 @@
 import { createRequire } from "module"
 import { beforeAll, describe, expect, it } from "vitest"
 import {
+  canonicalMembershipEventPayload,
   createIdentity,
   createOutboundSession,
   decryptMessage,
@@ -10,6 +11,8 @@ import {
   isValidOlmCiphertext,
   loadOlm,
   parseOlmEnvelope,
+  signPayload,
+  verifyEd25519Signature,
   verifyKeyBundleSignature,
   type SerializedAccount,
   type OlmKeyBundle,
@@ -272,6 +275,31 @@ describe("olm-protocol: envelope helpers", () => {
     expect(isValidOlmCiphertext({ type: 1, body: "" })).toBe(false)
     expect(isValidOlmCiphertext(null)).toBe(false)
     expect(isValidOlmCiphertext("abc")).toBe(false)
+  })
+})
+
+describe("olm-protocol: arbitrary payload signing (issue #40, group trust model)", () => {
+  it("signs a membership-event payload verifiable against the signer's own identity key", async () => {
+    const alice = await makeDevice("alice", "device-1")
+    const payload = canonicalMembershipEventPayload("channel-1", "member_added", "alice", "bob")
+    const signature = await signPayload(alice.account, payload)
+    expect(await verifyEd25519Signature(alice.publish.ed25519IdentityKey, payload, signature)).toBe(true)
+  })
+
+  it("rejects a signature verified against a different identity key", async () => {
+    const alice = await makeDevice("alice", "device-1")
+    const mallory = await makeDevice("mallory", "device-1")
+    const payload = canonicalMembershipEventPayload("channel-1", "member_added", "alice", "bob")
+    const signature = await signPayload(alice.account, payload)
+    expect(await verifyEd25519Signature(mallory.publish.ed25519IdentityKey, payload, signature)).toBe(false)
+  })
+
+  it("rejects a signature whose payload was tampered with after signing", async () => {
+    const alice = await makeDevice("alice", "device-1")
+    const payload = canonicalMembershipEventPayload("channel-1", "member_added", "alice", "bob")
+    const signature = await signPayload(alice.account, payload)
+    const tampered = canonicalMembershipEventPayload("channel-1", "member_removed", "alice", "bob")
+    expect(await verifyEd25519Signature(alice.publish.ed25519IdentityKey, tampered, signature)).toBe(false)
   })
 })
 

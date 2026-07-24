@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, lazy, Suspense, type MutableRefObject } from "react"
 import { createPortal } from "react-dom"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Room, RoomEvent, createLocalAudioTrack, createLocalVideoTrack, type LocalAudioTrack, type LocalVideoTrack, type RemoteParticipant, type RemoteTrack } from "livekit-client"
 import { createEqTrackProcessor, type EqTrackProcessor } from "@/lib/voice/eq-track-processor"
 import { buildSpatialAudioGraph, type SpatialAudioGraph } from "@/lib/voice/spatial-audio-graph"
@@ -10,7 +10,7 @@ import { useVoiceAudioStore } from "@/lib/stores/voice-audio-store"
 import { EqSettingsPanel } from "@/components/dm/eq-settings-panel"
 import { setActiveDmChannel } from "@/lib/notification-manager"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Phone, Video, Users, Paperclip, Pencil, Trash2, PhoneOff, Mic, MicOff, VideoOff, Search, Pin, Smile, Reply, X, ArrowLeft, Settings } from "lucide-react"
+import { Phone, Video, Users, Paperclip, Pencil, Trash2, PhoneOff, Mic, MicOff, VideoOff, Search, Pin, Smile, Reply, X, ArrowLeft, Settings, ShieldCheck } from "lucide-react"
 import { useLazyEmojiPicker } from "@/hooks/use-lazy-emoji-picker"
 import { CustomEmojiGrid } from "@/components/chat/custom-emoji-grid"
 import { format } from "date-fns"
@@ -45,6 +45,7 @@ import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useLocalSearch } from "@/hooks/use-local-search"
 const DmLocalSearchModal = lazy(() => import("@/components/modals/dm-local-search-modal").then((m) => ({ default: m.DmLocalSearchModal })))
 const SearchModal = lazy(() => import("@/components/modals/search-modal").then((m) => ({ default: m.SearchModal })))
+const GroupTrustModal = lazy(() => import("@/components/dm/group-trust-modal").then((m) => ({ default: m.GroupTrustModal })))
 import type { IndexedDocument } from "@/lib/local-search-index"
 import { ChannelRowSkeleton, MessageListSkeleton } from "@/components/ui/skeleton"
 import { useMobileLayout } from "@/hooks/use-mobile-layout"
@@ -433,6 +434,25 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   const { playNotification } = useNotificationSound()
   const { indexMessages, addMessage: addMessageToIndex, removeMessage: removeMessageFromIndex, search: searchLocal, clearChannel: clearLocalChannel } = useLocalSearch()
   const [showLocalSearch, setShowLocalSearch] = useState(false)
+  // Issue #40 ("Group trust model") — the group's signed membership log +
+  // safety-number verification, opened from the header shield button or
+  // deep-linked from a "verify_prompt" notification (see
+  // notification-bell.tsx's handleClick, which navigates here with
+  // ?verify=<otherUserId>).
+  const [trustModalOpen, setTrustModalOpen] = useState(false)
+  const [trustModalTab, setTrustModalTab] = useState<"log" | "safety">("log")
+  const [trustModalOtherUserId, setTrustModalOtherUserId] = useState<string | null>(null)
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const verifyUserId = searchParams.get("verify")
+    if (!verifyUserId) return
+    setTrustModalOtherUserId(verifyUserId)
+    setTrustModalTab("safety")
+    setTrustModalOpen(true)
+    router.replace(`/channels/me/${channelId}`)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
   // Track which message IDs have already been fed into the local index so the
   // indexing effect only processes newly-decrypted messages, not the full set.
   const indexedIdsRef = useRef<Set<string>>(new Set())
@@ -1493,6 +1513,18 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
         >
           <Pin className="w-4 h-4 md:w-[18px] md:h-[18px]" />
         </button>
+        {channel.is_group && (
+          <button
+            className="w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-md hover:bg-white/10 active:bg-white/15 transition-colors"
+            style={{ color: "var(--theme-text-secondary)" }}
+            title="Group trust & safety"
+            aria-label="Group trust & safety"
+            type="button"
+            onClick={() => { setTrustModalTab("log"); setTrustModalOtherUserId(null); setTrustModalOpen(true) }}
+          >
+            <ShieldCheck className="w-4 h-4 md:w-[18px] md:h-[18px]" />
+          </button>
+        )}
         <ConversationThemePicker
           channelId={channelId}
           themePreset={channel.theme_preset}
@@ -2101,6 +2133,21 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
             dmChannelLabel={displayName}
             onClose={() => setShowLocalSearch(false)}
             onJumpToMessage={handleSearchJumpToMessage}
+          />
+        </Suspense>
+      )}
+
+      {/* Issue #40: group trust log + safety-number verification */}
+      {trustModalOpen && channel && (
+        <Suspense fallback={null}>
+          <GroupTrustModal
+            open={trustModalOpen}
+            onClose={() => { setTrustModalOpen(false); setTrustModalOtherUserId(null) }}
+            channelId={channel.id}
+            currentUserId={currentUserId}
+            members={channel.members}
+            initialTab={trustModalTab}
+            initialOtherUserId={trustModalOtherUserId}
           />
         </Suspense>
       )}
