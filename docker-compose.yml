@@ -16,15 +16,16 @@
 #                 / Apple APNs relay involved; users subscribe directly to
 #                 their own private topic on this server)
 #
-#  Database: SQLite. The db file is bind-mounted from ./data on the host
-#  into both `web` and `signal` (both need direct read/write access) —
-#  see the "Database (SQLite)" section in deploy/SELF-HOSTING.md for why
-#  it's a plain file rather than a Docker-managed volume, and how that
-#  interacts with backups.
+#  Database: SQLite. The db file is bind-mounted from ./data on the host into
+#  `web` — the only service that touches it. `signal` authenticates socket
+#  handshakes with JWTs verified against web's JWKS endpoint, so it needs no
+#  database access of its own. See the "Database (SQLite)" section in
+#  deploy/SELF-HOSTING.md for why it's a plain file rather than a
+#  Docker-managed volume, and how that interacts with backups.
 #
-#  IMPORTANT: because `web` and `signal` share one SQLite file, this stack
-#  must run on a single Docker host — do not split it across a Swarm/K8s
-#  cluster without re-architecting the database layer.
+#  IMPORTANT: SQLite is a single on-disk file with no network protocol, so the
+#  `web` service must run on a single Docker host — do not split it across a
+#  Swarm/K8s cluster without re-architecting the database layer.
 ##############################################################################
 
 services:
@@ -96,13 +97,11 @@ services:
       PORT: 3001
       REDIS_URL: redis://redis:6379
       ALLOWED_ORIGINS: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
-      DATABASE_URL: file:/data/vortex.db
-      # Handshake auth verification — see apps/signal/.env.example.
+      # No DATABASE_URL / ./data mount: signal never reads the SQLite file. It
+      # verifies socket handshakes via JWTs checked against web's JWKS below.
       AUTH_JWKS_URL: http://web:3000/api/auth/jwks
       AUTH_JWT_ISSUER: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
       AUTH_JWT_AUDIENCE: vortex-signal
-    volumes:
-      - ./data:/data
     depends_on:
       redis:
         condition: service_healthy

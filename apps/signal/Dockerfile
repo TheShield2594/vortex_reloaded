@@ -1,9 +1,9 @@
 FROM node:20-alpine AS base
 
-# python3/make/g++ are required to build better-sqlite3's native addon on
-# Alpine (musl) — there is no prebuilt binary for this platform, so it
-# compiles from source during `npm ci`.
-RUN apk add --no-cache libc6-compat python3 make g++
+# musl compat shim for any glibc-linked prebuilt binaries. The signal server
+# is pure JS (no native addons — it never touches the SQLite database, only
+# Redis and JWT verification), so no build toolchain is needed here.
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # Copy workspace root files needed for npm workspace resolution
@@ -25,9 +25,9 @@ RUN npm run build --workspace=packages/shared && \
 # ─── Production image ────────────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 
-# python3/make/g++ needed here too since this stage runs its own `npm ci`
-# (better-sqlite3 has no prebuilt musl/Alpine binary, it compiles on install).
-RUN apk add --no-cache libc6-compat python3 make g++
+# musl compat shim (see base stage) — no build toolchain: signal has no
+# native dependencies to compile.
+RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
@@ -49,13 +49,6 @@ ENV PORT=3001
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 signaluser
-
-# Mount point for the SQLite database file — same host path as the web
-# container mounts (see docker-compose.yml). Both processes read/write the
-# same file, so they must run on the same host (no multi-host Swarm/K8s
-# split) unless the DB layer is re-architected around a network protocol.
-RUN mkdir -p /data && chown signaluser:nodejs /data
-VOLUME ["/data"]
 
 USER signaluser
 
