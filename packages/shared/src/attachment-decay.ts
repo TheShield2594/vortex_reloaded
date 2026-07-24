@@ -165,31 +165,3 @@ export function maybeRenewExpiry({
 
   return newExpiry
 }
-
-/**
- * Pick the later of two expiry dates (never shorten an existing expiry).
- */
-export function extendExpiry(
-  currentExpiry: Date | null,
-  newlyComputed: Date
-): Date {
-  if (!currentExpiry) return newlyComputed
-  return currentExpiry > newlyComputed ? currentExpiry : newlyComputed
-}
-
-/**
- * Compute estimated storage cost for a given size and lifetime.
- */
-export function computeCost({
-  sizeBytes,
-  lifetimeDays,
-  pricePerTBPerMonth = DECAY_CONSTANTS.PRICE_PER_TB_PER_MONTH,
-}: {
-  sizeBytes: number
-  lifetimeDays: number
-  pricePerTBPerMonth?: number
-}): number {
-  const sizeTB = sizeBytes / 1024 / 1024 / 1024 / 1024
-  const lifetimeMonths = lifetimeDays / 30
-  return sizeTB * pricePerTBPerMonth * lifetimeMonths
-}

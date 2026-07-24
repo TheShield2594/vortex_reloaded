@@ -582,9 +582,3 @@ export async function revokeChannelAccess(
     if (state.userId === targetUserId) state.subscribedChannels.delete(channelId)
   }
 }
-
-/**
- * Publish a VortexEvent through the event bus.
- * Called from API routes when data is written to the database.
- */
-export { RedisEventBus } from "./event-bus"

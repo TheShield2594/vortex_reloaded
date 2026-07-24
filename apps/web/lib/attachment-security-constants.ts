@@ -11,6 +11,3 @@ export const EXECUTABLE_MIMES = new Set([
   "application/x-executable",
   "application/x-dosexec",
 ])
-
-/** MIME prefixes that suggest potentially dangerous content. */
-export const HIGH_RISK_MIME_PREFIXES = ["application/x-ms", "application/x-dosexec"]

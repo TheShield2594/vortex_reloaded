@@ -3,7 +3,7 @@ import { createChannelAccessChecker } from "./channel-access"
 
 /**
  * Assertions for the gateway channel-membership authorizer (issue #51).
- * Run with `tsx src/channel-access.check.ts` (mirrors rooms.parity-check.ts).
+ * Run with `tsx src/channel-access.check.ts` (mirrors gateway.check.ts).
  */
 
 type FetchStub = (url: string, init: { body?: unknown }) => Promise<{

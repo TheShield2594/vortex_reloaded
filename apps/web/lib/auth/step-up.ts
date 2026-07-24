@@ -57,11 +57,6 @@ export async function issueStepUpToken(userId: string) {
   })
 }
 
-export async function clearStepUpToken() {
-  const cookieStore = await cookies()
-  cookieStore.delete(STEP_UP_COOKIE)
-}
-
 export async function hasValidStepUpToken(userId: string): Promise<boolean> {
   try {
     const cookieStore = await cookies()
@@ -85,5 +80,3 @@ export async function hasValidStepUpToken(userId: string): Promise<boolean> {
     return false
   }
 }
-
-export const STEP_UP_WINDOW_SECONDS = STEP_UP_TTL_MS / 1000

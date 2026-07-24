@@ -103,42 +103,9 @@ export function forbidden(message = "Forbidden") {
   return NextResponse.json({ error: message }, { status: 403 })
 }
 
-/** 404 Not Found */
-export function notFound(entity = "Resource") {
-  return NextResponse.json({ error: `${entity} not found` }, { status: 404 })
-}
-
 /** Generic API error response */
 export function apiError(message: string, status = 500) {
   return NextResponse.json({ error: message }, { status })
-}
-
-/** Structured context for dbError logging */
-export interface DbErrorContext {
-  route?: string
-  userId?: string
-  action?: string
-  detail?: string
-}
-
-/**
- * Convert a Supabase error into a 500 response.
- * Returns a generic message to avoid leaking DB schema details to clients.
- * The original error message is logged server-side for debugging.
- *
- * Replace the 50+ copies of:
- *   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
- */
-export function dbError(error: { message: string } | null, context?: string | DbErrorContext): NextResponse | null {
-  if (!error) return null
-  if (typeof context === "string") {
-    log.error({ context, err: error.message }, "Database operation failed")
-  } else if (context) {
-    log.error({ ...context, err: error.message }, "Database operation failed")
-  } else {
-    log.error({ err: error.message }, "Database operation failed (no context)")
-  }
-  return NextResponse.json({ error: "Database operation failed" }, { status: 500 })
 }
 
 // ---------------------------------------------------------------------------

@@ -119,27 +119,6 @@ export interface GatewayServerEvents {
   }
 }
 
-// ── Presence Data Structures ────────────────────────────────────────────────
-
-export interface PresenceEntry {
-  userId: string
-  status: UserStatus
-  socketId: string
-  /** ISO 8601 timestamp of last heartbeat. */
-  lastHeartbeat: string
-  /** Server IDs the user is a member of (for scoped presence broadcasts). */
-  serverIds: string[]
-}
-
-// ── Redis Stream Event Wrapper ──────────────────────────────────────────────
-
-export interface StreamEvent {
-  /** Redis Stream entry ID (e.g. "1234567890-0"). */
-  streamId: string
-  /** The VortexEvent serialized as JSON. */
-  event: VortexEvent
-}
-
 // ── Constants ───────────────────────────────────────────────────────────────
 
 /** Redis key prefix for event streams (per-channel). */
@@ -151,23 +130,19 @@ export const PRESENCE_KEY_PREFIX = "vortex:presence"
 /** Maximum events stored per channel stream. */
 export const EVENT_STREAM_MAXLEN = 1000
 
-/** TTL for event stream entries (24 hours in seconds). */
-export const EVENT_STREAM_TTL_SECONDS = 86_400
-
 /** Presence entry TTL in Redis (seconds). Offline detection = pingTimeout. */
 export const PRESENCE_TTL_SECONDS = 30
 
-/** How often the server checks for stale presence entries (ms). */
-export const PRESENCE_CLEANUP_INTERVAL_MS = 10_000
-
-/** Socket.IO pingTimeout for presence-based offline detection (ms). */
-export const GATEWAY_PING_TIMEOUT_MS = 20_000
+/**
+ * How often the server sweeps for stale presence entries (ms).
+ * TTL expiry (PRESENCE_TTL_SECONDS) is the primary cleanup mechanism; this
+ * sweep is only a safety net for orphaned keys with no TTL, so it runs
+ * infrequently (5 min).
+ */
+export const PRESENCE_CLEANUP_INTERVAL_MS = 5 * 60_000
 
 /** Maximum events replayed on reconnection per channel. */
 export const MAX_REPLAY_EVENTS = 500
-
-/** Rate limit for gateway event publishing (events/min). */
-export const GATEWAY_PUBLISH_RATE_LIMIT = 60
 
 /** Rate limit for typing events (events/min). */
 export const TYPING_RATE_LIMIT = 30
@@ -198,14 +173,4 @@ export const PERSISTED_EVENT_TYPES: ReadonlySet<VortexEventType> = new Set([
   "member.joined",
   "member.left",
   "channel.updated",
-])
-
-/** Ephemeral event types that are broadcast but not persisted. */
-export const EPHEMERAL_EVENT_TYPES: ReadonlySet<VortexEventType> = new Set([
-  "typing.start",
-  "typing.stop",
-  "presence.update",
-  "voice.peer_joined",
-  "voice.peer_left",
-  "voice.state_changed",
 ])

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-24T16:21:41.449Z",
+  "generatedAt": "2026-07-24T18:32:29.411Z",
   "rules": [
     {
       "id": "inline-style-color",
@@ -64,11 +64,6 @@
       "ruleId": "inline-style-color",
       "file": "apps/web/app/channels/notifications/page.tsx",
       "count": 14
-    },
-    {
-      "ruleId": "inline-style-color",
-      "file": "apps/web/app/channels/profile/loading.tsx",
-      "count": 1
     },
     {
       "ruleId": "inline-style-color",
@@ -139,11 +134,6 @@
       "ruleId": "inline-style-color",
       "file": "apps/web/app/verify-email/page.tsx",
       "count": 11
-    },
-    {
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/chat/custom-emoji-grid.tsx",
-      "count": 3
     },
     {
       "ruleId": "inline-style-color",
@@ -254,11 +244,6 @@
       "ruleId": "inline-style-color",
       "file": "apps/web/components/modals/dm-local-search-modal.tsx",
       "count": 9
-    },
-    {
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "count": 88
     },
     {
       "ruleId": "inline-style-color",
@@ -412,11 +397,6 @@
     },
     {
       "ruleId": "inline-style-color",
-      "file": "apps/web/components/ui/alert-dialog.tsx",
-      "count": 4
-    },
-    {
-      "ruleId": "inline-style-color",
       "file": "apps/web/components/ui/branded-empty-state.tsx",
       "count": 4
     },
@@ -441,11 +421,6 @@
       "count": 1
     },
     {
-      "ruleId": "inline-style-color",
-      "file": "apps/web/components/user-profile-popover.tsx",
-      "count": 18
-    },
-    {
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/app/global-error.tsx",
       "count": 1
@@ -453,11 +428,6 @@
     {
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/app/page.tsx",
-      "count": 1
-    },
-    {
-      "ruleId": "inline-style-radius-shadow",
-      "file": "apps/web/components/chat/custom-emoji-grid.tsx",
       "count": 1
     },
     {
@@ -479,11 +449,6 @@
       "ruleId": "inline-style-radius-shadow",
       "file": "apps/web/components/layout/user-panel.tsx",
       "count": 1
-    },
-    {
-      "ruleId": "inline-style-radius-shadow",
-      "file": "apps/web/components/modals/profile-settings-modal.tsx",
-      "count": 3
     },
     {
       "ruleId": "inline-style-radius-shadow",
@@ -523,11 +488,6 @@
     {
       "ruleId": "tailwind-arbitrary-surface-token",
       "file": "apps/web/components/ui/scroll-area.tsx",
-      "count": 1
-    },
-    {
-      "ruleId": "tailwind-arbitrary-surface-token",
-      "file": "apps/web/components/user-profile-popover.tsx",
       "count": 1
     }
   ]

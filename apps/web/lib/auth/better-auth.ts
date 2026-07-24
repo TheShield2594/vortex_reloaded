@@ -1,6 +1,6 @@
 import { cache } from "react"
 import bcrypt from "bcryptjs"
-import { and, desc, eq, gt, lt, or, sql } from "drizzle-orm"
+import { and, desc, eq, gt, or, sql } from "drizzle-orm"
 import { betterAuth, APIError } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { createAuthMiddleware } from "better-auth/api"
@@ -542,17 +542,6 @@ export const auth = betterAuth({
     },
   },
 })
-
-/**
- * Best-effort cleanup of expired login-risk lockout rows — mirrors the old
- * `record_login_attempt` RPC's implicit TTL via the lockout window query
- * itself, but also prevents unbounded growth of `login_attempts`. Call
- * periodically from the existing cron app rather than on every request.
- */
-export async function pruneExpiredLoginAttempts(): Promise<void> {
-  const cutoff = new Date(Date.now() - LOGIN_LOCKOUT_WINDOW_MS).toISOString()
-  await db.delete(loginAttempts).where(lt(loginAttempts.attemptedAt, cutoff))
-}
 
 /**
  * Drop-in replacement for `supabase.auth.getUser()`'s return shape
