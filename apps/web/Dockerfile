@@ -26,8 +26,12 @@ COPY packages/shared ./packages/shared
 COPY packages/db ./packages/db
 COPY apps/web ./apps/web
 
-# Build shared package first
-RUN npm run build --workspace=packages/shared 2>/dev/null || true
+# Build the shared package. next build transpiles @vortex/shared from source
+# (transpilePackages in next.config.js), so its dist/ isn't strictly consumed
+# by the image — but run it as a real build step (no silent `|| true`) so a
+# broken shared package fails the build here instead of surfacing as a
+# confusing runtime error.
+RUN npm run build --workspace=packages/shared
 
 # Compile @vortex/db to dist/. next build resolves @vortex/db from source, but
 # the runtime schema migration (docker-entrypoint.sh) needs a plain-JS entry
