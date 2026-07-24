@@ -160,6 +160,7 @@ All configuration is via environment variables in `.env` and
 | `STEAM_WEB_API_KEY` | Steam API | Profile enrichment |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google OAuth | YouTube connections |
 | `GITHUB_CLIENT_ID/SECRET`, `TWITCH_CLIENT_ID/SECRET` | OAuth sign-in | Additional auth providers |
+| `STEP_UP_SECRET_PREV` | Step-up secret rotation | Only set while rotating `STEP_UP_SECRET`: put the *old* value here so step-up tokens issued before the deploy still verify. Remove it 10+ minutes later (the token TTL), once none can still be live. |
 
 ---
 

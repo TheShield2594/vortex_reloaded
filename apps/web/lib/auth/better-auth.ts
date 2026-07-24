@@ -12,7 +12,7 @@ import { loginAttempts, loginRiskEvents, notifications, userConnections, users }
 import { computeLoginRisk } from "@/lib/auth/risk"
 import { revokeGatewaySessions } from "@/lib/gateway-publish"
 import { sendAuthEmail } from "@/lib/auth/email"
-import { hasValidStepUpToken } from "@/lib/auth/step-up"
+import { clearStepUpToken, hasValidStepUpToken } from "@/lib/auth/step-up"
 import { consumeInviteCode } from "@/lib/auth/invites"
 import { rateLimiter } from "@/lib/rate-limit"
 import { createLogger } from "@/lib/logger"
@@ -268,6 +268,15 @@ const GATEWAY_REVOKE_PATHS = new Set([
   "/delete-user",
 ])
 
+/**
+ * Endpoints gated behind a fresh re-authentication (`lib/auth/step-up.ts`),
+ * the same way OAuth-identity linking and MFA disable were gated under
+ * Supabase Auth — neither re-verifies the user's password or 2FA at call time
+ * on its own. `POST /api/auth/step-up` is what mints the token; the `after`
+ * hook below burns it, so one re-auth buys one gated mutation (issue #56).
+ */
+const STEP_UP_PATHS = new Set(["/two-factor/disable", "/link-social"])
+
 export const auth = betterAuth({
   baseURL: APP_ORIGIN,
   secret: betterAuthSecret(),
@@ -425,10 +434,8 @@ export const auth = betterAuth({
       }
 
       // Defense-in-depth: the app's own HMAC step-up cookie (lib/auth/step-up.ts)
-      // gates sensitive account-mutation endpoints the same way it gated
-      // OAuth-identity linking and MFA disable under Supabase Auth — these two
-      // don't otherwise re-verify the user's password/2FA at call time.
-      if (ctx.path === "/two-factor/disable" || ctx.path === "/link-social") {
+      // gates sensitive account-mutation endpoints — see STEP_UP_PATHS above.
+      if (STEP_UP_PATHS.has(ctx.path)) {
         const requestHeaders = ctx.headers ?? ctx.request?.headers ?? new Headers()
         const session = await auth.api.getSession({ headers: requestHeaders })
         if (session?.user && !(await hasValidStepUpToken(session.user.id))) {
@@ -456,6 +463,22 @@ export const auth = betterAuth({
       }
     }),
     after: createAuthMiddleware(async (ctx) => {
+      // Make the step-up token single-use. Only on success: a rejected
+      // `/link-social` (unconfigured provider, say) shouldn't cost the user
+      // the re-auth they just performed. Best-effort — if the clear fails the
+      // token simply expires on its own TTL, so it must not throw here and
+      // undo the mutation that just succeeded.
+      if (STEP_UP_PATHS.has(ctx.path) && !(ctx.context.returned instanceof Error)) {
+        try {
+          await clearStepUpToken()
+        } catch (err) {
+          log.error(
+            { err: err instanceof Error ? err.message : String(err), path: ctx.path },
+            "Failed to clear step-up token",
+          )
+        }
+      }
+
       if (ctx.path !== "/sign-in/email") return
       const email = typeof ctx.body?.email === "string" ? ctx.body.email.toLowerCase() : null
       if (!email) return

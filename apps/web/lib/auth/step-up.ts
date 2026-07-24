@@ -2,7 +2,27 @@ import crypto from "node:crypto"
 import { cookies } from "next/headers"
 
 const STEP_UP_COOKIE = "vtx_step_up"
-const STEP_UP_TTL_MS = 10 * 60 * 1000
+
+/**
+ * How long a freshly-issued step-up token stays valid. Exported so the
+ * `/api/auth/step-up` route can tell the client how long its re-auth is good
+ * for without the number being duplicated (and drifting) on both sides.
+ */
+export const STEP_UP_TTL_MS = 10 * 60 * 1000
+
+/**
+ * Shared attributes for both writes below. `clearStepUpToken` has to repeat
+ * `path`/`sameSite`/`secure` exactly or the browser treats the expiry write as
+ * a *different* cookie and leaves the live one in place.
+ */
+function stepUpCookieAttributes() {
+  return {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  } as const
+}
 
 /**
  * Returns the ordered list of step-up signing secrets.
@@ -43,17 +63,37 @@ function verifySignature(payload: string, signature: string): boolean {
   return false
 }
 
+/**
+ * Mint the step-up cookie for `userId`. Called by `POST /api/auth/step-up`
+ * once the caller has re-proven a credential (password or TOTP); nothing else
+ * should issue one, since the gate in lib/auth/better-auth.ts treats its mere
+ * presence as "this user re-authenticated in the last {@link STEP_UP_TTL_MS}".
+ */
 export async function issueStepUpToken(userId: string) {
   const issuedAt = Date.now()
   const payload = `${userId}:${issuedAt}`
   const signature = sign(payload)
   const cookieStore = await cookies()
   cookieStore.set(STEP_UP_COOKIE, `${payload}:${signature}`, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    ...stepUpCookieAttributes(),
     expires: new Date(issuedAt + STEP_UP_TTL_MS),
-    path: "/",
+  })
+}
+
+/**
+ * Burn the step-up cookie. Wired to the `after` hook in lib/auth/better-auth.ts
+ * so a token is single-use: re-authenticating buys exactly one gated mutation,
+ * not a 10-minute window in which every subsequent one rides for free.
+ *
+ * Deliberately never throws — a failed clear degrades to the token simply
+ * living out its TTL, which is strictly no worse than not having this at all,
+ * and must not be allowed to fail the auth operation that just succeeded.
+ */
+export async function clearStepUpToken(): Promise<void> {
+  const cookieStore = await cookies()
+  cookieStore.set(STEP_UP_COOKIE, "", {
+    ...stepUpCookieAttributes(),
+    expires: new Date(0),
   })
 }
 
