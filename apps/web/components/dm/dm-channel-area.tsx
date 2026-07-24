@@ -519,7 +519,20 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     })
   }, [gateway.status, channel?.is_encrypted, maybeTopUpOlmKeys])
 
-  const { typingUsers, onKeystroke, onSent } = useGatewayTyping(channelId, currentUserId, currentDisplayName)
+  const { typingUserIds, onKeystroke, onSent } = useGatewayTyping(channelId, currentUserId)
+
+  // Resolve typing labels from this channel's membership rather than from the
+  // gateway payload: `gateway:typing` carries only the authenticated userId, so
+  // a member can't type under someone else's name. Unknown IDs (membership not
+  // loaded yet, or a member we don't have a record for) fall back to "Unknown".
+  const typingNames = useMemo(
+    () =>
+      typingUserIds.map((id) => {
+        const member = channel?.members.find((m) => m.id === id)
+        return member?.display_name || member?.username || "Unknown"
+      }),
+    [typingUserIds, channel?.members],
+  )
 
   const loadMessages = useCallback(async (before?: string) => {
     if (!before) setLoadError(false)
@@ -836,7 +849,15 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
           const data = await res.json() as Record<string, unknown> | null
           if (!data) return
           const newMsg: Message = data as unknown as Message
-          setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg])
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev
+            // A replay batch fires these fetches concurrently, so responses can
+            // resolve out of order — keep the timeline sorted by created_at
+            // rather than trusting arrival order.
+            return [...prev, newMsg].sort(
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+            )
+          })
           // Encrypted channels index incrementally once the Olm decrypt
           // effect resolves each message's plaintext (see the indexing effect
           // below); nothing to index here from the raw envelope.
@@ -1889,7 +1910,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
       </div>
 
       {/* Typing indicator */}
-      <TypingIndicator users={typingUsers.map((user) => user.displayName)} />
+      <TypingIndicator users={typingNames} />
 
       {/* Input — hidden during active/ringing calls */}
       {/* Input — hidden during active/ringing calls */}

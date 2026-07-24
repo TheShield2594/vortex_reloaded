@@ -16,18 +16,15 @@ import type { GatewayServerEvents } from "@vortex/shared"
 
 const TYPING_TIMEOUT_MS = 3000
 
-interface TypingUser {
-  userId: string
-  displayName: string
-}
-
-export function useGatewayTyping(
-  channelId: string,
-  currentUserId: string,
-  currentDisplayName: string,
-) {
+/**
+ * Returns the user IDs currently typing in `channelId` (excluding the current
+ * user). Deliberately IDs, not names: `gateway:typing` carries only the
+ * authenticated `userId`, so callers resolve the label from their own trusted
+ * channel-membership data rather than trusting anything off the wire.
+ */
+export function useGatewayTyping(channelId: string, currentUserId: string) {
   const gateway = useGatewayContext()
-  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([])
+  const [typingUserIds, setTypingUserIds] = useState<string[]>([])
   const typingTimeoutsRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const isTypingRef = useRef(false)
   const stopTypingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -40,16 +37,13 @@ export function useGatewayTyping(
         if (data.userId === currentUserId) return
 
         if (data.isTyping) {
-          setTypingUsers((prev) => {
-            if (prev.some((u) => u.userId === data.userId)) return prev
-            return [...prev, { userId: data.userId, displayName: data.displayName }]
-          })
+          setTypingUserIds((prev) => (prev.includes(data.userId) ? prev : [...prev, data.userId]))
 
           const existing = typingTimeoutsRef.current.get(data.userId)
           if (existing) clearTimeout(existing)
 
           const timer = setTimeout(() => {
-            setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId))
+            setTypingUserIds((prev) => prev.filter((id) => id !== data.userId))
             typingTimeoutsRef.current.delete(data.userId)
           }, TYPING_TIMEOUT_MS + 500)
 
@@ -58,7 +52,7 @@ export function useGatewayTyping(
           const existing = typingTimeoutsRef.current.get(data.userId)
           if (existing) clearTimeout(existing)
           typingTimeoutsRef.current.delete(data.userId)
-          setTypingUsers((prev) => prev.filter((u) => u.userId !== data.userId))
+          setTypingUserIds((prev) => prev.filter((id) => id !== data.userId))
         }
       },
     )
@@ -78,7 +72,7 @@ export function useGatewayTyping(
   const onKeystroke = useCallback(() => {
     if (!isTypingRef.current) {
       isTypingRef.current = true
-      gateway.sendTyping(channelId, true, currentDisplayName)
+      gateway.sendTyping(channelId, true)
     }
 
     if (stopTypingTimerRef.current) clearTimeout(stopTypingTimerRef.current)
@@ -86,7 +80,7 @@ export function useGatewayTyping(
       isTypingRef.current = false
       gateway.sendTyping(channelId, false)
     }, TYPING_TIMEOUT_MS)
-  }, [channelId, gateway, currentDisplayName])
+  }, [channelId, gateway])
 
   const onSent = useCallback(() => {
     if (stopTypingTimerRef.current) clearTimeout(stopTypingTimerRef.current)
@@ -96,5 +90,5 @@ export function useGatewayTyping(
     }
   }, [channelId, gateway])
 
-  return { typingUsers, onKeystroke, onSent }
+  return { typingUserIds, onKeystroke, onSent }
 }

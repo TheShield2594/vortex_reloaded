@@ -41,11 +41,20 @@ interface GatewaySocketState {
   /** Channel IDs this socket is subscribed to for gateway events. */
   subscribedChannels: Set<string>
   /**
-   * The user's last-known presence status for this socket. Set on gateway:init
-   * and updated on gateway:presence, so a later gateway:subscribe can announce
-   * the correct status (not a hardcoded "online") to newly-joined DM rooms.
+   * The user's last-known presence status for this socket. Written by
+   * gateway:init and gateway:presence, so a later gateway:subscribe announces
+   * the real status (not a hardcoded "online") to newly-joined DM rooms.
+   * Only meaningful once `statusKnown` is true.
    */
   status: UserStatus
+  /**
+   * True once gateway:init (or a gateway:presence update) has supplied the
+   * user's actual status. Until then the `status` field is only a placeholder
+   * and MUST NOT be announced: gateway:subscribe/gateway:resume can win the
+   * connect-time race, and broadcasting an assumed "online" would tell DM
+   * co-members that an `invisible` user is online before init corrects it.
+   */
+  statusKnown: boolean
 }
 
 const socketStates = new Map<string, GatewaySocketState>()
@@ -54,14 +63,19 @@ const socketStates = new Map<string, GatewaySocketState>()
  * Return this socket's gateway state, creating it if absent. Used by
  * gateway:init, gateway:subscribe and gateway:resume so that whichever event
  * wins the connect-time race establishes the state and the others merge into
- * it — none of them clobbers another's subscribedChannels (issue #58 §4). The
- * `status` is only applied when the state is first created; gateway:init is the
- * authoritative writer for it thereafter.
+ * it — none of them clobbers another's subscribedChannels (issue #58 §4).
+ * Newly-created state is deliberately NOT status-authoritative; only
+ * gateway:init/gateway:presence set that (see `statusKnown`).
  */
-function getOrCreateState(socketId: string, userId: string, status: UserStatus): GatewaySocketState {
+function getOrCreateState(socketId: string, userId: string): GatewaySocketState {
   let state = socketStates.get(socketId)
   if (!state) {
-    state = { userId, subscribedChannels: new Set(), status }
+    state = {
+      userId,
+      subscribedChannels: new Set(),
+      status: "online",
+      statusKnown: false,
+    }
     socketStates.set(socketId, state)
   } else {
     state.userId = userId
@@ -75,22 +89,51 @@ function getOrCreateState(socketId: string, userId: string, status: UserStatus):
  * people who should see a user's presence are exactly the co-members of the
  * DM channels they share, which are already the `gateway:{channelId}` rooms
  * (issue #58 §1). `invisible` is masked to `offline` before it leaves the
- * server. Uses socket.to() so it's cluster-aware via the Redis adapter and
- * excludes the originating socket.
+ * server.
+ *
+ * Emits ONCE against the full set of rooms rather than once per room: Socket.IO
+ * unions the targets and delivers to each recipient at most once, so a
+ * co-member who shares several channels with this user doesn't get N copies.
+ * socket.to() is cluster-aware via the Redis adapter and excludes the sender.
+ *
+ * No-op when the socket's status isn't authoritative yet — see `statusKnown`.
  */
 function broadcastPresenceToChannels(
   socket: Socket,
-  userId: string,
-  status: UserStatus,
+  state: GatewaySocketState,
   channels: Iterable<string>,
 ): void {
-  const payload = {
-    userId,
-    status: (status === "invisible" ? "offline" : status) as UserStatus,
+  if (!state.statusKnown) return
+  const rooms = [...channels].map((channelId) => `gateway:${channelId}`)
+  if (rooms.length === 0) return
+  socket.to(rooms).emit("gateway:presence", {
+    userId: state.userId,
+    status: (state.status === "invisible" ? "offline" : state.status) as UserStatus,
     updatedAt: new Date().toISOString(),
-  }
-  for (const channelId of channels) {
-    socket.to(`gateway:${channelId}`).emit("gateway:presence", payload)
+  })
+}
+
+/**
+ * True when `userId` still has at least one connected socket besides the one
+ * currently disconnecting. Cluster-aware: io.fetchSockets() enumerates every
+ * replica via the Redis adapter, and socket.data.userId (set on
+ * gateway:init/subscribe/resume) identifies ownership on sockets this replica
+ * doesn't otherwise know about — the same mechanism revokeChannelAccess() uses.
+ *
+ * Call this only from the "disconnect" handler, where the closing socket has
+ * already been removed from the namespace and so isn't counted.
+ *
+ * Fails "no siblings" on error, preserving the previous unconditional-offline
+ * behavior: a missed offline is worse (a ghost stays online forever) than a
+ * premature one (the next gateway:presence heartbeat corrects it).
+ */
+async function hasOtherSocketsForUser(io: Server, userId: string): Promise<boolean> {
+  try {
+    const sockets = await io.fetchSockets()
+    return sockets.some((s) => s.data?.userId === userId)
+  } catch (err) {
+    log.error({ err, userId }, "failed to count user's remaining sockets — assuming last socket")
+    return false
   }
 }
 
@@ -98,7 +141,6 @@ function broadcastPresenceToChannels(
 
 interface TypingEntry {
   userId: string
-  displayName: string
   channelId: string
   timer: ReturnType<typeof setTimeout>
 }
@@ -201,9 +243,7 @@ export function initGateway(options: GatewayOptions): void {
 
         // Initialize socket state (merges with any state a racing gateway:init
         // already created — never clobbers its subscribedChannels; issue #58 §4).
-        // Default status is "online"; a preceding/subsequent gateway:init is the
-        // authoritative writer for the real status.
-        const state = getOrCreateState(socket.id, userId, "online")
+        const state = getOrCreateState(socket.id, userId)
         // Exposed cross-replica via the Redis adapter's fetchSockets(), so
         // revokeChannelAccess() can identify which remote sockets belong to a
         // given user without a shared socketStates map.
@@ -219,8 +259,10 @@ export function initGateway(options: GatewayOptions): void {
 
         // Announce this user's presence to co-members of the rooms they just
         // joined, so someone already in the DM sees them come online / change
-        // status live (issue #58 §1).
-        broadcastPresenceToChannels(socket, userId, state.status, newlyJoined)
+        // status live (issue #58 §1). Skipped while the status isn't yet
+        // authoritative — gateway:init announces to already-joined rooms when
+        // it lands, so neither ordering loses the announcement.
+        broadcastPresenceToChannels(socket, state, newlyJoined)
 
         socket.emit("gateway:subscribed", { channelIds: validChannels, denied: deniedChannels })
         if (deniedChannels.length > 0) {
@@ -259,11 +301,7 @@ export function initGateway(options: GatewayOptions): void {
       try {
         if (typeof data !== "object" || data === null) return
 
-        const { channelId, isTyping, displayName: rawDisplayName } = data as {
-          channelId?: unknown
-          isTyping?: unknown
-          displayName?: unknown
-        }
+        const { channelId, isTyping } = data as { channelId?: unknown; isTyping?: unknown }
         if (typeof channelId !== "string" || !channelId) return
         if (typeof isTyping !== "boolean") return
 
@@ -276,15 +314,11 @@ export function initGateway(options: GatewayOptions): void {
         // Must be subscribed to the channel
         if (!state.subscribedChannels.has(channelId)) return
 
-        // The signal server has no DB access to resolve names, so the client
-        // supplies its own display name (same trust model as callerName on
-        // gateway:call-signal). Validate + cap length; fall back to "Unknown"
-        // when absent (issue #58 §3).
-        const displayName =
-          typeof rawDisplayName === "string" && rawDisplayName.trim()
-            ? rawDisplayName.trim().slice(0, 100)
-            : "Unknown"
-
+        // Only the authenticated userId is relayed — never a display name. The
+        // signal server can't resolve names (no DB access), and relaying a
+        // client-supplied one would let any member type under an arbitrary
+        // label. Receivers resolve the label from their own trusted membership
+        // data instead (issue #58 §3).
         const key = typingKey(state.userId, channelId)
 
         if (isTyping) {
@@ -298,12 +332,11 @@ export function initGateway(options: GatewayOptions): void {
             io.to(`gateway:${channelId}`).emit("gateway:typing", {
               channelId,
               userId: state.userId,
-              displayName,
               isTyping: false,
             })
           }, 5_000)
 
-          activeTyping.set(key, { userId: state.userId, displayName, channelId, timer })
+          activeTyping.set(key, { userId: state.userId, channelId, timer })
         } else {
           const existing = activeTyping.get(key)
           if (existing?.timer) clearTimeout(existing.timer)
@@ -314,7 +347,6 @@ export function initGateway(options: GatewayOptions): void {
         socket.to(`gateway:${channelId}`).emit("gateway:typing", {
           channelId,
           userId: state.userId,
-          displayName,
           isTyping,
         })
       } catch (err) {
@@ -383,13 +415,14 @@ export function initGateway(options: GatewayOptions): void {
 
         const userStatus = status as UserStatus
         state.status = userStatus
+        // An explicit status from the client is authoritative, same as init's.
+        state.statusKnown = true
         await presence.updateStatus(state.userId, userStatus)
 
         // Fan the update out to the DM channel rooms this socket is subscribed
         // to. Cluster-aware via the Redis adapter, so co-members on other
-        // replicas receive it too; Socket.IO dedupes a recipient in multiple
-        // targeted rooms (issue #58 §1).
-        broadcastPresenceToChannels(socket, state.userId, userStatus, state.subscribedChannels)
+        // replicas receive it too (issue #58 §1).
+        broadcastPresenceToChannels(socket, state, state.subscribedChannels)
       } catch (err) {
         log.error({ socketId: socket.id, err }, "gateway:presence error")
       }
@@ -439,7 +472,7 @@ export function initGateway(options: GatewayOptions): void {
         // Ensure state exists even if resume wins the connect-time race against
         // gateway:init/subscribe, so rejoined rooms are tracked in
         // subscribedChannels (and later typing/call-signal guards pass; #58 §4).
-        const state = getOrCreateState(socket.id, userId, "online")
+        const state = getOrCreateState(socket.id, userId)
         socket.data.userId = userId
 
         const successChannels: string[] = []
@@ -481,8 +514,9 @@ export function initGateway(options: GatewayOptions): void {
         }
 
         // Re-announce presence to the rooms we rejoined so co-members see this
-        // user back online after a reconnect (issue #58 §1).
-        broadcastPresenceToChannels(socket, userId, state.status, rejoined)
+        // user back online after a reconnect (issue #58 §1). Gated on an
+        // authoritative status, same as the subscribe path.
+        broadcastPresenceToChannels(socket, state, rejoined)
 
         socket.emit("gateway:resume-complete", {
           channels: successChannels,
@@ -523,18 +557,21 @@ export function initGateway(options: GatewayOptions): void {
 
         // Initialize socket state without clobbering channels a racing
         // gateway:subscribe/gateway:resume may already have added (issue #58 §4).
-        // gateway:init is the authoritative writer for presence status.
-        const state = getOrCreateState(socket.id, userId, status)
+        // gateway:init is the authoritative writer for presence status — until
+        // it lands, nothing about this user's status is broadcast.
+        const state = getOrCreateState(socket.id, userId)
         state.status = status
+        state.statusKnown = true
         socket.data.userId = userId
 
         // Set presence
         await presence.setOnline(userId, socket.id, status)
 
-        // Announce online status to co-members of any DM rooms already joined
-        // (e.g. subscribe/resume won the race). If none are joined yet, the
-        // subsequent gateway:subscribe announces on join instead (issue #58 §1).
-        broadcastPresenceToChannels(socket, userId, status, state.subscribedChannels)
+        // Announce status to co-members of any DM rooms already joined (i.e.
+        // subscribe/resume won the race and skipped their own announce). If no
+        // rooms are joined yet, the subsequent gateway:subscribe announces on
+        // join instead — so exactly one of the two paths fires (issue #58 §1).
+        broadcastPresenceToChannels(socket, state, state.subscribedChannels)
 
         log.info({ userId, channels: state.subscribedChannels.size }, "gateway initialized")
       } catch (err) {
@@ -559,10 +596,24 @@ export function initGateway(options: GatewayOptions): void {
             io.to(`gateway:${channelId}`).emit("gateway:typing", {
               channelId,
               userId: state.userId,
-              displayName: entry.displayName,
               isTyping: false,
             })
           }
+        }
+
+        // Drop this socket's state before counting, so a same-replica sibling
+        // check can't see the socket that's going away.
+        gatewayLimiter!.remove(socket.id)
+        socketStates.delete(socket.id)
+
+        // A user commonly has several sockets (multiple tabs/devices). Going
+        // offline is a per-USER event but socketStates is per-SOCKET, so tearing
+        // down here unconditionally would tell every DM room the user is offline
+        // while another tab is still connected. Only do it when this was their
+        // last socket.
+        if (await hasOtherSocketsForUser(io, state.userId)) {
+          log.debug({ userId: state.userId }, "socket closed but user still connected elsewhere")
+          return
         }
 
         // Fan an offline update to co-members of every DM room this socket was
@@ -575,15 +626,11 @@ export function initGateway(options: GatewayOptions): void {
           status: "offline" as UserStatus,
           updatedAt: new Date().toISOString(),
         }
-        for (const channelId of state.subscribedChannels) {
-          io.to(`gateway:${channelId}`).emit("gateway:presence", offlinePayload)
-        }
+        const rooms = [...state.subscribedChannels].map((channelId) => `gateway:${channelId}`)
+        if (rooms.length > 0) io.to(rooms).emit("gateway:presence", offlinePayload)
 
         // Clear presence from Redis.
         await presence.setOffline(state.userId)
-
-        gatewayLimiter!.remove(socket.id)
-        socketStates.delete(socket.id)
       } catch (err) {
         log.error({ socketId: socket.id, err }, "gateway disconnect cleanup error")
       }

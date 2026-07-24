@@ -26,7 +26,7 @@ interface GatewayContextValue {
   status: GatewayStatus
   subscribe: (channelIds: string[]) => void
   unsubscribe: (channelIds: string[]) => void
-  sendTyping: (channelId: string, isTyping: boolean, displayName?: string) => void
+  sendTyping: (channelId: string, isTyping: boolean) => void
   sendPresence: (status: UserStatus) => void
   sendCallSignal: (payload: {
     channelId: string

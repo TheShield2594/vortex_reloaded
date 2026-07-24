@@ -165,6 +165,12 @@ export function useDMCall(
   const incomingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // User IDs that have declined the current outgoing ring (group calls).
   const declinedRef = useRef<Set<string>>(new Set())
+  // Read through a ref so the listener effect doesn't depend on it: membership
+  // hydrates after mount (1 → N), and re-running the effect would fire its
+  // cleanup, clearing the live ring/incoming timers and stranding an
+  // incoming-call toast or an outgoing ring that can never time out.
+  const otherMemberCountRef = useRef(otherMemberCount)
+  otherMemberCountRef.current = otherMemberCount
 
   const clearIncoming = useCallback(() => {
     if (incomingTimeoutRef.current) { clearTimeout(incomingTimeoutRef.current); incomingTimeoutRef.current = null }
@@ -211,7 +217,7 @@ export function useDMCall(
           // Group ring: give up only once every other member has declined, so a
           // single decline can't cancel a ring others might still answer.
           declinedRef.current.add(data.userId)
-          if (declinedRef.current.size >= otherMemberCount) stopRinging()
+          if (declinedRef.current.size >= otherMemberCountRef.current) stopRinging()
           break
       }
     })
@@ -221,7 +227,7 @@ export function useDMCall(
       if (incomingTimeoutRef.current) { clearTimeout(incomingTimeoutRef.current); incomingTimeoutRef.current = null }
       removeListener()
     }
-  }, [channelId, currentUserId, gateway, otherMemberCount, clearIncoming, stopRinging])
+  }, [channelId, currentUserId, gateway, clearIncoming, stopRinging])
 
   const startCall = useCallback((withVideo: boolean, callerAvatar?: string | null) => {
     declinedRef.current.clear()

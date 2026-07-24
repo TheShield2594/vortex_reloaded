@@ -291,7 +291,7 @@ export function useGateway(handlers?: GatewayEventHandlers) {
     typingTimersRef.current.clear()
   }, [])
 
-  const sendTyping = useCallback((channelId: string, isTyping: boolean, displayName?: string) => {
+  const sendTyping = useCallback((channelId: string, isTyping: boolean) => {
     const socket = socketRef.current
     if (!socket?.connected) return
 
@@ -299,8 +299,7 @@ export function useGateway(handlers?: GatewayEventHandlers) {
     const existing = timers.get(channelId)
 
     if (!isTyping) {
-      // Explicit stop — clear timers and send immediately. displayName is
-      // omitted: stop events are matched by userId on the receiving side.
+      // Explicit stop — clear timers and send immediately
       if (existing?.stopTimer) clearTimeout(existing.stopTimer)
       timers.delete(channelId)
       socket.volatile.emit("gateway:typing", { channelId, isTyping: false })
@@ -321,10 +320,9 @@ export function useGateway(handlers?: GatewayEventHandlers) {
       return
     }
 
-    // First keystroke (or suppress window expired) — emit immediately, carrying
-    // the sender's display name so the server can relay it (issue #58 §3).
+    // First keystroke (or suppress window expired) — emit immediately
     if (existing?.stopTimer) clearTimeout(existing.stopTimer)
-    socket.volatile.emit("gateway:typing", { channelId, isTyping: true, displayName })
+    socket.volatile.emit("gateway:typing", { channelId, isTyping: true })
     timers.set(channelId, {
       suppressUntil: now + 2000,
       stopTimer: setTimeout(() => {
