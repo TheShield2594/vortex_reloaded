@@ -68,6 +68,11 @@ export interface GatewayOptions {
   presence: PresenceManager
   validateSession: (socket: Socket) => Promise<boolean>
   getSessionUserId: (socket: Socket) => string | undefined
+  /**
+   * Returns the subset of requested channel IDs the user is authorized to
+   * join (membership check — issue #51). See ./channel-access.ts.
+   */
+  checkChannelAccess: (userId: string, channelIds: string[]) => Promise<string[]>
 }
 
 /** Stop the gateway rate-limiter cleanup timer (call during graceful shutdown). */
@@ -77,7 +82,7 @@ export function stopGatewayCleanup(): void {
 
 export function initGateway(options: GatewayOptions): void {
   gatewayLimiter = (gatewayLimiter ?? new SocketRateLimiter()).startCleanup()
-  const { io, eventBus, presence, validateSession, getSessionUserId } = options
+  const { io, eventBus, presence, validateSession, getSessionUserId, checkChannelAccess } = options
 
   // Subscribe to event bus to fan out events to connected sockets
   eventBus.subscribe({}, (event: VortexEvent) => {
@@ -134,7 +139,12 @@ export function initGateway(options: GatewayOptions): void {
           }
         }
 
-        const validChannels: string[] = [...channelIds]
+        // Membership authorization (issue #51): only join rooms the user is
+        // actually a member of. `user:{id}` channels are owner-only; DM
+        // channels are checked against the web app's membership records.
+        // Re-checked on every subscribe so a removed member can't rejoin a
+        // room by re-emitting gateway:subscribe.
+        const validChannels = await checkChannelAccess(userId, channelIds as string[])
 
         // Initialize socket state
         let state = socketStates.get(socket.id)
@@ -352,11 +362,21 @@ export function initGateway(options: GatewayOptions): void {
           return
         }
 
+        // Authorize before rejoining any room (issue #51): resume must not be
+        // a bypass around gateway:subscribe's membership check.
+        const requestedChannelIds = entries
+          .filter(([channelId, lastEventId]) => typeof channelId === "string" && typeof lastEventId === "string")
+          .map(([channelId]) => channelId)
+        const allowedChannels = new Set(await checkChannelAccess(userId, requestedChannelIds))
+
         const successChannels: string[] = []
         const gapTooLarge: string[] = []
 
         for (const [channelId, lastEventId] of entries) {
           if (typeof channelId !== "string" || typeof lastEventId !== "string") continue
+
+          // Skip rooms the user is no longer authorized for.
+          if (!allowedChannels.has(channelId)) continue
 
           // Re-subscribe to the channel room
           socket.join(`gateway:${channelId}`)

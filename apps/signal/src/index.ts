@@ -9,6 +9,7 @@ import pino from "pino"
 import { RedisEventBus } from "./event-bus"
 import { PresenceManager } from "./presence"
 import { initGateway, stopGatewayCleanup, revokeChannelAccess } from "./gateway"
+import { createChannelAccessChecker } from "./channel-access"
 
 dotenv.config()
 
@@ -80,6 +81,28 @@ async function verifyAuthToken(token: string): Promise<string | null> {
 // ─── HTTP server + Socket.IO ──────────────────────────────────────────────────
 
 const REVOKE_TOKEN_SECRET = process.env.SIGNAL_REVOKE_SECRET ?? ""
+
+// Base URL of apps/web, used to authorize DM channel-room subscriptions
+// (issue #51). Same host as AUTH_JWKS_URL — reachable from wherever apps/signal
+// runs, not necessarily the public browser origin. Trailing slash trimmed.
+const WEB_APP_URL = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "")
+
+// Membership authorizer for gateway:subscribe / gateway:resume. When the web
+// app URL or shared secret is missing we pass null, which allows DM channels
+// with a warning (dev parity with validateSession's JWKS-less skip). In
+// production both must be set or DM room subscriptions go unauthorized.
+if (process.env.NODE_ENV === "production" && (!WEB_APP_URL || !REVOKE_TOKEN_SECRET)) {
+  logger.error(
+    "WEB_APP_URL and SIGNAL_REVOKE_SECRET must both be set in production so gateway " +
+    "channel subscriptions are authorized (issue #51). DM channel membership is NOT " +
+    "enforced until these are configured."
+  )
+}
+const channelAccessChecker = createChannelAccessChecker(
+  WEB_APP_URL && REVOKE_TOKEN_SECRET
+    ? { webAppUrl: WEB_APP_URL, secret: REVOKE_TOKEN_SECRET }
+    : null,
+)
 
 const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
   if (req.url === "/health") {
@@ -503,6 +526,7 @@ if (eventBus && presenceManager) {
     presence: presenceManager,
     validateSession: async (socket: Socket) => validateSession(socket),
     getSessionUserId: (socket: Socket) => sessionValidationCache.get(socket.id)?.userId,
+    checkChannelAccess: channelAccessChecker,
   })
 }
 
