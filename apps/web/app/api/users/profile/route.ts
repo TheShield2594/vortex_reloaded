@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { createDb, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { sanitizeBannerColor } from "@/lib/banner-color"
 import { toSnakeCase } from "@/lib/utils/case"
 import type { UserRow } from "@/types/database"
@@ -16,6 +17,9 @@ export async function PATCH(request: Request) {
   try {
     const { data: { user }, error: authError } = await getBetterAuthUser()
     if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const limited = await checkRateLimit(user.id, "profile:update", { limit: 30, windowMs: 60_000 })
+    if (limited) return limited
 
     const body = (await request.json()) as ProfileUpdatePayload
     const allowedKeys: Array<keyof ProfileUpdatePayload> = [

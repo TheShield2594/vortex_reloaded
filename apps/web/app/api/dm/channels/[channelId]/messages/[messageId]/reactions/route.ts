@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm"
 import { createDb, directMessages, dmChannelMembers, dmReactions } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
+import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
 
 const db = createDb()
@@ -71,6 +72,11 @@ export async function POST(
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    // Tighter limit than message send: each reaction fans out over the gateway,
+    // so reaction spam amplifies across every channel member.
+    const limited = await checkRateLimit(user.id, "dm:react", { limit: 30, windowMs: 10_000 })
+    if (limited) return limited
+
     const body = (await req.json().catch(() => ({}))) as Body
     const emoji = normalizeEmoji(body.emoji)
     if (!emoji) return NextResponse.json({ error: "emoji required" }, { status: 400 })
@@ -116,6 +122,11 @@ export async function DELETE(
     const { channelId, messageId } = await params
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    // Tighter limit than message send: each reaction change fans out over the
+    // gateway, so reaction spam amplifies across every channel member.
+    const limited = await checkRateLimit(user.id, "dm:react", { limit: 30, windowMs: 10_000 })
+    if (limited) return limited
 
     const body = (await req.json().catch(() => ({}))) as Body
     const emoji = normalizeEmoji(body.emoji)

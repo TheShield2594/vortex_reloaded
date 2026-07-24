@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { eq } from "drizzle-orm"
 import { createDb, users } from "@vortex/db"
 import { getAuthUser } from "@/lib/auth/better-auth"
+import { checkRateLimit } from "@/lib/utils/api-helpers"
 
 const db = createDb()
 
@@ -18,6 +19,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    // Presence updates (heartbeats, status changes, sendBeacon on tab close) are
+    // legitimately frequent, so this ceiling is generous — it only stops abuse.
+    const limited = await checkRateLimit(user.id, "presence:update", { limit: 60, windowMs: 60_000 })
+    if (limited) return limited
 
     let body: unknown
     try {
