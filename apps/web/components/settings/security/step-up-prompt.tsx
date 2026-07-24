@@ -25,15 +25,31 @@ import { getStepUpStatus, submitStepUp, type StepUpMethods } from "@/lib/auth/st
  * caller never has to interpret the gate's 403 itself. Cancelling resolves
  * `false`, which callers should treat as "user backed out" — not an error.
  */
+const DIALOG_TITLE = {
+  challenge: "Confirm it's you",
+  "no-factor": "Re-authentication unavailable",
+  unavailable: "Couldn't verify it's you",
+} as const
+
+const DIALOG_MESSAGE = {
+  challenge: "This action changes your account’s security settings, so we need you to re-authenticate first.",
+  "no-factor":
+    "This action needs you to re-authenticate, but your account has no password and no authenticator app. Set a password (use “Forgot password” on the sign-in page) or enable two-factor authentication, then try again.",
+  unavailable:
+    "We couldn’t check how to verify you — you may be offline, or your session may have expired. Check your connection, reload the page, and try again.",
+} as const
+
 export function useStepUpPrompt(): {
   requireStepUp: () => Promise<boolean>
   stepUpDialog: React.JSX.Element
 } {
   const [open, setOpen] = useState(false)
   const [methods, setMethods] = useState<StepUpMethods>({ password: false, totp: false })
-  // The account has no factor to be challenged on, so there is nothing to
-  // prompt for — the dialog explains the block instead of collecting input.
-  const [blocked, setBlocked] = useState(false)
+  // `challenge` collects a factor; the other two explain why none can be
+  // collected. Both of those still open the dialog rather than resolving
+  // straight to `false` — that value reads as "user cancelled" to callers and
+  // suppresses their error handling, which would leave the button looking dead.
+  const [mode, setMode] = useState<"challenge" | "no-factor" | "unavailable">("challenge")
   const [password, setPassword] = useState("")
   const [totpCode, setTotpCode] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -51,13 +67,30 @@ export function useStepUpPrompt(): {
     setTotpCode("")
     setError(null)
     setSubmitting(false)
-    setBlocked(false)
+    setMode("challenge")
     resolve?.(verified)
   }, [])
 
   const requireStepUp = useCallback(async (): Promise<boolean> => {
+    // One hook instance backs several trigger buttons (three providers in
+    // connections-section), and the dialog state is shared. Overwriting a
+    // pending `resolveRef` would orphan the first caller's promise forever and
+    // then hand its result to the second, so refuse to start a second run.
+    if (resolveRef.current) return false
+
     const status = await getStepUpStatus()
-    if (!status) return false
+
+    // Couldn't even find out what to ask for — offline, session expired, 5xx.
+    // Distinct from "cancelled": the user did click, and needs to know it
+    // failed rather than watch nothing happen.
+    if (!status) {
+      setMode("unavailable")
+      setOpen(true)
+      return new Promise<boolean>((resolve) => {
+        resolveRef.current = resolve
+      })
+    }
+
     if (status.verified) return true
 
     setMethods(status.methods)
@@ -65,7 +98,7 @@ export function useStepUpPrompt(): {
     // 2FA). Step-up has to prove something the session alone doesn't, so the
     // action stays blocked — say why rather than failing silently. The server
     // enforces this too (403); this only saves a doomed round-trip.
-    setBlocked(!status.methods.password && !status.methods.totp)
+    setMode(!status.methods.password && !status.methods.totp ? "no-factor" : "challenge")
     setPassword("")
     setTotpCode("")
     setError(null)
@@ -97,21 +130,15 @@ export function useStepUpPrompt(): {
     <Dialog open={open} onOpenChange={(next) => { if (!next) settle(false) }}>
       <DialogContent className="step-up-dialog">
         <DialogHeader>
-          <DialogTitle className="text-white">
-            {blocked ? "Re-authentication unavailable" : "Confirm it's you"}
-          </DialogTitle>
+          <DialogTitle className="text-white">{DIALOG_TITLE[mode]}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex items-start gap-3 rounded-lg border p-3 step-up-notice">
             <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5 step-up-notice-icon" />
-            <p className="text-sm">
-              {blocked
-                ? "This action needs you to re-authenticate, but your account has no password and no authenticator app. Set a password (use “Forgot password” on the sign-in page) or enable two-factor authentication, then try again."
-                : "This action changes your account’s security settings, so we need you to re-authenticate first."}
-            </p>
+            <p className="text-sm">{DIALOG_MESSAGE[mode]}</p>
           </div>
 
-          {!blocked && methods.password && (
+          {mode === "challenge" && methods.password && (
             <div className="space-y-2">
               <Label htmlFor="step-up-password" className="step-up-label">Password</Label>
               <Input
@@ -127,7 +154,7 @@ export function useStepUpPrompt(): {
             </div>
           )}
 
-          {!blocked && methods.totp && (
+          {mode === "challenge" && methods.totp && (
             <div className="space-y-2">
               <Label htmlFor="step-up-totp" className="step-up-label">
                 {methods.password ? "Or a code from your authenticator app" : "Code from your authenticator app"}
@@ -152,8 +179,8 @@ export function useStepUpPrompt(): {
           )}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => settle(false)}>{blocked ? "Close" : "Cancel"}</Button>
-            {!blocked && (
+            <Button variant="outline" onClick={() => settle(false)}>{mode === "challenge" ? "Cancel" : "Close"}</Button>
+            {mode === "challenge" && (
               <Button
                 onClick={handleSubmit}
                 disabled={!canSubmit || submitting}

@@ -90,11 +90,16 @@ export async function issueStepUpToken(userId: string) {
  * and must not be allowed to fail the auth operation that just succeeded.
  */
 export async function clearStepUpToken(): Promise<void> {
-  const cookieStore = await cookies()
-  cookieStore.set(STEP_UP_COOKIE, "", {
-    ...stepUpCookieAttributes(),
-    expires: new Date(0),
-  })
+  try {
+    const cookieStore = await cookies()
+    cookieStore.set(STEP_UP_COOKIE, "", {
+      ...stepUpCookieAttributes(),
+      expires: new Date(0),
+    })
+  } catch {
+    // Swallowed so the guarantee above holds for every caller, not just the
+    // one that happens to wrap the call itself.
+  }
 }
 
 export async function hasValidStepUpToken(userId: string): Promise<boolean> {

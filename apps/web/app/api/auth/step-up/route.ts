@@ -88,7 +88,16 @@ export async function POST(request: NextRequest) {
       const ok = await auth.api
         .verifyTOTP({ body: { code: totpCode }, headers: await nextHeaders() })
         .then(() => true)
-        .catch(() => false)
+        .catch((err: unknown) => {
+          // A wrong code and a broken 2FA subsystem both land here. The caller
+          // gets the same 401 either way (it must not learn which), so this is
+          // the only place the difference is recoverable — log it.
+          log.warn(
+            { userId: user.id, err: err instanceof Error ? err.message : String(err) },
+            "TOTP step-up verification rejected",
+          )
+          return false
+        })
       if (!ok) return apiError(VERIFICATION_FAILED, 401)
     } else if (password && methods.password) {
       if (!(await verifyStepUpPassword(db, user.id, password))) {
