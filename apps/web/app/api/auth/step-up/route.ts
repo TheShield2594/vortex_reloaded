@@ -32,6 +32,15 @@ const db = createDb()
  */
 const VERIFICATION_FAILED = "Verification failed"
 
+/**
+ * Returned when the account has no factor to be challenged on at all. Unlike
+ * {@link VERIFICATION_FAILED} this is deliberately specific: it's not a failed
+ * attempt, it's a state the user has to leave before the action is reachable,
+ * and the message has to say how.
+ */
+const NO_FACTOR_AVAILABLE =
+  "Set a password or enable two-factor authentication before changing your account's security settings."
+
 export async function GET() {
   const { user, error } = await requireAuth()
   if (error) return error
@@ -91,10 +100,14 @@ export async function POST(request: NextRequest) {
     } else {
       // No password and no 2FA — an OAuth-only account (see the bootstrap
       // escape hatch in lib/auth/better-auth.ts, the one path that can create
-      // one). There is no second credential to re-prove, so challenging is
-      // impossible and refusing would restore exactly the lockout this
-      // endpoint exists to fix. Grant it, and say so in the log.
-      log.warn({ userId: user.id }, "Issuing step-up token without re-verification — account has no password or 2FA")
+      // one). Minting a token here would make the session itself the proof,
+      // which is exactly what step-up exists to *not* accept: a stolen session
+      // could then link an attacker-controlled provider and outlive the theft
+      // (CWE-287). Not a lockout either — Better Auth's password reset creates
+      // a `credential` account when the user has none, so "forgot password"
+      // gets such an account a real factor without help from an admin.
+      log.warn({ userId: user.id }, "Step-up refused — account has no password or 2FA to challenge")
+      return apiError(NO_FACTOR_AVAILABLE, 403)
     }
 
     await issueStepUpToken(user.id)

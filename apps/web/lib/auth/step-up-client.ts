@@ -38,8 +38,9 @@ export async function getStepUpStatus(): Promise<StepUpStatus | null> {
 }
 
 /**
- * Submit a factor and mint the token. An empty payload is only valid for an
- * account with no password and no 2FA — the server decides, not the caller.
+ * Submit a factor and mint the token. The server rejects a payload that
+ * carries no factor the account can actually be challenged on (403) — step-up
+ * has to prove something the session alone doesn't.
  */
 export async function submitStepUp(
   payload: { password?: string; totpCode?: string } = {},

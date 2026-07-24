@@ -68,10 +68,17 @@ describe("submitStepUp", () => {
     })
   })
 
-  it("posts an empty body when no factor is supplied", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, { ok: true }))
+  it("surfaces the server's refusal when the account has no factor to challenge", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(403, { error: "Set a password or enable two-factor authentication…" }),
+    )
 
-    await submitStepUp()
+    // The session alone is never sufficient proof for step-up, so an empty
+    // submission has to come back as a failure rather than a minted token.
+    expect(await submitStepUp()).toEqual({
+      ok: false,
+      error: "Set a password or enable two-factor authentication…",
+    })
     expect(fetchMock.mock.calls[0][1].body).toBe("{}")
   })
 

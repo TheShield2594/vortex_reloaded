@@ -31,6 +31,9 @@ export function useStepUpPrompt(): {
 } {
   const [open, setOpen] = useState(false)
   const [methods, setMethods] = useState<StepUpMethods>({ password: false, totp: false })
+  // The account has no factor to be challenged on, so there is nothing to
+  // prompt for — the dialog explains the block instead of collecting input.
+  const [blocked, setBlocked] = useState(false)
   const [password, setPassword] = useState("")
   const [totpCode, setTotpCode] = useState("")
   const [submitting, setSubmitting] = useState(false)
@@ -48,6 +51,7 @@ export function useStepUpPrompt(): {
     setTotpCode("")
     setError(null)
     setSubmitting(false)
+    setBlocked(false)
     resolve?.(verified)
   }, [])
 
@@ -56,14 +60,12 @@ export function useStepUpPrompt(): {
     if (!status) return false
     if (status.verified) return true
 
-    // Nothing to challenge on (an OAuth-only account with no password and no
-    // 2FA). The server still has to be the one to decide that, so ask it
-    // rather than prompting for a factor the user cannot possibly supply.
-    if (!status.methods.password && !status.methods.totp) {
-      return (await submitStepUp()).ok
-    }
-
     setMethods(status.methods)
+    // Nothing to challenge on (an OAuth-only account with no password and no
+    // 2FA). Step-up has to prove something the session alone doesn't, so the
+    // action stays blocked — say why rather than failing silently. The server
+    // enforces this too (403); this only saves a doomed round-trip.
+    setBlocked(!status.methods.password && !status.methods.totp)
     setPassword("")
     setTotpCode("")
     setError(null)
@@ -95,17 +97,21 @@ export function useStepUpPrompt(): {
     <Dialog open={open} onOpenChange={(next) => { if (!next) settle(false) }}>
       <DialogContent className="step-up-dialog">
         <DialogHeader>
-          <DialogTitle className="text-white">Confirm it&apos;s you</DialogTitle>
+          <DialogTitle className="text-white">
+            {blocked ? "Re-authentication unavailable" : "Confirm it's you"}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex items-start gap-3 rounded-lg border p-3 step-up-notice">
             <ShieldAlert className="w-5 h-5 flex-shrink-0 mt-0.5 step-up-notice-icon" />
             <p className="text-sm">
-              This action changes your account&apos;s security settings, so we need you to re-authenticate first.
+              {blocked
+                ? "This action needs you to re-authenticate, but your account has no password and no authenticator app. Set a password (use “Forgot password” on the sign-in page) or enable two-factor authentication, then try again."
+                : "This action changes your account’s security settings, so we need you to re-authenticate first."}
             </p>
           </div>
 
-          {methods.password && (
+          {!blocked && methods.password && (
             <div className="space-y-2">
               <Label htmlFor="step-up-password" className="step-up-label">Password</Label>
               <Input
@@ -121,7 +127,7 @@ export function useStepUpPrompt(): {
             </div>
           )}
 
-          {methods.totp && (
+          {!blocked && methods.totp && (
             <div className="space-y-2">
               <Label htmlFor="step-up-totp" className="step-up-label">
                 {methods.password ? "Or a code from your authenticator app" : "Code from your authenticator app"}
@@ -146,15 +152,17 @@ export function useStepUpPrompt(): {
           )}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => settle(false)}>Cancel</Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={!canSubmit || submitting}
-              className="step-up-submit"
-            >
-              {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              Confirm
-            </Button>
+            <Button variant="outline" onClick={() => settle(false)}>{blocked ? "Close" : "Cancel"}</Button>
+            {!blocked && (
+              <Button
+                onClick={handleSubmit}
+                disabled={!canSubmit || submitting}
+                className="step-up-submit"
+              >
+                {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Confirm
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
