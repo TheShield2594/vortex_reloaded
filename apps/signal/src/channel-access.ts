@@ -49,16 +49,18 @@ export type CheckChannelAccess = (userId: string, channelIds: string[]) => Promi
  * revocation actually stick — a removed member re-emitting `gateway:subscribe`
  * is re-checked and rejected instead of silently rejoining the room.
  *
- * Pass `null` to disable the DM membership backend (local dev without apps/web
- * wired up): DM channels are then allowed with a warning, mirroring how
- * validateSession skips when no JWKS is configured. The `user:{id}` ownership
- * check still applies in that mode.
+ * Pass `null` when no DM membership backend is configured: DM/group channels
+ * are then DENIED (fail closed), so an unconfigured or misconfigured deployment
+ * can never hand out unauthorized DM subscriptions (issue #51). `user:{id}`
+ * channels are still resolved locally and remain available. Production startup
+ * refuses to run in this state (see index.ts) — the null path is a dev/last-line
+ * safety net, not a supported operating mode.
  */
 export function createChannelAccessChecker(config: ChannelAccessConfig | null): CheckChannelAccess {
   const timeoutMs = config?.timeoutMs ?? DEFAULT_TIMEOUT_MS
 
   if (!config) {
-    log.warn("channel access checker unconfigured — DM channel subscriptions will not be authorized (dev only)")
+    log.warn("channel access checker unconfigured — DM/group channel subscriptions will be DENIED (set WEB_APP_URL + SIGNAL_REVOKE_SECRET)")
   }
 
   return async function checkChannelAccess(userId: string, channelIds: string[]): Promise<string[]> {
@@ -76,9 +78,10 @@ export function createChannelAccessChecker(config: ChannelAccessConfig | null): 
 
     if (dmChannelIds.length === 0) return allowed
 
-    // No membership backend configured — dev parity with validateSession's
-    // skip-when-unconfigured behavior. The user:{id} check above still ran.
-    if (!config) return [...allowed, ...dmChannelIds]
+    // No membership backend configured — fail closed: deny every DM/group
+    // channel rather than hand out unauthorized subscriptions. The user:{id}
+    // check above still ran, so per-user channels remain available.
+    if (!config) return allowed
 
     try {
       const controller = new AbortController()

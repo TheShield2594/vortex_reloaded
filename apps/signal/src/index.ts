@@ -87,16 +87,18 @@ const REVOKE_TOKEN_SECRET = process.env.SIGNAL_REVOKE_SECRET ?? ""
 // runs, not necessarily the public browser origin. Trailing slash trimmed.
 const WEB_APP_URL = (process.env.WEB_APP_URL ?? "").replace(/\/$/, "")
 
-// Membership authorizer for gateway:subscribe / gateway:resume. When the web
-// app URL or shared secret is missing we pass null, which allows DM channels
-// with a warning (dev parity with validateSession's JWKS-less skip). In
-// production both must be set or DM room subscriptions go unauthorized.
+// Membership authorizer for gateway:subscribe / gateway:resume. Both the web
+// app URL and shared secret are REQUIRED to authorize DM/group channel rooms
+// (issue #51). In production, refuse to start when either is missing — running
+// with the null checker would deny all DM subscriptions and silently break
+// real-time, so fail fast and loud instead (same posture as ALLOWED_ORIGINS
+// above). Outside production the null checker is a fail-closed dev fallback.
 if (process.env.NODE_ENV === "production" && (!WEB_APP_URL || !REVOKE_TOKEN_SECRET)) {
   logger.error(
     "WEB_APP_URL and SIGNAL_REVOKE_SECRET must both be set in production so gateway " +
-    "channel subscriptions are authorized (issue #51). DM channel membership is NOT " +
-    "enforced until these are configured."
+    "channel subscriptions can be authorized (issue #51). Refusing to start."
   )
+  process.exit(1)
 }
 const channelAccessChecker = createChannelAccessChecker(
   WEB_APP_URL && REVOKE_TOKEN_SECRET

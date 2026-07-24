@@ -97,12 +97,13 @@ async function run(): Promise<void> {
     if (!sortedEqual(allowed, [])) throw new Error(`got ${JSON.stringify(allowed)}`)
   })
 
-  // Unconfigured (dev): DM channels allowed with no network, but user:{other}
-  // is still rejected by the local ownership rule.
-  await check("unconfigured dev parity", async () => {
+  // Unconfigured: fail closed — every DM/group channel is denied, while the
+  // locally resolved user:{owner} channel is still allowed and user:{other}
+  // still rejected.
+  await check("unconfigured fails closed", async () => {
     const checker = createChannelAccessChecker(null)
     const allowed = await checker("user-a", ["user:user-a", "user:user-b", "dm-1"])
-    if (!sortedEqual(allowed, ["user:user-a", "dm-1"])) throw new Error(`got ${JSON.stringify(allowed)}`)
+    if (!sortedEqual(allowed, ["user:user-a"])) throw new Error(`got ${JSON.stringify(allowed)}`)
   })
 
   mkdirSync(".reports", { recursive: true })

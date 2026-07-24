@@ -20,6 +20,7 @@ import {
   TYPING_RATE_LIMIT,
   PRESENCE_RATE_LIMIT,
   CALL_SIGNAL_RATE_LIMIT,
+  SUBSCRIBE_RATE_LIMIT,
 } from "@vortex/shared"
 import type { RedisEventBus } from "./event-bus"
 import type { PresenceManager } from "./presence"
@@ -108,6 +109,14 @@ export function initGateway(options: GatewayOptions): void {
       try {
         if (typeof data !== "object" || data === null) {
           socket.emit("error", { message: "Invalid gateway:subscribe payload" })
+          return
+        }
+
+        // Throttle before the membership check's network round-trip so a
+        // client can't amplify load against the internal endpoint by spamming
+        // subscribe.
+        if (!gatewayLimiter!.check(socket.id, "subscribe", SUBSCRIBE_RATE_LIMIT, 60_000)) {
+          socket.emit("error", { message: "Rate limit exceeded for gateway:subscribe" })
           return
         }
 
@@ -345,6 +354,13 @@ export function initGateway(options: GatewayOptions): void {
       try {
         if (typeof data !== "object" || data === null) {
           socket.emit("error", { message: "Invalid gateway:resume payload" })
+          return
+        }
+
+        // Same throttle as gateway:subscribe — resume also authorizes every
+        // channel via the internal endpoint before rejoining rooms.
+        if (!gatewayLimiter!.check(socket.id, "resume", SUBSCRIBE_RATE_LIMIT, 60_000)) {
+          socket.emit("error", { message: "Rate limit exceeded for gateway:resume" })
           return
         }
 
