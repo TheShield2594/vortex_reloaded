@@ -20,8 +20,8 @@ const STORAGE_ERROR_ALERT_THRESHOLD = 5
  * the database rows as purged. Processes both channel attachments and DM
  * attachments in batches.
  *
- * Called daily by scheduled-tasks cron dispatcher. Also available for
- * manual invocation. Requires CRON_SECRET.
+ * Called daily by the self-hosted cron runner (apps/cron, see its `jobs`
+ * schedule). Also available for manual invocation. Requires CRON_SECRET.
  */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {

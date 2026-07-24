@@ -62,6 +62,13 @@ services:
       REDIS_URL: redis://redis:6379
       DATABASE_URL: file:/data/vortex.db
       LIVEKIT_API_URL: http://livekit:7880
+      # Server-side URL the web app uses to publish realtime events to the
+      # signal service (a server-to-server HTTP fetch — NOT the browser's
+      # NEXT_PUBLIC_SIGNAL_URL WebSocket). Without this, gateway-publish.ts
+      # would fall back to NEXT_PUBLIC_SIGNAL_URL (a ws:// URL pointing at the
+      # public origin) and realtime fan-out would silently fail inside the
+      # compose network.
+      SIGNAL_SERVER_URL: http://signal:3001
       # Internal address of the `ntfy` service below — set by default since
       # ntfy ships in this stack (like Redis, it costs little to keep
       # running), but an operator-provided .env value still wins, e.g. to
