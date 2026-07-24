@@ -128,8 +128,31 @@ export function CallerRingingOverlay({ partnerName, partnerAvatar, withVideo, on
 // ─── useDMCall hook ─────────────────────────────────────────────────────────────
 // Manages incoming call state for a DM channel
 
-/** Manages incoming/outgoing DM call state and signaling via the Socket.IO gateway. */
-export function useDMCall(channelId: string, currentUserId: string, currentUserName: string) {
+/** How long the caller rings before auto-cancelling. */
+const RING_TIMEOUT_MS = 30_000
+/**
+ * How long a callee's incoming-call toast lives before auto-dismissing. Slightly
+ * longer than the caller's ring window so a normal "cancel" arrives first; the
+ * timeout is the backstop for the group case where the caller stops ringing
+ * (because another member accepted) and so never sends a cancel to the rest
+ * (issue #58 §5).
+ */
+const INCOMING_TIMEOUT_MS = 35_000
+
+/**
+ * Manages incoming/outgoing DM call state and signaling via the Socket.IO gateway.
+ *
+ * `otherMemberCount` is the number of *other* members in the channel (1 for a
+ * 1:1 DM). It drives the group-ring semantics: the caller only gives up once
+ * every other member has declined, so one member's decline can't tear down a
+ * ring others might still answer.
+ */
+export function useDMCall(
+  channelId: string,
+  currentUserId: string,
+  currentUserName: string,
+  otherMemberCount = 1,
+) {
   const gateway = useGatewayContext()
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null)
   const [activeCall, setActiveCall] = useState<{ withVideo: boolean } | null>(null)
@@ -139,6 +162,26 @@ export function useDMCall(channelId: string, currentUserId: string, currentUserN
   const ringingRef = useRef(ringing)
   ringingRef.current = ringing
   const ringTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const incomingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // User IDs that have declined the current outgoing ring (group calls).
+  const declinedRef = useRef<Set<string>>(new Set())
+  // Read through a ref so the listener effect doesn't depend on it: membership
+  // hydrates after mount (1 → N), and re-running the effect would fire its
+  // cleanup, clearing the live ring/incoming timers and stranding an
+  // incoming-call toast or an outgoing ring that can never time out.
+  const otherMemberCountRef = useRef(otherMemberCount)
+  otherMemberCountRef.current = otherMemberCount
+
+  const clearIncoming = useCallback(() => {
+    if (incomingTimeoutRef.current) { clearTimeout(incomingTimeoutRef.current); incomingTimeoutRef.current = null }
+    setIncomingCall(null)
+  }, [])
+
+  const stopRinging = useCallback(() => {
+    if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
+    declinedRef.current.clear()
+    setRinging(null)
+  }, [])
 
   useEffect(() => {
     const removeListener = gateway.addCallSignalListener(channelId, (data) => {
@@ -153,56 +196,66 @@ export function useDMCall(channelId: string, currentUserId: string, currentUserN
             channelId,
             withVideo: data.withVideo ?? false,
           })
+          // Auto-dismiss the toast if the ring is never explicitly cancelled.
+          if (incomingTimeoutRef.current) clearTimeout(incomingTimeoutRef.current)
+          incomingTimeoutRef.current = setTimeout(() => {
+            incomingTimeoutRef.current = null
+            setIncomingCall(null)
+          }, INCOMING_TIMEOUT_MS)
           break
         case "cancel":
-          if (incomingCallRef.current?.callerId === data.userId) setIncomingCall(null)
+          if (incomingCallRef.current?.callerId === data.userId) clearIncoming()
           break
         case "accept":
+          // Only the caller (still ringing) acts on an accept.
           if (!ringingRef.current) return
-          if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
-          setRinging(null)
+          stopRinging()
           setActiveCall({ withVideo: data.withVideo ?? false })
           break
         case "decline":
           if (!ringingRef.current) return
-          if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
-          setRinging(null)
+          // Group ring: give up only once every other member has declined, so a
+          // single decline can't cancel a ring others might still answer.
+          declinedRef.current.add(data.userId)
+          if (declinedRef.current.size >= otherMemberCountRef.current) stopRinging()
           break
       }
     })
 
     return () => {
       if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
+      if (incomingTimeoutRef.current) { clearTimeout(incomingTimeoutRef.current); incomingTimeoutRef.current = null }
       removeListener()
     }
-  }, [channelId, currentUserId, gateway])
+  }, [channelId, currentUserId, gateway, clearIncoming, stopRinging])
 
   const startCall = useCallback((withVideo: boolean, callerAvatar?: string | null) => {
+    declinedRef.current.clear()
     gateway.sendCallSignal({ channelId, type: "invite", withVideo, callerName: currentUserName, callerAvatar: callerAvatar ?? null })
     setRinging({ withVideo })
     ringTimeoutRef.current = setTimeout(() => {
       ringTimeoutRef.current = null
+      declinedRef.current.clear()
       gateway.sendCallSignal({ channelId, type: "cancel" })
       setRinging(null)
-    }, 30_000)
+    }, RING_TIMEOUT_MS)
   }, [channelId, currentUserName, gateway])
 
   const cancelCall = useCallback(() => {
-    if (ringTimeoutRef.current) { clearTimeout(ringTimeoutRef.current); ringTimeoutRef.current = null }
+    stopRinging()
     gateway.sendCallSignal({ channelId, type: "cancel" })
-    setRinging(null)
-  }, [channelId, gateway])
+  }, [channelId, gateway, stopRinging])
 
   const acceptCall = useCallback((withVideo: boolean) => {
     gateway.sendCallSignal({ channelId, type: "accept", withVideo })
-    setIncomingCall(null)
+    clearIncoming()
     setActiveCall({ withVideo })
-  }, [channelId, gateway])
+  }, [channelId, gateway, clearIncoming])
 
   const declineCall = useCallback(() => {
     gateway.sendCallSignal({ channelId, type: "decline" })
-    setIncomingCall(null)
-  }, [channelId, gateway])
+    clearIncoming()
+  }, [channelId, gateway, clearIncoming])
 
   const endCall = useCallback(() => {
     setActiveCall(null)

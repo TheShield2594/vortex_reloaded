@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { useGatewayContext } from "@/hooks/use-gateway-context"
-import type { VortexEvent } from "@vortex/shared"
+import type { VortexEvent, UserStatus } from "@vortex/shared"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Users, Plus, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils/cn"
@@ -220,6 +220,20 @@ export function DMList({ onNavigate }: { onNavigate?: () => void } = {}) {
     gateway.subscribe(ids)
   }, [channelIdsStr, gateway])
 
+  // Live presence (issue #58 §1). The initial status per partner comes from the
+  // DB via /api/dm/channels; gateway:presence events — fanned out to the DM
+  // rooms this socket subscribes to above — then patch it in real time as
+  // co-members go online/idle/offline.
+  const [livePresence, setLivePresence] = useState<Record<string, UserStatus>>({})
+  useEffect(() => {
+    return gateway.addPresenceListener((data) => {
+      if (data.userId === currentUserId) return
+      setLivePresence((prev) =>
+        prev[data.userId] === data.status ? prev : { ...prev, [data.userId]: data.status },
+      )
+    })
+  }, [gateway, currentUserId])
+
   // Refresh the list when a message lands in one of our channels, or when
   // our own membership changes (channel created/added to, or removed from —
   // delivered on the per-user channel since we aren't subscribed to a
@@ -426,7 +440,7 @@ export function DMList({ onNavigate }: { onNavigate?: () => void } = {}) {
                     </Avatar>
                   )}
                   {!ch.is_group && ch.partner && (
-                    <StatusDot status={ch.partner.status} />
+                    <StatusDot status={livePresence[ch.partner.id] ?? ch.partner.status} />
                   )}
                 </div>
 

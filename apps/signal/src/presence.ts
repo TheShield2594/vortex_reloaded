@@ -5,8 +5,11 @@
  * Detects offline in ~10s (Socket.IO pingTimeout) instead of ~90s (30s heartbeat + 60s cron).
  *
  * Key schema:
- *   vortex:presence:{userId}       — Redis Hash with status, socketId, lastHeartbeat, serverIds
- *   vortex:presence:server:{sId}   — Redis Set of online user IDs per server
+ *   vortex:presence:{userId}       — Redis Hash with status, socketId, lastHeartbeat
+ *
+ * This app is DM/friends-based with no server/guild concept, so presence is
+ * keyed per user only; fan-out to the user's DM channel rooms is the gateway's
+ * job (see broadcastPresenceToChannels in ./gateway.ts).
  *
  * #595: WebSocket-Based Presence & Typing
  */
@@ -35,38 +38,21 @@ export class PresenceManager {
     return `${PRESENCE_KEY_PREFIX}:${userId}`
   }
 
-  private serverKey(serverId: string): string {
-    return `${PRESENCE_KEY_PREFIX}:server:${serverId}`
-  }
-
   /** Mark a user as online when they connect via Socket.IO. */
-  async setOnline(
-    userId: string,
-    socketId: string,
-    status: UserStatus,
-    serverIds: string[],
-  ): Promise<void> {
+  async setOnline(userId: string, socketId: string, status: UserStatus): Promise<void> {
     try {
       const key = this.userKey(userId)
-      const now = new Date().toISOString()
 
-      const pipeline = this.redis.pipeline()
-      pipeline.hset(key, {
-        userId,
-        status,
-        socketId,
-        lastHeartbeat: now,
-        serverIds: JSON.stringify(serverIds),
-      })
-      pipeline.expire(key, PRESENCE_TTL_SECONDS)
-
-      // Add user to all their server presence sets
-      for (const serverId of serverIds) {
-        pipeline.sadd(this.serverKey(serverId), userId)
-        pipeline.expire(this.serverKey(serverId), PRESENCE_TTL_SECONDS * 2)
-      }
-
-      await pipeline.exec()
+      await this.redis
+        .pipeline()
+        .hset(key, {
+          userId,
+          status,
+          socketId,
+          lastHeartbeat: new Date().toISOString(),
+        })
+        .expire(key, PRESENCE_TTL_SECONDS)
+        .exec()
     } catch (err) {
       log.error({ err, userId }, "setOnline failed")
     }
@@ -89,37 +75,26 @@ export class PresenceManager {
     }
   }
 
-  /** Remove a user's presence when they disconnect. */
-  async setOffline(userId: string): Promise<string[]> {
+  /**
+   * Remove a user's presence when their last socket disconnects. Fan-out to
+   * the user's DM rooms is the gateway's job (see broadcastPresenceToChannels)
+   * — this only clears Redis state.
+   */
+  async setOffline(userId: string): Promise<void> {
     try {
-      const key = this.userKey(userId)
-      const data = await this.redis.hgetall(key)
-      if (!data || !data.serverIds) return []
-
-      let serverIds: string[] = []
-      try {
-        serverIds = JSON.parse(data.serverIds) as string[]
-      } catch {
-        serverIds = []
-      }
-
-      const pipeline = this.redis.pipeline()
-      pipeline.del(key)
-      for (const serverId of serverIds) {
-        pipeline.srem(this.serverKey(serverId), userId)
-      }
-      await pipeline.exec()
-
-      return serverIds
+      await this.redis.del(this.userKey(userId))
     } catch (err) {
       log.error({ err, userId }, "setOffline failed")
-      return []
     }
   }
 
   /** Start periodic cleanup of stale presence entries.
-   *  Uses cursor-based SCAN instead of blocking KEYS to avoid locking Redis. */
-  startCleanup(onStaleUser: (userId: string, serverIds: string[]) => void): void {
+   *  Uses cursor-based SCAN instead of blocking KEYS to avoid locking Redis.
+   *
+   *  This is a safety-net sweep only: it reaps orphaned keys that never got a
+   *  TTL. The authoritative offline signal is the gateway's socket-disconnect
+   *  handler, so no stale-user fan-out callback is needed here. */
+  startCleanup(): void {
     if (this.cleanupTimer) return
 
     // TTL expiry is the primary cleanup mechanism; this sweep is a safety net
@@ -143,8 +118,6 @@ export class PresenceManager {
 
           for (const key of keys) {
             if (this.destroyed) return
-            // Skip server set keys
-            if (key.includes(":server:")) continue
 
             const ttl = await this.redis.ttl(key)
             if (ttl === -1) {

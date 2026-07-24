@@ -71,11 +71,17 @@ export interface GatewayServerEvents {
     hasMore: boolean
   }
 
-  /** Typing indicator update for a channel. */
+  /**
+   * Typing indicator update for a channel.
+   *
+   * Carries only `userId` — never a display name. The signal server has no DB
+   * access to resolve names, and relaying a client-supplied one would let any
+   * channel member type under an arbitrary label (impersonation). Receivers
+   * resolve the label locally from their own trusted channel-membership data.
+   */
   "gateway:typing": {
     channelId: string
     userId: string
-    displayName: string
     isTyping: boolean
   }
 

@@ -196,6 +196,12 @@ export function useGateway(handlers?: GatewayEventHandlers) {
         })
 
         socket.on("gateway:replay", (data: GatewayServerEvents["gateway:replay"]) => {
+          // Advance the per-channel cursor across the replayed batch so a
+          // later resume asks only for what's newer, not the same gap again.
+          // Events arrive in order, so the last one is the newest.
+          for (const event of data.events) {
+            stateRef.current.lastEventIds.set(event.channelId, event.id)
+          }
           handlersRef.current?.onReplay?.(data)
         })
 
