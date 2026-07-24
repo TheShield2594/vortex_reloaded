@@ -35,9 +35,7 @@ export const MIGRATION_TABLES: TableSpec[] = [
   { name: "auth_security_policies", orderBy: ["user_id"] },
   { name: "login_risk_events", orderBy: ["id"] },
   { name: "login_attempts", orderBy: ["id"] },
-  { name: "user_device_keys", orderBy: ["user_id", "device_id"] },
   { name: "dm_channel_members", orderBy: ["dm_channel_id", "user_id"] },
-  { name: "dm_channel_keys", orderBy: ["dm_channel_id", "key_version", "target_user_id", "target_device_id"] },
   // Chronological order isn't required for correctness (see import.ts), but
   // keeps the NDJSON dump readable and makes reply_to_id issues easy to spot.
   { name: "direct_messages", orderBy: ["created_at", "id"] },

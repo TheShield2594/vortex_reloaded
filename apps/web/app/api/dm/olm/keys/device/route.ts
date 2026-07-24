@@ -14,7 +14,7 @@ import {
 const log = createLogger("api/dm/olm/keys/device")
 const db = createDb()
 
-// Matches PER_USER_DEVICE_LIMIT elsewhere (legacy-ecdh's user_device_keys cap)
+// Cap on the number of Olm device identities a single user may register.
 const DEVICE_LIMIT = 20
 // Each POST may publish at most this many one-time keys in one call
 const MAX_ONE_TIME_KEYS_PER_REQUEST = 100

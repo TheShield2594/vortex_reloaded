@@ -33,11 +33,12 @@ export const dmChannels = sqliteTable(
     encryptionMembershipEpoch: integer("encryption_membership_epoch").notNull().default(0),
     /**
      * Which E2EE scheme this channel's `directMessages.content` envelopes
-     * use. New encrypted channels are always created as "olm" (Matrix.org's
-     * Double Ratchet implementation — see apps/web/app/api/dm/channels/route.ts)
-     * — "legacy-ecdh" (the static per-device ECDH+AES-GCM wrap in
-     * lib/dm-encryption.ts) only exists on channels created before this
-     * migration and is never assigned to a new channel going forward.
+     * use. Every encrypted channel now uses "olm" (Matrix.org's Double
+     * Ratchet implementation — see apps/web/app/api/dm/channels/route.ts).
+     * "legacy-ecdh" (a retired static per-device ECDH+AES-GCM wrap) only
+     * lingers on channels created before the Olm migration; its client code
+     * has since been removed, so those channels' history is no longer
+     * decryptable and the value is retained for historical record only.
      */
     encryptionScheme: text("encryption_scheme", { enum: ["legacy-ecdh", "olm"] })
       .notNull()
@@ -204,72 +205,9 @@ export const dmAttachments = sqliteTable(
 )
 
 /**
- * supabase/migrations/00030_dm_e2ee.sql.
- * The Postgres `prune_dm_channel_keys` cleanup ran off a *statement-level*
- * `AFTER INSERT/UPDATE ... REFERENCING NEW TABLE` trigger, which has no
- * SQLite equivalent — ported to application code instead, see
- * `../lib/prune-dm-channel-keys.ts`.
- */
-export const dmChannelKeys = sqliteTable(
-  "dm_channel_keys",
-  {
-    dmChannelId: text("dm_channel_id")
-      .notNull()
-      .references(() => dmChannels.id, { onDelete: "cascade" }),
-    keyVersion: integer("key_version").notNull(),
-    targetUserId: text("target_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    targetDeviceId: text("target_device_id").notNull(),
-    wrappedKey: text("wrapped_key").notNull(),
-    wrappedByUserId: text("wrapped_by_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    wrappedByDeviceId: text("wrapped_by_device_id").notNull(),
-    senderPublicKey: text("sender_public_key").notNull(),
-    createdAt: createdAt(),
-  },
-  (table) => [
-    primaryKey({
-      columns: [table.dmChannelId, table.keyVersion, table.targetUserId, table.targetDeviceId],
-    }),
-    index("dm_channel_keys_target_idx").on(
-      table.targetUserId,
-      table.targetDeviceId,
-      table.dmChannelId,
-      table.keyVersion
-    ),
-  ]
-)
-
-/**
- * supabase/migrations/00030_dm_e2ee.sql.
- * The Postgres `upsert_user_device_key` RPC's count-then-insert device cap
- * (default limit 20, matching `DEVICE_LIMIT` in
- * apps/web/app/api/dm/keys/device/route.ts) is folded into a `BEFORE
- * INSERT` trigger in src/sql/ per the FTS5/transactions spike's
- * recommendation (issue #4) — safe under real concurrency without needing
- * better-sqlite3's async-incompatible `db.transaction()`.
- */
-export const userDeviceKeys = sqliteTable(
-  "user_device_keys",
-  {
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    deviceId: text("device_id").notNull(),
-    publicKey: text("public_key").notNull(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
-  },
-  (table) => [primaryKey({ columns: [table.userId, table.deviceId] })]
-)
-
-/**
  * Olm (Matrix.org's Double Ratchet implementation — not Signal's own
  * codebase/protocol, see issue #1's discussion) device identity — one row
- * per (user, device), independent of `userDeviceKeys` (the legacy-ecdh
- * scheme's device table). `curve25519IdentityKey`/`ed25519IdentityKey` come
+ * per (user, device). `curve25519IdentityKey`/`ed25519IdentityKey` come
  * straight from `Olm.Account.identity_keys()`; `fallback*` is the device's
  * current Olm fallback key (functions like Signal's signed prekey — a
  * long-lived key used to establish a session once one-time keys are

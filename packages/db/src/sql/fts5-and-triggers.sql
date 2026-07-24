@@ -6,14 +6,8 @@
 -- docs/sqlite-migration-fts5-transactions-spike.md, issue #4's spike).
 --
 -- Apply this AFTER the drizzle-kit-generated table migrations (it assumes
--- direct_messages, dm_channels, dm_channel_members, and user_device_keys
--- already exist) — see src/migrate.ts.
---
--- NOT here: `prune_dm_channel_keys`. Its Postgres trigger was
--- *statement-level* (`AFTER INSERT/UPDATE ... REFERENCING NEW TABLE`),
--- which SQLite has no equivalent for. That logic is ported to application
--- code instead — see ../lib/prune-dm-channel-keys.ts, called after any
--- write to dm_channel_keys.
+-- direct_messages, dm_channels, and dm_channel_members already exist) —
+-- see src/migrate.ts.
 
 -- ============================================================================
 -- 1. direct_messages full-text search (replaces the dropped `search_vector`
@@ -146,24 +140,4 @@ BEGIN
       ORDER BY created_at DESC
       LIMIT 50
     );
-END;
-
--- ============================================================================
--- 6. user_device_keys device cap (00030_dm_e2ee.sql's upsert_user_device_key
---    RPC, ported per issue #4's spike recommendation: option B, a BEFORE
---    INSERT trigger folding the cap check into the insert itself, safe
---    under real concurrency without needing better-sqlite3's
---    async-incompatible db.transaction()). Cap of 20 matches DEVICE_LIMIT
---    in apps/web/app/api/dm/keys/device/route.ts — baked into the trigger
---    body since CREATE TRIGGER is DDL and can't take a bind parameter.
--- ============================================================================
-
-CREATE TRIGGER IF NOT EXISTS user_device_keys_cap_before_insert
-BEFORE INSERT ON user_device_keys
-WHEN (
-  SELECT COUNT(*) FROM user_device_keys
-  WHERE user_id = NEW.user_id AND device_id <> NEW.device_id
-) >= 20
-BEGIN
-  SELECT RAISE(ABORT, 'device_limit_reached');
 END;
