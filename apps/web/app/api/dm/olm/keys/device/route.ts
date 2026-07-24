@@ -9,6 +9,7 @@ import {
   isValidOlmSignature,
   isValidOlmKeyId,
   validateOneTimeKeyEntry,
+  verifyOneTimeKeySignature,
 } from "@/lib/olm-key-validation"
 
 const log = createLogger("api/dm/olm/keys/device")
@@ -99,6 +100,16 @@ export async function POST(req: NextRequest) {
           // client bug (topped up before ever publishing) rather than
           // something to silently create half-formed.
           if (!existing) throw new Error("device_not_registered")
+          // Each key must be signed by this device's already-registered
+          // ed25519 identity — otherwise anyone authenticated could inject
+          // forged one-time keys under another of their own (enumerable)
+          // device ids that later fail the claimer's client-side signature
+          // check, breaking new session setup (CWE-347).
+          for (const key of oneTimeKeys) {
+            if (!verifyOneTimeKeySignature(existing.ed25519IdentityKey, user.id, deviceId, key)) {
+              throw new Error("invalid_one_time_key_signature")
+            }
+          }
         } else {
           const curve25519IdentityKey = body.curve25519IdentityKey as string
           const ed25519IdentityKey = body.ed25519IdentityKey as string
@@ -204,6 +215,9 @@ export async function POST(req: NextRequest) {
       }
       if (message.includes("device_not_registered")) {
         return NextResponse.json({ error: "Device not registered — publish an identity before topping up keys" }, { status: 409 })
+      }
+      if (message.includes("invalid_one_time_key_signature")) {
+        return NextResponse.json({ error: "One-time key signature does not match the device identity" }, { status: 400 })
       }
       log.error({ route: "/api/dm/olm/keys/device", action: "POST", userId: user.id, error: message }, "failed to register device")
       return NextResponse.json({ error: "Failed to register device key" }, { status: 500 })
