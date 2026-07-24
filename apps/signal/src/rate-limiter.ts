@@ -1,8 +1,8 @@
 /**
  * Shared per-socket sliding-window rate limiter for the signal server.
  *
- * Used by both the main WebRTC signaling handler (index.ts) and
- * the real-time gateway (gateway.ts).
+ * Used by the real-time gateway (gateway.ts) to throttle per-socket
+ * subscribe / typing / presence / call-signal events.
  */
 
 export class SocketRateLimiter {

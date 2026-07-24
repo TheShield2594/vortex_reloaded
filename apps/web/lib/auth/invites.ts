@@ -30,13 +30,6 @@ export type InviteValidation =
   | { valid: true }
   | { valid: false; reason: "not_found" | "revoked" | "expired" | "exhausted" }
 
-export const INVITE_VALIDATION_MESSAGES: Record<Exclude<InviteValidation, { valid: true }>["reason"], string> = {
-  not_found: "That invite code doesn't exist.",
-  revoked: "That invite code has been revoked.",
-  expired: "That invite code has expired.",
-  exhausted: "That invite code has already been used.",
-}
-
 /** Read-only check — for pre-submit UX feedback. Never mutates use_count. */
 export async function checkInviteCode(db: VortexDb, rawCode: string): Promise<InviteValidation> {
   const code = normalizeInviteCode(rawCode)

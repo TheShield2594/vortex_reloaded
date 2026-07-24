@@ -1,6 +1,6 @@
 /** Standard emoji shortcodes mapped to Unicode characters.
  *  Covers the most commonly used shortcodes across Discord, Slack, and GitHub. */
-export const EMOJI_SHORTCODES: Record<string, string> = {
+const EMOJI_SHORTCODES: Record<string, string> = {
   // Smileys & Emotion
   grinning: "\u{1F600}",
   smiley: "\u{1F603}",

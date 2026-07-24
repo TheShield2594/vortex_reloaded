@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
-    "test": "tsx src/rooms.parity-check.ts && tsx src/channel-access.check.ts && tsx src/revocation.check.ts"
+    "test": "tsx src/gateway.check.ts && tsx src/channel-access.check.ts && tsx src/revocation.check.ts"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",

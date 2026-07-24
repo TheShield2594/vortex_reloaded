@@ -54,14 +54,6 @@ export function setActiveDmChannel(dmChannelId: string | null): void {
   if (dmChannelId) clearChannelNotifications(dmChannelId)
 }
 
-export function getActiveChannelId(): string | null {
-  return activeChannelId
-}
-
-export function getActiveDmChannelId(): string | null {
-  return activeDmChannelId
-}
-
 // ---------------------------------------------------------------------------
 // Per-channel notification tracking (browser Notification instances)
 // ---------------------------------------------------------------------------
@@ -109,15 +101,6 @@ function clearChannelNotifications(channelId: string): void {
     try { entry.notification.close() } catch { /* already closed */ }
   }
   channelNotifications.delete(channelId)
-}
-
-export function clearAllNotifications(): void {
-  for (const [, entries] of channelNotifications) {
-    for (const entry of entries) {
-      try { entry.notification.close() } catch { /* already closed */ }
-    }
-  }
-  channelNotifications.clear()
 }
 
 // ---------------------------------------------------------------------------

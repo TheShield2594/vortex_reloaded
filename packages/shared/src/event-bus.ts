@@ -25,9 +25,6 @@ export type VortexEventType =
   | "notification.created"
   | "notification.updated"
   | "notification.deleted"
-  | "voice.peer_joined"
-  | "voice.peer_left"
-  | "voice.state_changed"
 
 /** An event flowing through the bus. */
 export interface VortexEvent<T = unknown> {

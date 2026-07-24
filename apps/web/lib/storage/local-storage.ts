@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
+import { mkdir, rename, rm, stat, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { resolveUploadsDir } from "@vortex/db"
 
@@ -57,17 +57,6 @@ export async function writeUploadFile(baseDir: string, key: string, data: Buffer
 /** True if `err` is a Node filesystem error with the given `code` (e.g. "ENOENT"). */
 function isFsErrorCode(err: unknown, code: string): boolean {
   return typeof err === "object" && err !== null && "code" in err && (err as { code?: unknown }).code === code
-}
-
-export async function readUploadFile(baseDir: string, key: string): Promise<Buffer | null> {
-  const filePath = safeResolve(baseDir, key)
-  if (!filePath) return null
-  try {
-    return await readFile(filePath)
-  } catch (err) {
-    if (isFsErrorCode(err, "ENOENT")) return null
-    throw err
-  }
 }
 
 export async function statUploadFile(baseDir: string, key: string): Promise<{ path: string; size: number } | null> {

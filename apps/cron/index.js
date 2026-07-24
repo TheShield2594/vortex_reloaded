@@ -87,6 +87,12 @@ const jobs = [
     schedule: "0 0 * * *",          // Daily at midnight UTC
     description: "Purge expired attachment files (channel + DM)",
   },
+  {
+    name: "login-attempts-cleanup",
+    path: "/api/cron/login-attempts-cleanup",
+    schedule: "30 3 * * *",         // Daily at 03:30 UTC
+    description: "Purge stale login-attempt rows",
+  },
 ]
 
 // ─── Start ──────────────────────────────────────────────────────────────────

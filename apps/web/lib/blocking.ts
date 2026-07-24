@@ -28,33 +28,3 @@ export async function isBlockedBetweenUsers(
   const blockedIds = deriveBlockedUserIds(leftUserId, rows)
   return blockedIds.has(rightUserId)
 }
-
-/** Filters mention ids down to users that are not blocked relative to sender. */
-export async function filterMentionsByBlockState(
-  senderUserId: string,
-  mentions: string[]
-): Promise<{ allowed: string[]; blocked: string[] }> {
-  const uniqueMentions = Array.from(new Set(mentions.filter(Boolean))).filter((id) => id !== senderUserId)
-  if (uniqueMentions.length === 0) return { allowed: [], blocked: [] }
-
-  const rows = await db
-    .select({
-      requesterId: friendships.requesterId,
-      addresseeId: friendships.addresseeId,
-      status: friendships.status,
-    })
-    .from(friendships)
-    .where(
-      and(
-        eq(friendships.status, "blocked"),
-        or(eq(friendships.requesterId, senderUserId), eq(friendships.addresseeId, senderUserId))
-      )
-    )
-
-  const blockedSet = deriveBlockedUserIds(senderUserId, rows)
-
-  return {
-    allowed: uniqueMentions.filter((id) => !blockedSet.has(id)),
-    blocked: uniqueMentions.filter((id) => blockedSet.has(id)),
-  }
-}

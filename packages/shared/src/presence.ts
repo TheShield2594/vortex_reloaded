@@ -11,10 +11,6 @@ import type { UserStatus } from './index'
 
 // ── Heartbeat ────────────────────────────────────────────────────────────────
 
-/** How often the client sends a heartbeat (ms).
- *  Legacy HTTP polling: 30s. Gateway (Socket.IO): handled by pingInterval. */
-export const PRESENCE_HEARTBEAT_INTERVAL_MS = 30_000
-
 /** Server considers a user stale after this many ms without a heartbeat.
  *  Legacy HTTP: 90s (30s heartbeat + 60s cron). Gateway: ~10s (Socket.IO pingTimeout). */
 export const PRESENCE_STALE_THRESHOLD_MS = 90_000

@@ -29,13 +29,10 @@ export {
   computeRenewalWindowDays,
   computeRenewalThresholdDays,
   maybeRenewExpiry,
-  extendExpiry,
-  computeCost,
 } from './attachment-decay'
 export type { DecayInput, DecayResult } from './attachment-decay'
 
 export {
-  PRESENCE_HEARTBEAT_INTERVAL_MS,
   PRESENCE_STALE_THRESHOLD_MS,
   PRESENCE_HEARTBEAT_DEBOUNCE_MS,
   IDLE_TIMEOUT_MS,
@@ -59,26 +56,20 @@ export type {
 export type {
   GatewayClientEvents,
   GatewayServerEvents,
-  PresenceEntry,
-  StreamEvent,
 } from './gateway-events'
 
 export {
   EVENT_STREAM_PREFIX,
   PRESENCE_KEY_PREFIX,
   EVENT_STREAM_MAXLEN,
-  EVENT_STREAM_TTL_SECONDS,
   PRESENCE_TTL_SECONDS,
   PRESENCE_CLEANUP_INTERVAL_MS,
-  GATEWAY_PING_TIMEOUT_MS,
   MAX_REPLAY_EVENTS,
-  GATEWAY_PUBLISH_RATE_LIMIT,
   TYPING_RATE_LIMIT,
   PRESENCE_RATE_LIMIT,
   CALL_SIGNAL_RATE_LIMIT,
   SUBSCRIBE_RATE_LIMIT,
   PERSISTED_EVENT_TYPES,
-  EPHEMERAL_EVENT_TYPES,
 } from './gateway-events'
 
 export type UserStatus = 'online' | 'idle' | 'dnd' | 'invisible' | 'offline'

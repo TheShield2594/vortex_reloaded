@@ -22,14 +22,6 @@ import {
 
 const log = pino({ name: "presence" })
 
-export interface PresenceData {
-  userId: string
-  status: UserStatus
-  socketId: string
-  lastHeartbeat: string
-  serverIds: string[]
-}
-
 export class PresenceManager {
   private readonly redis: Redis
   private cleanupTimer: ReturnType<typeof setInterval> | null = null
@@ -97,20 +89,6 @@ export class PresenceManager {
     }
   }
 
-  /** Refresh the heartbeat TTL for a user. Called on Socket.IO ping. */
-  async heartbeat(userId: string): Promise<void> {
-    try {
-      const key = this.userKey(userId)
-      await this.redis
-        .pipeline()
-        .hset(key, "lastHeartbeat", new Date().toISOString())
-        .expire(key, PRESENCE_TTL_SECONDS)
-        .exec()
-    } catch (err) {
-      log.error({ err, userId }, "heartbeat failed")
-    }
-  }
-
   /** Remove a user's presence when they disconnect. */
   async setOffline(userId: string): Promise<string[]> {
     try {
@@ -139,75 +117,14 @@ export class PresenceManager {
     }
   }
 
-  /** Get presence data for a specific user. */
-  async getPresence(userId: string): Promise<PresenceData | null> {
-    try {
-      const data = await this.redis.hgetall(this.userKey(userId))
-      if (!data || !data.userId) return null
-
-      return {
-        userId: data.userId,
-        status: data.status as UserStatus,
-        socketId: data.socketId,
-        lastHeartbeat: data.lastHeartbeat,
-        serverIds: JSON.parse(data.serverIds || "[]") as string[],
-      }
-    } catch (err) {
-      log.error({ err, userId }, "getPresence failed")
-      return null
-    }
-  }
-
-  /** Get all online user IDs for a server. */
-  async getServerOnlineUsers(serverId: string): Promise<string[]> {
-    try {
-      return await this.redis.smembers(this.serverKey(serverId))
-    } catch (err) {
-      log.error({ err, serverId }, "getServerOnlineUsers failed")
-      return []
-    }
-  }
-
-  /** Get presence for multiple users (batch). */
-  async getMultiplePresence(userIds: string[]): Promise<Map<string, PresenceData>> {
-    const result = new Map<string, PresenceData>()
-    if (userIds.length === 0) return result
-
-    try {
-      const pipeline = this.redis.pipeline()
-      for (const userId of userIds) {
-        pipeline.hgetall(this.userKey(userId))
-      }
-      const results = await pipeline.exec()
-      if (!results) return result
-
-      for (let i = 0; i < userIds.length; i++) {
-        const [err, data] = results[i] as [Error | null, Record<string, string>]
-        if (err || !data || !data.userId) continue
-        result.set(userIds[i], {
-          userId: data.userId,
-          status: data.status as UserStatus,
-          socketId: data.socketId,
-          lastHeartbeat: data.lastHeartbeat,
-          serverIds: JSON.parse(data.serverIds || "[]") as string[],
-        })
-      }
-    } catch (err) {
-      log.error({ err }, "getMultiplePresence failed")
-    }
-
-    return result
-  }
-
   /** Start periodic cleanup of stale presence entries.
    *  Uses cursor-based SCAN instead of blocking KEYS to avoid locking Redis. */
   startCleanup(onStaleUser: (userId: string, serverIds: string[]) => void): void {
     if (this.cleanupTimer) return
 
-    // Use 5-minute interval — TTL expiry is the primary cleanup mechanism;
-    // this sweep is a safety net for orphaned keys (TTL === -1).
-    const CLEANUP_INTERVAL_MS = 5 * 60_000
-
+    // TTL expiry is the primary cleanup mechanism; this sweep is a safety net
+    // for orphaned keys (TTL === -1). Interval comes from the shared constant
+    // so signal and any other consumer stay in lockstep.
     let cleanupInFlight = false
     this.cleanupTimer = setInterval(async () => {
       if (this.destroyed || cleanupInFlight) return
@@ -241,7 +158,7 @@ export class PresenceManager {
       } finally {
         cleanupInFlight = false
       }
-    }, CLEANUP_INTERVAL_MS)
+    }, PRESENCE_CLEANUP_INTERVAL_MS)
   }
 
   async destroy(): Promise<void> {

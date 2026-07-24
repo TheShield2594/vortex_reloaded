@@ -3,7 +3,7 @@ import { Track } from "livekit-client"
 import { buildEqAudioGraph, type EqAudioGraph } from "@/lib/voice/audio-pipeline"
 import type { VoiceAudioSettings } from "@/lib/voice/audio-settings"
 
-export const EQ_TRACK_PROCESSOR_NAME = "vortex-eq-processor"
+const EQ_TRACK_PROCESSOR_NAME = "vortex-eq-processor"
 
 /**
  * LiveKit TrackProcessor port of `createInputAudioPipeline` (see that file's

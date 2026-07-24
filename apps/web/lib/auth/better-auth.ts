@@ -136,6 +136,25 @@ async function clearLoginAttempts(email: string): Promise<void> {
 }
 
 /**
+ * Delete login-attempt rows older than the lockout window. Rows are only
+ * cleared per-email on a *successful* login (`clearLoginAttempts`), so attempts
+ * against emails that never succeed (credential-stuffing probes, abandoned
+ * sign-ins) would otherwise accumulate forever. Anything older than the lockout
+ * window is irrelevant to `isLoginLockedOut`, so it is safe to purge.
+ *
+ * Wired to the cron runner via `/api/cron/login-attempts-cleanup`. Returns the
+ * number of rows removed.
+ */
+export async function pruneExpiredLoginAttempts(): Promise<number> {
+  const cutoff = new Date(Date.now() - LOGIN_LOCKOUT_WINDOW_MS).toISOString()
+  const rows = await db
+    .delete(loginAttempts)
+    .where(lt(loginAttempts.attemptedAt, cutoff))
+    .returning({ id: loginAttempts.id })
+  return rows.length
+}
+
+/**
  * Extracts the client IP the same way the rest of the app's API routes do.
  * `hooks.before`/`databaseHooks` run inside the Better Auth request pipeline,
  * not a Next.js route handler, but `ctx.request` is still a standard
@@ -542,17 +561,6 @@ export const auth = betterAuth({
     },
   },
 })
-
-/**
- * Best-effort cleanup of expired login-risk lockout rows — mirrors the old
- * `record_login_attempt` RPC's implicit TTL via the lockout window query
- * itself, but also prevents unbounded growth of `login_attempts`. Call
- * periodically from the existing cron app rather than on every request.
- */
-export async function pruneExpiredLoginAttempts(): Promise<void> {
-  const cutoff = new Date(Date.now() - LOGIN_LOCKOUT_WINDOW_MS).toISOString()
-  await db.delete(loginAttempts).where(lt(loginAttempts.attemptedAt, cutoff))
-}
 
 /**
  * Drop-in replacement for `supabase.auth.getUser()`'s return shape
