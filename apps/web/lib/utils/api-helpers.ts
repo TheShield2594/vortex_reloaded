@@ -150,7 +150,7 @@ export function dbError(error: { message: string } | null, context?: string | Db
  * Returns `null` if the request is allowed, or a 429 `NextResponse` if blocked.
  *
  * Usage:
- *   const limited = await checkRateLimit(user.id, "servers:create", { limit: 10, windowMs: 3600_000 })
+ *   const limited = await checkRateLimit(user.id, "dm:create", { limit: 10, windowMs: 3600_000 })
  *   if (limited) return limited
  */
 export async function checkRateLimit(

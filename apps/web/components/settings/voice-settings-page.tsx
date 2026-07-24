@@ -38,8 +38,8 @@ export function VoiceSettingsPage() {
       <div className="grid grid-cols-2 gap-4">
         {[
           { icon: Mic, label: "Microphone", description: "EQ, presets, and gain are adjustable live from the settings button in the call controls during a voice call." },
-          { icon: Video, label: "Camera", description: "Select your camera and resolution when starting a video stream." },
-          { icon: Volume2, label: "Speaker", description: "Output device selection is available during an active voice session." },
+          { icon: Video, label: "Camera", description: "Toggle your camera on or off from the call controls. Vortex uses your system's default camera." },
+          { icon: Volume2, label: "Speaker", description: "Calls play through your system's default audio output device." },
         ].map(({ icon: Icon, label, description }) => (
           <div
             key={label}

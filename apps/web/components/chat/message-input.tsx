@@ -132,7 +132,7 @@ export function MessageInput({ variant = "channel", channelName, draft, replyTo,
   const mention = useMentionAutocomplete({ content, cursorPosition, members: EMPTY_MEMBERS })
 
   // Emoji autocomplete (`:shortcode` trigger) — no custom/server emoji source in a DM-only app
-  const emoji = useEmojiAutocomplete({ content, cursorPosition, serverEmojis: [] })
+  const emoji = useEmojiAutocomplete({ content, cursorPosition })
 
   // Slash command autocomplete (`/command` prefix trigger) — built-ins only
   const slashCommands = useMemo(() => BUILT_IN_SLASH_COMMANDS, [])

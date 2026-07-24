@@ -8,7 +8,7 @@ import pino from "pino"
  *
  * Usage:
  *   import { logger } from "@/lib/logger"
- *   logger.info({ serverId, userId }, "Member joined server")
+ *   logger.info({ channelId, userId }, "Member joined channel")
  *   logger.error({ endpoint: "/api/foo", err }, "Request failed")
  *
  * Environment variables:
@@ -45,8 +45,8 @@ export const logger = pino({
  * Create a child logger scoped to a specific module/area.
  *
  * Usage:
- *   const log = createLogger("api/bans")
- *   log.warn({ serverId }, "Ban rollback failed")
+ *   const log = createLogger("api/dm")
+ *   log.warn({ channelId }, "Message delivery failed")
  */
 export function createLogger(module: string): pino.Logger {
   return logger.child({ module })

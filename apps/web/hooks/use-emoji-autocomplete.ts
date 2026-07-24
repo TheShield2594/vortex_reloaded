@@ -5,16 +5,11 @@ import { useAutocomplete } from "./use-autocomplete"
 export interface EmojiMatch {
   shortcode: string
   emoji: string
-  /** true for server custom emojis (rendered as images, inserted as :name:) */
-  isCustom?: boolean
-  imageUrl?: string
 }
 
 interface Options {
   content: string
   cursorPosition: number
-  /** Optional server custom emojis to include in results */
-  serverEmojis?: Array<{ name: string; image_url: string }>
 }
 
 interface Result {
@@ -51,22 +46,14 @@ function findEmojiQuery(text: string, cursor: number): string | null {
   return null
 }
 
-export function useEmojiAutocomplete({ content, cursorPosition, serverEmojis = [] }: Options): Result {
+export function useEmojiAutocomplete({ content, cursorPosition }: Options): Result {
   const filter = useCallback(
     (query: string) => {
       if (query.length < MIN_QUERY_LENGTH) return []
       const lower = query.toLowerCase()
       const results: EmojiMatch[] = []
 
-      // Search server custom emojis first
-      for (const emoji of serverEmojis) {
-        if (emoji.name.toLowerCase().includes(lower)) {
-          results.push({ shortcode: emoji.name, emoji: "", isCustom: true, imageUrl: emoji.image_url })
-        }
-        if (results.length >= 10) return results
-      }
-
-      // Then search standard Unicode emojis
+      // Search standard Unicode emojis
       for (const [shortcode, char] of EMOJI_ENTRIES) {
         if (shortcode.includes(lower)) {
           results.push({ shortcode, emoji: char })
@@ -84,7 +71,7 @@ export function useEmojiAutocomplete({ content, cursorPosition, serverEmojis = [
 
       return results.slice(0, 10)
     },
-    [serverEmojis]
+    []
   )
 
   const { isOpen, query, matches, selectedIndex, handleKeyDown, close } = useAutocomplete({
@@ -99,16 +86,7 @@ export function useEmojiAutocomplete({ content, cursorPosition, serverEmojis = [
     const before = content.slice(0, colonIndex)
     const after = content.slice(cursorPosition)
 
-    if (match.isCustom) {
-      // Server emoji — insert as :name: so the renderer picks it up
-      const replacement = `:${match.shortcode}: `
-      return {
-        newContent: before + replacement + after,
-        newCursorPosition: before.length + replacement.length,
-      }
-    }
-
-    // Unicode emoji — insert the character directly
+    // Insert the Unicode emoji character directly
     const replacement = match.emoji + " "
     return {
       newContent: before + replacement + after,

@@ -150,7 +150,7 @@ export function EqSettingsPanel({ userId, onClose, anchorRef, processorRef }: Eq
                 max={12}
                 step={0.5}
                 value={band.gain}
-                onChange={(event) => setEqBandGain(userId, undefined, index, Number(event.target.value))}
+                onChange={(event) => setEqBandGain(userId, index, Number(event.target.value))}
                 className="w-full"
               />
             </div>
