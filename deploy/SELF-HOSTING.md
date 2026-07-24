@@ -25,20 +25,26 @@ Portainer (see [Deploying via Portainer](#deploying-via-portainer) below).
      ┌──────────────────┐   ┌───────────────────┐   ┌──────────────┐
      │   SQLite (file)   │   │  LiveKit + coturn │   │     ntfy     │
      │  ./data/vortex.db │   │  (voice/video)    │   │ (push, :8080)│
-     │  mounted into      │   │  :7880/:7881/UDP   │   └──────────────┘
-     │  web + signal      │   │  :3478/:5349/UDP   │
+     │  mounted into web  │   │  :7880/:7881/UDP   │   └──────────────┘
+     │  only              │   │  :3478/:5349/UDP   │
      └──────────────────┘   └───────────────────┘
 ```
 
 **Database: SQLite.** The database is a single file, bind-mounted from
-`./data` on the host into both the `web` and `signal` containers (both need
-direct read/write access — `signal` verifies session/membership on socket
-events without round-tripping to `web`). There's no separate database
-*service* in this stack; SQLite runs in-process inside each container.
+`./data` on the host into the `web` container only — `web` is the sole
+service that reads or writes it, with SQLite running in-process. `signal`
+needs no database access: it authenticates socket handshakes with JWTs
+verified against `web`'s JWKS endpoint (`AUTH_JWKS_URL`), not by querying the
+database. There's no separate database *service* in this stack.
 
-Because both `web` and `signal` read/write the same file, **this stack must
-run on a single Docker host** — don't split it across a Swarm/Kubernetes
-cluster without re-architecting the database layer.
+Because SQLite is a single on-disk file with no network protocol, **this
+stack must run on a single Docker host** — don't split it across a
+Swarm/Kubernetes cluster without re-architecting the database layer.
+
+**Schema migrations run automatically.** The `web` container's entrypoint
+applies pending migrations against `./data/vortex.db` on every start
+(idempotent), so a fresh install boots against a fully-created schema — no
+manual `db:migrate` step. See [Database (SQLite)](#database-sqlite) below.
 
 **Voice/video: self-hosted LiveKit + coturn.** LiveKit is the SFU that
 carries call media; coturn is the TURN/STUN server clients fall back to
@@ -106,7 +112,7 @@ VortexChat will be available at `http://localhost:3000` (or your configured URL)
 | `ntfy` | 8080/tcp | Self-hosted push notifications (issue #38) — alternative to Web Push's FCM/APNs relay |
 
 The database isn't a service — it's `./data/vortex.db` on the host,
-bind-mounted into `web` and `signal`.
+bind-mounted into `web` (the only service that uses it).
 
 ---
 
@@ -164,8 +170,16 @@ All configuration is via environment variables in `.env` and
   plain, directly-accessible file — any backup tool you already run on the
   host (rclone, restic, a cron job, Backblaze's own agent) can reach it
   without going through `docker cp` or volume inspection first.
-- Both `web` and `signal` mount the same path — keep this stack on one
-  host.
+- Only `web` mounts it — keep this stack on one host (SQLite has no network
+  protocol to share the file across machines).
+- **Schema creation is automatic.** `web`'s container entrypoint
+  (`apps/web/docker-entrypoint.sh`) runs the migrations before starting the
+  server, so the first `docker compose up` turns an empty `./data/vortex.db`
+  into a fully-migrated database with no manual step. It's idempotent —
+  drizzle skips table migrations it has already applied, and the FTS5/trigger
+  SQL is all `IF NOT EXISTS` — so it's a no-op on every subsequent start. If
+  you run the stack outside Docker, apply the schema yourself with
+  `npm run db:migrate --workspace=packages/db`.
 
 ## File Storage (avatars/attachments)
 
