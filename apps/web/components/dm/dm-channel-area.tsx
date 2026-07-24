@@ -40,6 +40,7 @@ import {
   hasSessionWith,
   saveOwnPlaintext,
   loadOwnPlaintext,
+  topUpOneTimeKeys,
 } from "@/lib/olm-protocol-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useLocalSearch } from "@/hooks/use-local-search"
@@ -306,6 +307,14 @@ const DEVICE_KEY_DB = "vortexchat-e2ee"
 const DEVICE_KEY_STORE = "device-private-keys"
 const CONVERSATION_KEY_STORE = "conversation-keys"
 const registeredDeviceKeys = new Set<string>()
+
+// Replenish published Olm one-time keys once the server's unclaimed pool for
+// this device drops below the watermark, generating a fresh batch to restore
+// a healthy buffer. createIdentity publishes 20 initially; the server caps
+// stored unclaimed keys at 200 (see the device route), so a 20-key batch
+// stays well under that ceiling.
+const OLM_ONE_TIME_KEY_LOW_WATERMARK = 10
+const OLM_ONE_TIME_KEY_TOP_UP_BATCH = 20
 
 function openDeviceKeyDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -660,6 +669,47 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
 
     return JSON.stringify({ kind: "dm-olm", v: 1, senderDeviceId: identity.deviceId, ciphertexts })
   }, [currentUserId, ensureOlmReady])
+
+  // Replenish this device's published one-time keys when the server-side
+  // pool runs low. Every inbound Olm session another device establishes
+  // consumes one of these keys; without a top-up the pool drains to zero and
+  // every subsequent new session silently falls back to the reusable
+  // fallback key, giving up the per-session forward secrecy one-time keys
+  // provide. `topUpOneTimeKeys` only adds keys (the identity/fallback bundle
+  // was published once at registration and never rotates), so the POST omits
+  // that material and the device route treats it as a top-up.
+  const maybeTopUpOlmKeys = useCallback(async () => {
+    const identity = await ensureOlmReady()
+    const res = await fetch(`/api/dm/olm/keys/device?deviceId=${encodeURIComponent(identity.deviceId)}`)
+    if (!res.ok) return
+    const { oneTimeKeyCount } = await res.json() as { oneTimeKeyCount?: number }
+    if (typeof oneTimeKeyCount !== "number" || oneTimeKeyCount >= OLM_ONE_TIME_KEY_LOW_WATERMARK) return
+
+    const oneTimeKeys = await topUpOneTimeKeys(currentUserId, identity.deviceId, OLM_ONE_TIME_KEY_TOP_UP_BATCH)
+    const uploadRes = await fetch("/api/dm/olm/keys/device", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId: identity.deviceId, oneTimeKeys }),
+    })
+    if (!uploadRes.ok) throw new Error("Failed to top up Olm one-time keys")
+  }, [currentUserId, ensureOlmReady])
+
+  // Check the one-time-key supply once per gateway connection for Olm
+  // channels — reconnects re-arm it (the ref resets while disconnected), so a
+  // long-lived session that drains its pool between reconnects still tops up.
+  const olmTopUpArmedRef = useRef(false)
+  useEffect(() => {
+    if (channel?.encryption_scheme !== "olm") return
+    if (gateway.status !== "connected") {
+      olmTopUpArmedRef.current = false
+      return
+    }
+    if (olmTopUpArmedRef.current) return
+    olmTopUpArmedRef.current = true
+    maybeTopUpOlmKeys().catch((err) => {
+      console.error("[olm-protocol] one-time key top-up failed", err)
+    })
+  }, [gateway.status, channel?.encryption_scheme, maybeTopUpOlmKeys])
 
   const { typingUsers, onKeystroke, onSent } = useGatewayTyping(channelId, currentUserId, currentDisplayName)
 
