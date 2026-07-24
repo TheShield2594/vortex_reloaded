@@ -36,11 +36,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Run ESLint only. The style-guardrails check uses a locally-generated
-      # baseline that is sensitive to file-set differences between CI and dev
-      # machines, producing false positives that can't be reproduced locally.
-      # Style-guardrail regressions are caught in local dev via `npm run lint`.
       - run: npx eslint . --max-warnings 0
+        working-directory: apps/web
+      # Style guardrails: the baseline tracks an occurrence count per
+      # (rule, file), so it's independent of line numbers and of untracked
+      # files a dev machine might have — CI walks the committed tree and gets
+      # the same counts the baseline was generated from.
+      - run: npm run lint:style-guardrails
         working-directory: apps/web
       - run: npm run type-check --workspace=apps/web
       - run: npm run type-check --workspace=apps/signal
