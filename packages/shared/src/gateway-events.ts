@@ -89,7 +89,14 @@ export interface GatewayServerEvents {
 
   /** Acknowledgement that subscription was successful. */
   "gateway:subscribed": {
+    /** Requested channels the server authorized and joined. */
     channelIds: string[]
+    /**
+     * Requested channels the server refused because the membership check
+     * failed (issue #51). Lets the client reconcile its optimistic
+     * subscription state instead of believing it joined a room it never did.
+     */
+    denied?: string[]
   }
 
   /** Resume complete — client is caught up. */
@@ -170,6 +177,14 @@ export const PRESENCE_RATE_LIMIT = 12
 
 /** Rate limit for call ring-signal events (events/min). */
 export const CALL_SIGNAL_RATE_LIMIT = 20
+
+/**
+ * Rate limit for gateway:subscribe / gateway:resume (calls/min). Both now do
+ * a network round-trip + DB query to authorize channel membership (issue #51),
+ * so they're throttled to bound amplification against the internal endpoint.
+ * Generous enough for legit connect + per-channel navigation.
+ */
+export const SUBSCRIBE_RATE_LIMIT = 30
 
 /** Well-known event types that should be stored in Redis Streams. */
 export const PERSISTED_EVENT_TYPES: ReadonlySet<VortexEventType> = new Set([

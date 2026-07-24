@@ -42,8 +42,9 @@ export interface VortexEvent<T = unknown> {
    * Channel/scope this event belongs to. For per-user events with no
    * natural DM/group channel (e.g. `notification.created`, or a
    * `member.joined`/`member.left` notice to the affected user), this is
-   * the synthetic `user:{userId}` channel — see `checkChannelAccess` in
-   * apps/signal/src/gateway.ts.
+   * the synthetic `user:{userId}` channel — which the gateway restricts to
+   * the owning user via its channel-access check (apps/signal/src/gateway.ts's
+   * gateway:subscribe → apps/signal/src/channel-access.ts).
    */
   channelId: string
   /** Server context (null for DMs). */

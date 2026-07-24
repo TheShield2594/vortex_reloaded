@@ -20,6 +20,7 @@ import {
   TYPING_RATE_LIMIT,
   PRESENCE_RATE_LIMIT,
   CALL_SIGNAL_RATE_LIMIT,
+  SUBSCRIBE_RATE_LIMIT,
 } from "@vortex/shared"
 import type { RedisEventBus } from "./event-bus"
 import type { PresenceManager } from "./presence"
@@ -68,6 +69,11 @@ export interface GatewayOptions {
   presence: PresenceManager
   validateSession: (socket: Socket) => Promise<boolean>
   getSessionUserId: (socket: Socket) => string | undefined
+  /**
+   * Returns the subset of requested channel IDs the user is authorized to
+   * join (membership check — issue #51). See ./channel-access.ts.
+   */
+  checkChannelAccess: (userId: string, channelIds: string[]) => Promise<string[]>
 }
 
 /** Stop the gateway rate-limiter cleanup timer (call during graceful shutdown). */
@@ -77,7 +83,7 @@ export function stopGatewayCleanup(): void {
 
 export function initGateway(options: GatewayOptions): void {
   gatewayLimiter = (gatewayLimiter ?? new SocketRateLimiter()).startCleanup()
-  const { io, eventBus, presence, validateSession, getSessionUserId } = options
+  const { io, eventBus, presence, validateSession, getSessionUserId, checkChannelAccess } = options
 
   // Subscribe to event bus to fan out events to connected sockets
   eventBus.subscribe({}, (event: VortexEvent) => {
@@ -103,6 +109,14 @@ export function initGateway(options: GatewayOptions): void {
       try {
         if (typeof data !== "object" || data === null) {
           socket.emit("error", { message: "Invalid gateway:subscribe payload" })
+          return
+        }
+
+        // Throttle before the membership check's network round-trip so a
+        // client can't amplify load against the internal endpoint by spamming
+        // subscribe.
+        if (!gatewayLimiter!.check(socket.id, "subscribe", SUBSCRIBE_RATE_LIMIT, 60_000)) {
+          socket.emit("error", { message: "Rate limit exceeded for gateway:subscribe" })
           return
         }
 
@@ -134,7 +148,14 @@ export function initGateway(options: GatewayOptions): void {
           }
         }
 
-        const validChannels: string[] = [...channelIds]
+        // Membership authorization (issue #51): only join rooms the user is
+        // actually a member of. `user:{id}` channels are owner-only; DM
+        // channels are checked against the web app's membership records.
+        // Re-checked on every subscribe so a removed member can't rejoin a
+        // room by re-emitting gateway:subscribe.
+        const validChannels = await checkChannelAccess(userId, channelIds as string[])
+        const grantedSet = new Set(validChannels)
+        const deniedChannels = (channelIds as string[]).filter((id) => !grantedSet.has(id))
 
         // Initialize socket state
         let state = socketStates.get(socket.id)
@@ -159,7 +180,10 @@ export function initGateway(options: GatewayOptions): void {
           state.subscribedChannels.add(channelId)
         }
 
-        socket.emit("gateway:subscribed", { channelIds: validChannels })
+        socket.emit("gateway:subscribed", { channelIds: validChannels, denied: deniedChannels })
+        if (deniedChannels.length > 0) {
+          log.warn({ userId, denied: deniedChannels.length }, "gateway subscribe denied channels")
+        }
         log.info({ userId, channels: validChannels.length }, "gateway subscribed")
       } catch (err) {
         log.error({ socketId: socket.id, err }, "gateway:subscribe error")
@@ -333,6 +357,13 @@ export function initGateway(options: GatewayOptions): void {
           return
         }
 
+        // Same throttle as gateway:subscribe — resume also authorizes every
+        // channel via the internal endpoint before rejoining rooms.
+        if (!gatewayLimiter!.check(socket.id, "resume", SUBSCRIBE_RATE_LIMIT, 60_000)) {
+          socket.emit("error", { message: "Rate limit exceeded for gateway:resume" })
+          return
+        }
+
         if (!(await validateSession(socket))) return
 
         const userId = getSessionUserId(socket)
@@ -352,11 +383,21 @@ export function initGateway(options: GatewayOptions): void {
           return
         }
 
+        // Authorize before rejoining any room (issue #51): resume must not be
+        // a bypass around gateway:subscribe's membership check.
+        const requestedChannelIds = entries
+          .filter(([channelId, lastEventId]) => typeof channelId === "string" && typeof lastEventId === "string")
+          .map(([channelId]) => channelId)
+        const allowedChannels = new Set(await checkChannelAccess(userId, requestedChannelIds))
+
         const successChannels: string[] = []
         const gapTooLarge: string[] = []
 
         for (const [channelId, lastEventId] of entries) {
           if (typeof channelId !== "string" || typeof lastEventId !== "string") continue
+
+          // Skip rooms the user is no longer authorized for.
+          if (!allowedChannels.has(channelId)) continue
 
           // Re-subscribe to the channel room
           socket.join(`gateway:${channelId}`)

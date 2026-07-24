@@ -151,8 +151,9 @@ export async function DELETE(
     // announcing the departure — otherwise a still-connected socket (this
     // channel's DM list / notification-sound subscriptions are sticky, see
     // dm-list.tsx) would keep receiving this channel's message/reaction
-    // events until it happens to reconnect and gateway:subscribe's
-    // checkChannelAccess re-checks membership.
+    // events until it happens to reconnect and the gateway's channel-access
+    // check (gateway:subscribe → POST /api/internal/gateway/channel-access)
+    // re-checks membership.
     await revokeGatewayChannelAccess(targetUserId, channelId)
 
     // Issue #40: append a signed "left"/"removed" log entry — see the POST
