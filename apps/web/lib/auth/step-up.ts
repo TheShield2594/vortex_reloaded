@@ -82,8 +82,18 @@ export async function issueStepUpToken(userId: string) {
 
 /**
  * Burn the step-up cookie. Wired to the `after` hook in lib/auth/better-auth.ts
- * so a token is single-use: re-authenticating buys exactly one gated mutation,
- * not a 10-minute window in which every subsequent one rides for free.
+ * so re-authenticating normally buys one gated mutation rather than a
+ * 10-minute window in which every subsequent one rides for free.
+ *
+ * Single-use is **best-effort, against sequential reuse only.** The gate reads
+ * the cookie in `before` and clears it here in `after`, which is not atomic: two
+ * concurrent gated requests both carry the cookie in their own request headers,
+ * so both pass the check before either response can clear it, and one re-auth
+ * covers both. Cookies have no compare-and-swap, so closing that window would
+ * mean holding step-up state server-side (a consumed-nonce store) — deliberately
+ * out of scope here. The exposure is small: an attacker in a position to exploit
+ * it already holds a valid token, meaning they already produced the password or
+ * TOTP, and could simply re-authenticate again for the second mutation.
  *
  * Deliberately never throws — a failed clear degrades to the token simply
  * living out its TTL, which is strictly no worse than not having this at all,

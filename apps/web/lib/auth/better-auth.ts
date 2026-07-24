@@ -273,7 +273,10 @@ const GATEWAY_REVOKE_PATHS = new Set([
  * the same way OAuth-identity linking and MFA disable were gated under
  * Supabase Auth — neither re-verifies the user's password or 2FA at call time
  * on its own. `POST /api/auth/step-up` is what mints the token; the `after`
- * hook below burns it, so one re-auth buys one gated mutation (issue #56).
+ * hook below burns it, so one re-auth normally buys one gated mutation
+ * (issue #56). "Normally" because check-here/clear-there isn't atomic — see
+ * `clearStepUpToken` for why concurrent requests can share a token and why
+ * that's accepted.
  */
 const STEP_UP_PATHS = new Set(["/two-factor/disable", "/link-social"])
 
@@ -463,7 +466,7 @@ export const auth = betterAuth({
       }
     }),
     after: createAuthMiddleware(async (ctx) => {
-      // Make the step-up token single-use. Only on success: a rejected
+      // Burn the step-up token. Only on success: a rejected
       // `/link-social` (unconfigured provider, say) shouldn't cost the user
       // the re-auth they just performed. Best-effort — if the clear fails the
       // token simply expires on its own TTL, so it must not throw here and
