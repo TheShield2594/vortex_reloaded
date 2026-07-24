@@ -97,19 +97,24 @@ function sortedEqual(a: string[], b: string[]): boolean {
  * The event bus / presence managers are inert stubs — init only subscribes and
  * schedules a cleanup callback on them.
  */
-function makeOptions(granted: string[]): { io: FakeIo; options: GatewayOptions } {
+function makeOptions(
+  granted: string[]
+): { io: FakeIo; options: GatewayOptions; stats: { channelAccessCalls: number } } {
   const io = new FakeIo()
   const grantedSet = new Set(granted)
+  const stats = { channelAccessCalls: 0 }
   const options: GatewayOptions = {
     io: io as unknown as Server,
     eventBus: { subscribe: () => ({ unsubscribe: () => {} }) } as unknown as RedisEventBus,
     presence: { startCleanup: () => {} } as unknown as PresenceManager,
     validateSession: async () => true,
     getSessionUserId: () => "user-a",
-    checkChannelAccess: async (_userId, channelIds) =>
-      channelIds.filter((id) => grantedSet.has(id)),
+    checkChannelAccess: async (_userId, channelIds) => {
+      stats.channelAccessCalls++
+      return channelIds.filter((id) => grantedSet.has(id))
+    },
   }
-  return { io, options }
+  return { io, options, stats }
 }
 
 async function run(): Promise<void> {
@@ -179,22 +184,30 @@ async function run(): Promise<void> {
   })
 
   // The subscribe path is rate limited (SUBSCRIBE_RATE_LIMIT = 30/min): once the
-  // window is exhausted the socket is refused instead of hitting the membership
-  // endpoint again.
+  // window is exhausted the socket is refused *before* the membership check runs,
+  // so a client can't amplify load against the internal endpoint by spamming
+  // subscribe.
   await check("subscribe is rate limited", async () => {
-    const { io, options } = makeOptions(["dm-1"])
+    const { io, options, stats } = makeOptions(["dm-1"])
     initGateway(options)
     const socket = new FakeSocket("sock-ratelimit")
     io.connect(socket)
     for (let i = 0; i < 30; i++) {
       await socket.trigger("gateway:subscribe", { channelIds: ["dm-1"] })
     }
+    const callsAfter30 = stats.channelAccessCalls
+    if (callsAfter30 !== 30)
+      throw new Error(`expected 30 membership checks in-window, got ${callsAfter30}`)
+
     const before = socket.emissions.length
     await socket.trigger("gateway:subscribe", { channelIds: ["dm-1"] })
     const err = socket.lastEmission("error") as { message: string } | undefined
     if (!err || !/rate limit/i.test(err.message))
       throw new Error("31st subscribe was not rate limited")
     if (socket.emissions.length === before) throw new Error("no emission on rate-limit rejection")
+    // The rejected request must short-circuit before the membership check.
+    if (stats.channelAccessCalls !== callsAfter30)
+      throw new Error("rate-limited subscribe still hit the membership check")
   })
 
   stopGatewayCleanup()

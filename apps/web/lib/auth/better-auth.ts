@@ -1,6 +1,6 @@
 import { cache } from "react"
 import bcrypt from "bcryptjs"
-import { and, desc, eq, gt, or, sql } from "drizzle-orm"
+import { and, desc, eq, gt, lt, or, sql } from "drizzle-orm"
 import { betterAuth, APIError } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { createAuthMiddleware } from "better-auth/api"
@@ -133,6 +133,25 @@ async function clearLoginAttempts(email: string): Promise<void> {
   } catch (err) {
     log.error({ err: err instanceof Error ? err.message : String(err) }, "Failed to clear login attempts")
   }
+}
+
+/**
+ * Delete login-attempt rows older than the lockout window. Rows are only
+ * cleared per-email on a *successful* login (`clearLoginAttempts`), so attempts
+ * against emails that never succeed (credential-stuffing probes, abandoned
+ * sign-ins) would otherwise accumulate forever. Anything older than the lockout
+ * window is irrelevant to `isLoginLockedOut`, so it is safe to purge.
+ *
+ * Wired to the cron runner via `/api/cron/login-attempts-cleanup`. Returns the
+ * number of rows removed.
+ */
+export async function pruneExpiredLoginAttempts(): Promise<number> {
+  const cutoff = new Date(Date.now() - LOGIN_LOCKOUT_WINDOW_MS).toISOString()
+  const rows = await db
+    .delete(loginAttempts)
+    .where(lt(loginAttempts.attemptedAt, cutoff))
+    .returning({ id: loginAttempts.id })
+  return rows.length
 }
 
 /**
