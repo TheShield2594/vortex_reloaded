@@ -30,7 +30,6 @@ import { TypingIndicator } from "@/components/chat/typing-indicator"
 import { useChatScroll } from "@/components/chat/hooks/use-chat-scroll"
 import { MessageInput } from "@/components/chat/message-input"
 import { useShallow } from "zustand/react/shallow"
-import { decryptDmContent, encryptDmContent, exportPublicKey, fingerprintFromPublicKey, generateConversationKey, generateDeviceKeyPair, importPublicKey, parseEncryptedEnvelope, unwrapConversationKey, wrapConversationKey } from "@/lib/dm-encryption"
 import { isValidOlmCiphertext, parseOlmEnvelope, type OlmKeyBundle } from "@/lib/olm-protocol"
 import {
   ensureOutboundSession,
@@ -40,6 +39,7 @@ import {
   hasSessionWith,
   saveOwnPlaintext,
   loadOwnPlaintext,
+  topUpOneTimeKeys,
 } from "@/lib/olm-protocol-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useLocalSearch } from "@/hooks/use-local-search"
@@ -100,8 +100,6 @@ interface Channel {
   is_group: boolean
   owner_id: string | null
   is_encrypted?: boolean
-  encryption_key_version?: number
-  encryption_scheme?: "legacy-ecdh" | "olm"
   theme_preset?: string | null
   members: User[]
   partner: User | null
@@ -301,79 +299,13 @@ function DmReactionPickerContent({ onReaction, onClose, maxHeight, EmojiPicker }
 // formatDaySeparator, extractGifUrl, and groupReactionsByEmoji are imported
 // from @/lib/utils/message-helpers to share logic with chat-area.tsx
 
-const DEVICE_STORAGE_KEY = "dm-device-key-v1"
-const DEVICE_KEY_DB = "vortexchat-e2ee"
-const DEVICE_KEY_STORE = "device-private-keys"
-const CONVERSATION_KEY_STORE = "conversation-keys"
-const registeredDeviceKeys = new Set<string>()
-
-function openDeviceKeyDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DEVICE_KEY_DB, 1)
-    req.onupgradeneeded = () => {
-      const db = req.result
-      if (!db.objectStoreNames.contains(DEVICE_KEY_STORE)) {
-        db.createObjectStore(DEVICE_KEY_STORE)
-      }
-      if (!db.objectStoreNames.contains(CONVERSATION_KEY_STORE)) {
-        db.createObjectStore(CONVERSATION_KEY_STORE)
-      }
-    }
-    req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
-  })
-}
-
-async function putDevicePrivateKey(deviceId: string, privateKey: CryptoKey) {
-  const db = await openDeviceKeyDb()
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(DEVICE_KEY_STORE, "readwrite")
-    tx.objectStore(DEVICE_KEY_STORE).put(privateKey, deviceId)
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  })
-  db.close()
-}
-
-async function getDevicePrivateKey(deviceId: string): Promise<CryptoKey | null> {
-  const db = await openDeviceKeyDb()
-  const key = await new Promise<CryptoKey | null>((resolve, reject) => {
-    const tx = db.transaction(DEVICE_KEY_STORE, "readonly")
-    const req = tx.objectStore(DEVICE_KEY_STORE).get(deviceId)
-    req.onsuccess = () => resolve((req.result as CryptoKey | undefined) ?? null)
-    req.onerror = () => reject(req.error)
-  })
-  db.close()
-  return key
-}
-
-async function putConversationKey(cacheKey: string, keyBytes: Uint8Array) {
-  const db = await openDeviceKeyDb()
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(CONVERSATION_KEY_STORE, "readwrite")
-    tx.objectStore(CONVERSATION_KEY_STORE).put(keyBytes, cacheKey)
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error)
-  })
-  db.close()
-}
-
-async function getConversationKey(cacheKey: string): Promise<Uint8Array | null> {
-  const db = await openDeviceKeyDb()
-  const value = await new Promise<Uint8Array | null>((resolve, reject) => {
-    const tx = db.transaction(CONVERSATION_KEY_STORE, "readonly")
-    const req = tx.objectStore(CONVERSATION_KEY_STORE).get(cacheKey)
-    req.onsuccess = () => {
-      const result = req.result
-      if (result instanceof Uint8Array) return resolve(result)
-      if (result instanceof ArrayBuffer) return resolve(new Uint8Array(result))
-      resolve(null)
-    }
-    req.onerror = () => reject(req.error)
-  })
-  db.close()
-  return value
-}
+// Replenish published Olm one-time keys once the server's unclaimed pool for
+// this device drops below the watermark, generating a fresh batch to restore
+// a healthy buffer. createIdentity publishes 20 initially; the server caps
+// stored unclaimed keys at 200 (see the device route), so a 20-key batch
+// stays well under that ceiling.
+const OLM_ONE_TIME_KEY_LOW_WATERMARK = 10
+const OLM_ONE_TIME_KEY_TOP_UP_BATCH = 20
 
 /** Channel-based DM view with message history, file uploads, voice/video calling, typing indicators, and real-time updates. */
 export function DMChannelArea({ channelId, currentUserId }: Props) {
@@ -384,12 +316,8 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   const [loadingMore, setLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const channelRef = useRef<Channel | null>(null)
-  const conversationKeyRef = useRef<Uint8Array | null>(null)
   const [decryptedContent, setDecryptedContent] = useState<Record<string, { text: string; failed: boolean }>>({})
   const decryptedRef = useRef<Record<string, { text: string; failed: boolean }>>({})
-  const [conversationKey, setConversationKey] = useState<Uint8Array | null>(null)
-  const [deviceFingerprint, setDeviceFingerprint] = useState<string | null>(null)
-  const [deviceId, setDeviceId] = useState<string | null>(null)
   const [olmDeviceId, setOlmDeviceId] = useState<string | null>(null)
   const [pendingNewMessageCount, setPendingNewMessageCount] = useState(0)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
@@ -421,10 +349,9 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   const topRef = useRef<HTMLDivElement>(null)
   const gateway = useGatewayContext()
 
-  // Keep refs in sync so the realtime subscription can read latest values
-  // without needing them in its dependency array.
+  // Keep the channel ref in sync so the realtime subscription can read the
+  // latest value without needing it in its dependency array.
   channelRef.current = channel
-  conversationKeyRef.current = conversationKey
 
   const { toast } = useToast()
   const { currentUser } = useAppStore(
@@ -432,7 +359,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   )
 
   const { playNotification } = useNotificationSound()
-  const { indexMessages, addMessage: addMessageToIndex, removeMessage: removeMessageFromIndex, search: searchLocal, clearChannel: clearLocalChannel } = useLocalSearch()
+  const { indexMessages, removeMessage: removeMessageFromIndex, search: searchLocal, clearChannel: clearLocalChannel } = useLocalSearch()
   const [showLocalSearch, setShowLocalSearch] = useState(false)
   // Issue #40 ("Group trust model") — the group's signed membership log +
   // safety-number verification, opened from the header shield button or
@@ -473,120 +400,8 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     return { ...data, reactions: data.reactions ?? [] }
   }, [channelId])
 
-  const syncDeviceRegistration = useCallback(async (deviceId: string, publicKey: string) => {
-    const registrationKey = `${currentUserId}:${deviceId}:${publicKey}`
-    if (registeredDeviceKeys.has(registrationKey)) return
-
-    const res = await fetch("/api/dm/keys/device", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, publicKey }),
-    })
-    if (!res.ok) {
-      throw new Error("Failed to register device key")
-    }
-
-    registeredDeviceKeys.add(registrationKey)
-  }, [currentUserId])
-
-  const ensureDeviceIdentity = useCallback(async () => {
-    const existing = localStorage.getItem(DEVICE_STORAGE_KEY)
-    if (existing) {
-      try {
-        const parsed = JSON.parse(existing) as { deviceId?: string; publicKey?: string }
-        if (typeof parsed.deviceId === "string" && parsed.deviceId && typeof parsed.publicKey === "string" && parsed.publicKey) {
-          const privateKey = await getDevicePrivateKey(parsed.deviceId)
-          if (privateKey) {
-            await syncDeviceRegistration(parsed.deviceId, parsed.publicKey)
-            setDeviceId(parsed.deviceId)
-            setDeviceFingerprint(await fingerprintFromPublicKey(parsed.publicKey))
-            return { deviceId: parsed.deviceId, publicKey: parsed.publicKey, privateKey }
-          }
-        }
-        localStorage.removeItem(DEVICE_STORAGE_KEY)
-      } catch {
-        localStorage.removeItem(DEVICE_STORAGE_KEY)
-      }
-    }
-
-    const pair = await generateDeviceKeyPair()
-    const publicKey = await exportPublicKey(pair.publicKey)
-    const privateKey = pair.privateKey
-    const newDeviceId = crypto.randomUUID()
-
-    await putDevicePrivateKey(newDeviceId, privateKey)
-    localStorage.setItem(DEVICE_STORAGE_KEY, JSON.stringify({ deviceId: newDeviceId, publicKey }))
-
-    setDeviceId(newDeviceId)
-    setDeviceFingerprint(await fingerprintFromPublicKey(publicKey))
-
-    await syncDeviceRegistration(newDeviceId, publicKey)
-
-    return { deviceId: newDeviceId, publicKey, privateKey }
-  }, [syncDeviceRegistration])
-
-  const ensureConversationKey = useCallback(async (channelInfo: Channel) => {
-    if (!channelInfo?.is_encrypted) {
-      setConversationKey(null)
-      return null
-    }
-
-    const identity = await ensureDeviceIdentity()
-    const version = channelInfo.encryption_key_version ?? 1
-    const cacheKey = `dm-conversation-key:${channelInfo.id}:${version}`
-    const cached = await getConversationKey(cacheKey)
-    if (cached) {
-      setConversationKey(cached)
-      return cached
-    }
-
-    const legacyCached = localStorage.getItem(cacheKey)
-    if (legacyCached) localStorage.removeItem(cacheKey)
-
-    const keyRes = await fetch(`/api/dm/channels/${channelInfo.id}/keys`)
-    if (!keyRes.ok) return null
-    const payload = await keyRes.json()
-    const privateKey = identity.privateKey
-
-    const existingWrapped = (payload.wrappedKeys ?? []).find((row: { key_version: number; target_device_id: string; sender_public_key: string; wrapped_key: string }) => row.key_version === version && row.target_device_id === identity.deviceId)
-    if (existingWrapped) {
-      const senderPublic = await importPublicKey(existingWrapped.sender_public_key)
-      const unwrapped = await unwrapConversationKey(existingWrapped.wrapped_key, privateKey, senderPublic)
-      await putConversationKey(cacheKey, unwrapped)
-      setConversationKey(unwrapped)
-      return unwrapped
-    }
-
-    if (channelInfo.owner_id !== currentUserId) return null
-
-    const nextKey = generateConversationKey()
-    const wrappedKeys = await Promise.all((payload.memberDeviceKeys ?? []).map(async (row: { user_id: string; device_id: string; public_key: string }) => ({
-      targetUserId: row.user_id,
-      targetDeviceId: row.device_id,
-      wrappedKey: await wrapConversationKey(nextKey, privateKey, await importPublicKey(row.public_key)),
-      wrappedByDeviceId: identity.deviceId,
-      senderPublicKey: identity.publicKey,
-    })))
-
-    const uploadRes = await fetch(`/api/dm/channels/${channelInfo.id}/keys`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyVersion: version, wrappedKeys }),
-    })
-
-    if (!uploadRes.ok) {
-      throw new Error("Failed to upload wrapped conversation keys")
-    }
-
-    await putConversationKey(cacheKey, nextKey)
-    setConversationKey(nextKey)
-    return nextKey
-  }, [currentUserId, ensureDeviceIdentity])
-
-  // Olm identity setup — independent of the legacy-ecdh device
-  // above (different keypair, different purpose). Registers this device's
-  // Olm identity + prekey bundle with the server the first time it's ever
-  // seen; a no-op on every later call.
+  // Olm identity setup. Registers this device's Olm identity + prekey bundle
+  // with the server the first time it's ever seen; a no-op on every later call.
   const ensureOlmReady = useCallback(async () => {
     const { identity, publish } = await ensureOlmIdentity(currentUserId)
     if (publish) {
@@ -661,6 +476,47 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     return JSON.stringify({ kind: "dm-olm", v: 1, senderDeviceId: identity.deviceId, ciphertexts })
   }, [currentUserId, ensureOlmReady])
 
+  // Replenish this device's published one-time keys when the server-side
+  // pool runs low. Every inbound Olm session another device establishes
+  // consumes one of these keys; without a top-up the pool drains to zero and
+  // every subsequent new session silently falls back to the reusable
+  // fallback key, giving up the per-session forward secrecy one-time keys
+  // provide. `topUpOneTimeKeys` only adds keys (the identity/fallback bundle
+  // was published once at registration and never rotates), so the POST omits
+  // that material and the device route treats it as a top-up.
+  const maybeTopUpOlmKeys = useCallback(async () => {
+    const identity = await ensureOlmReady()
+    const res = await fetch(`/api/dm/olm/keys/device?deviceId=${encodeURIComponent(identity.deviceId)}`)
+    if (!res.ok) return
+    const { oneTimeKeyCount } = await res.json() as { oneTimeKeyCount?: number }
+    if (typeof oneTimeKeyCount !== "number" || oneTimeKeyCount >= OLM_ONE_TIME_KEY_LOW_WATERMARK) return
+
+    const oneTimeKeys = await topUpOneTimeKeys(currentUserId, identity.deviceId, OLM_ONE_TIME_KEY_TOP_UP_BATCH)
+    const uploadRes = await fetch("/api/dm/olm/keys/device", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId: identity.deviceId, oneTimeKeys }),
+    })
+    if (!uploadRes.ok) throw new Error("Failed to top up Olm one-time keys")
+  }, [currentUserId, ensureOlmReady])
+
+  // Check the one-time-key supply once per gateway connection for encrypted
+  // channels — reconnects re-arm it (the ref resets while disconnected), so a
+  // long-lived session that drains its pool between reconnects still tops up.
+  const olmTopUpArmedRef = useRef(false)
+  useEffect(() => {
+    if (!channel?.is_encrypted) return
+    if (gateway.status !== "connected") {
+      olmTopUpArmedRef.current = false
+      return
+    }
+    if (olmTopUpArmedRef.current) return
+    olmTopUpArmedRef.current = true
+    maybeTopUpOlmKeys().catch((err) => {
+      console.error("[olm-protocol] one-time key top-up failed", err)
+    })
+  }, [gateway.status, channel?.is_encrypted, maybeTopUpOlmKeys])
+
   const { typingUsers, onKeystroke, onSent } = useGatewayTyping(channelId, currentUserId, currentDisplayName)
 
   const loadMessages = useCallback(async (before?: string) => {
@@ -675,11 +531,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
       const data = await res.json()
       setChannel(data.channel)
       if (data.channel?.is_encrypted) {
-        if (data.channel.encryption_scheme === "olm") {
-          await ensureOlmReady()
-        } else {
-          await ensureConversationKey(data.channel)
-        }
+        await ensureOlmReady()
       }
       if (before) {
         setMessages((prev) => [...(data.messages ?? []), ...prev])
@@ -690,7 +542,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     } catch {
       if (!before) setLoadError(true)
     }
-  }, [channelId, ensureConversationKey, ensureOlmReady])
+  }, [channelId, ensureOlmReady])
 
   useEffect(() => {
     loadMessages()
@@ -829,54 +681,6 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     setDecryptedContent({})
   }, [channel?.id, channel?.is_encrypted])
 
-  // Realtime subscription — legacy-ecdh decrypt path (shared per-channel
-  // conversation key; see the Olm effect below for the newer
-  // pairwise-per-device scheme).
-  useEffect(() => {
-    if (!channel?.is_encrypted || channel.encryption_scheme === "olm") return
-    if (!conversationKey) {
-      decryptedRef.current = {}
-      setDecryptedContent({})
-      return
-    }
-
-    let cancelled = false
-    ;(async () => {
-      const next = { ...decryptedRef.current }
-      let changed = false
-
-      for (const msg of messages) {
-        const cached = next[msg.id]
-        if (cached && !cached.failed) continue
-
-        const envelope = parseEncryptedEnvelope(msg.content)
-        if (!envelope) {
-          next[msg.id] = { text: "Unable to decrypt this message", failed: true }
-          changed = true
-          continue
-        }
-
-        try {
-          const versionKey = await getConversationKey(`dm-conversation-key:${channel.id}:${envelope.keyVersion}`)
-          if (!versionKey) {
-            next[msg.id] = { text: "Unable to decrypt this message", failed: true }
-          } else {
-            next[msg.id] = { text: await decryptDmContent(envelope, versionKey), failed: false }
-          }
-        } catch {
-          next[msg.id] = { text: "Unable to decrypt this message", failed: true }
-        }
-        changed = true
-      }
-
-      if (!changed || cancelled) return
-      decryptedRef.current = next
-      setDecryptedContent(next)
-    })()
-
-    return () => { cancelled = true }
-  }, [channel?.id, channel?.is_encrypted, channel?.encryption_scheme, conversationKey, messages])
-
   // Olm decrypt path — one pairwise Olm session per sender
   // device (see issue #3: no group sender-key ratchet). A message this
   // device itself just sent has no entry for itself in the envelope by
@@ -884,7 +688,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
   // for those optimistically, so this effect only ever needs to decrypt
   // messages that actually came from someone else's session.
   useEffect(() => {
-    if (!channel?.is_encrypted || channel.encryption_scheme !== "olm") return
+    if (!channel?.is_encrypted) return
 
     let cancelled = false
     ;(async () => {
@@ -949,7 +753,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     })()
 
     return () => { cancelled = true }
-  }, [channel?.id, channel?.is_encrypted, channel?.encryption_scheme, currentUserId, messages, ensureOlmReady])
+  }, [channel?.id, channel?.is_encrypted, currentUserId, messages, ensureOlmReady])
 
   // Reset the indexed-IDs tracker whenever the active channel changes so that
   // the new channel's messages are fully re-indexed from scratch.
@@ -1015,36 +819,16 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
           if (!data) return
           const newMsg: Message = data as unknown as Message
           setMessages((prev) => prev.some((m) => m.id === newMsg.id) ? prev : [...prev, newMsg])
-
-          // Incrementally index the new message if the channel is encrypted
-          // and we can decrypt it.
-          if (channelRef.current?.is_encrypted && conversationKeyRef.current) {
-            const envelope = parseEncryptedEnvelope(newMsg.content)
-            if (envelope) {
-              getConversationKey(`dm-conversation-key:${channelId}:${envelope.keyVersion}`)
-                .then(async (vk) => {
-                  if (!vk) return
-                  const text = await decryptDmContent(envelope, vk)
-                  addMessageToIndex(channelId, {
-                    id: newMsg.id,
-                    channelId,
-                    authorId: newMsg.sender_id,
-                    authorName: newMsg.sender?.display_name || newMsg.sender?.username || "Unknown",
-                    avatarUrl: newMsg.sender?.avatar_url ?? null,
-                    text,
-                    createdAt: newMsg.created_at,
-                  })
-                })
-                .catch(() => {/* best-effort */})
-            }
-          }
+          // Encrypted channels index incrementally once the Olm decrypt
+          // effect resolves each message's plaintext (see the indexing effect
+          // below); nothing to index here from the raw envelope.
         })
     })
 
     return () => removeListener()
-    // channelRef / conversationKeyRef are used inside the callback so they
-    // don't need to be deps – this prevents tearing down and recreating the
-    // gateway listener every time encryption state loads.
+    // channelRef is read inside the callback so it doesn't need to be a dep –
+    // this prevents tearing down and recreating the gateway listener every
+    // time encryption state loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId, currentUserId, gateway])
 
@@ -1170,10 +954,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
 
     const encryptText = async (plaintext: string): Promise<string> => {
       if (!channel?.is_encrypted) return plaintext
-      if (channel.encryption_scheme === "olm") return encryptOlmText(channel, plaintext)
-      const key = conversationKey ?? await ensureConversationKey(channel)
-      if (!key) throw new Error("Missing encryption key")
-      return JSON.stringify(await encryptDmContent(plaintext, key, channel.encryption_key_version ?? 1))
+      return encryptOlmText(channel, plaintext)
     }
 
     // Olm has no shared symmetric channel key the sender could
@@ -1186,7 +967,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     // otherwise be unrecoverable after a reload (see the Olm decrypt effect,
     // which falls back to loadOwnPlaintext for our own messages).
     const seedOwnPlaintext = (id: string, plaintext: string) => {
-      if (channel?.is_encrypted && channel.encryption_scheme === "olm") {
+      if (channel?.is_encrypted) {
         decryptedRef.current = { ...decryptedRef.current, [id]: { text: plaintext, failed: false } }
         setDecryptedContent(decryptedRef.current)
         saveOwnPlaintext(id, plaintext).catch(() => {})
@@ -1276,7 +1057,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
     }
 
     setReplyTo(null)
-  }, [channelId, channel, conversationKey, ensureConversationKey, encryptOlmText, replyTo, sendDmPayload])
+  }, [channelId, channel, encryptOlmText, replyTo, sendDmPayload])
 
   async function handleEditSave(messageId: string) {
     if (!editContent.trim()) return
@@ -1486,9 +1267,7 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
           <div className="font-semibold text-sm md:text-base text-white truncate">{displayName}</div>
           {channel.is_encrypted && (
             <div className="text-xs truncate" style={{ color: "var(--theme-text-muted)" }}>
-              {channel.encryption_scheme === "olm"
-                ? <>End-to-end encrypted (Olm) • Device {olmDeviceId ? olmDeviceId.slice(0, 8) : "verifying…"}</>
-                : <>End-to-end encrypted • Device fingerprint: {deviceFingerprint ?? "verifying…"}</>}
+              End-to-end encrypted (Olm) • Device {olmDeviceId ? olmDeviceId.slice(0, 8) : "verifying…"}
             </div>
           )}
         </div>

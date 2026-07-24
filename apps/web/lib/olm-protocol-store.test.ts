@@ -231,6 +231,38 @@ describe("olm-protocol-store: identity pinning (issue #46 Strix HIGH)", () => {
     expect(later.publish).toBeNull()
   })
 
+  it("topUpOneTimeKeys returns a fresh signed batch and persists the account so successive top-ups never repeat a keyId (issue #60)", async () => {
+    const store = await freshStore()
+    const { identity, publish } = await store.ensureOlmIdentity("alice-id")
+    expect(publish).not.toBeNull()
+
+    const first = await store.topUpOneTimeKeys("alice-id", identity.deviceId, 5)
+    expect(first).toHaveLength(5)
+    for (const key of first) {
+      expect(typeof key.keyId).toBe("string")
+      expect(typeof key.publicKey).toBe("string")
+      expect(key.signature.length).toBeGreaterThan(0)
+    }
+
+    // A second top-up must generate a distinct batch — if the updated account
+    // weren't persisted back, Olm would re-emit the same unpublished keys and
+    // the server would reject the duplicates (onConflictDoNothing), leaving
+    // the pool un-replenished. Distinct keyIds across the two batches (and the
+    // initial publish) prove the persisted account advanced.
+    const second = await store.topUpOneTimeKeys("alice-id", identity.deviceId, 5)
+    const firstIds = new Set(first.map((k) => k.keyId))
+    const publishedIds = new Set(publish!.oneTimeKeys.map((k) => k.keyId))
+    for (const key of second) {
+      expect(firstIds.has(key.keyId)).toBe(false)
+      expect(publishedIds.has(key.keyId)).toBe(false)
+    }
+  })
+
+  it("topUpOneTimeKeys throws when there is no local identity to top up (issue #60)", async () => {
+    const store = await freshStore()
+    await expect(store.topUpOneTimeKeys("alice-id", "device-1", 5)).rejects.toThrow(/no local olm identity/i)
+  })
+
   it("saveOwnPlaintext survives a simulated reload (fresh module instance) and is wiped by resetOlmIdentity", async () => {
     const store = await freshStore()
     await store.ensureOlmIdentity("alice-id")

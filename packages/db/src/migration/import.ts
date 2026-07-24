@@ -20,7 +20,7 @@ import { applyFts5AndTriggers, applyTableMigrations } from "../schema-setup"
  * before the bulk load, and `applyFts5AndTriggers` (the FTS5 virtual table
  * + every hand-written trigger in src/sql/fts5-and-triggers.sql —
  * dm_message_bump_trigger, dm_rotate_on_member_*, trg_prune_activity_log,
- * user_device_keys_cap_before_insert, trg_dm_reply_same_channel_*) only
+ * trg_dm_reply_same_channel_*) only
  * *after* every row is already loaded. `CREATE TRIGGER` never fires
  * retroactively for existing rows, so none of those triggers' side effects
  * (bumping dm_channels.updated_at/encryption_key_version on every imported
