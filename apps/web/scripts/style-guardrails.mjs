@@ -54,30 +54,51 @@ function collectViolations() {
       rule.regex.lastIndex = 0
       let match
       while ((match = rule.regex.exec(content)) !== null) {
-        const line = lineNumberFromIndex(content, match.index)
         violations.push({
-          key: `${rule.id}:${rel}:${line}`,
           ruleId: rule.id,
           file: rel,
-          line,
+          line: lineNumberFromIndex(content, match.index),
           excerpt: match[0].slice(0, 120),
         })
       }
     }
   }
-  return violations.sort((a, b) => a.key.localeCompare(b.key))
+  return violations
+}
+
+// Aggregate raw matches into an occurrence count per (rule, file). The
+// baseline used to be keyed by exact line number (`ruleId:file:line`), which
+// meant any unrelated edit that shifted lines in a governed file turned every
+// tolerated violation in it into a false "regression" — and made the check
+// drift between CI and dev file sets (see .github/workflows/ci.yml, which
+// disables it in CI for exactly this reason). Counting per file is robust to
+// code moving around while still catching a *net-new* inline-style /
+// arbitrary-token usage on a product surface.
+function countByRuleFile(violations) {
+  const counts = new Map()
+  for (const v of violations) {
+    const key = `${v.ruleId}:${v.file}`
+    const entry = counts.get(key)
+    if (entry) entry.count += 1
+    else counts.set(key, { ruleId: v.ruleId, file: v.file, count: 1 })
+  }
+  return counts
 }
 
 const current = collectViolations()
+const currentCounts = countByRuleFile(current)
 
 if (WRITE_BASELINE) {
+  const counts = [...currentCounts.values()].sort(
+    (a, b) => a.ruleId.localeCompare(b.ruleId) || a.file.localeCompare(b.file)
+  )
   const payload = {
     generatedAt: new Date().toISOString(),
     rules: rules.map(({ id, description }) => ({ id, description })),
-    violations: current.map(({ key, ruleId, file, line }) => ({ key, ruleId, file, line })),
+    counts,
   }
   writeFileSync(BASELINE_PATH, `${JSON.stringify(payload, null, 2)}\n`)
-  console.log(`Wrote baseline with ${current.length} violations to ${relative(ROOT, BASELINE_PATH)}`)
+  console.log(`Wrote baseline with ${counts.length} file/rule entries (${current.length} total violations) to ${relative(ROOT, BASELINE_PATH)}`)
   process.exit(0)
 }
 
@@ -87,16 +108,30 @@ if (!existsSync(BASELINE_PATH)) {
 }
 
 const baseline = JSON.parse(readFileSync(BASELINE_PATH, "utf8"))
-const baselineKeys = new Set((baseline.violations ?? []).map((item) => item.key))
-const regressions = current.filter((item) => !baselineKeys.has(item.key))
+const baselineCounts = new Map((baseline.counts ?? []).map((item) => [`${item.ruleId}:${item.file}`, item.count]))
+
+const regressions = []
+for (const [key, entry] of currentCounts) {
+  const allowed = baselineCounts.get(key) ?? 0
+  if (entry.count > allowed) {
+    const lines = current
+      .filter((v) => v.ruleId === entry.ruleId && v.file === entry.file)
+      .map((v) => v.line)
+    regressions.push({ ...entry, allowed, lines })
+  }
+}
+regressions.sort((a, b) => a.ruleId.localeCompare(b.ruleId) || a.file.localeCompare(b.file))
 
 if (regressions.length > 0) {
   console.error("Detected new style-token guardrail regressions:\n")
-  for (const regression of regressions) {
-    console.error(`- [${regression.ruleId}] ${regression.file}:${regression.line}`)
+  for (const r of regressions) {
+    console.error(`- [${r.ruleId}] ${r.file}: ${r.count} occurrences, baseline allows ${r.allowed} (lines ${r.lines.join(", ")})`)
   }
   console.error("\nUse governed design tokens/component variants instead of ad-hoc inline values.")
+  console.error("If these occurrences are intentional and reviewed, refresh the baseline with:")
+  console.error("  npm run lint:style-guardrails -- --write-baseline")
   process.exit(1)
 }
 
-console.log(`Style guardrails passed (${current.length} tracked baseline violations, 0 regressions).`)
+const totalTracked = [...currentCounts.values()].reduce((sum, e) => sum + e.count, 0)
+console.log(`Style guardrails passed (${totalTracked} tracked baseline violations across ${currentCounts.size} file/rule entries, 0 regressions).`)
