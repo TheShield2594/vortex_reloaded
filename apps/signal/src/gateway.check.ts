@@ -171,6 +171,7 @@ function makeOptions(
       startCleanup: () => {},
       setOnline: async () => {},
       updateStatus: async () => {},
+      refresh: async () => {},
       setOffline: async () => {},
     } as unknown as PresenceManager,
     validateSession: async () => true,

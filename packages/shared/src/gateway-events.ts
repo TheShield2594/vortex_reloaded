@@ -140,6 +140,16 @@ export const EVENT_STREAM_MAXLEN = 1000
 export const PRESENCE_TTL_SECONDS = 30
 
 /**
+ * How often the gateway re-arms the TTL on the presence keys of the sockets
+ * it still holds (ms). A connected user can sit idle far longer than
+ * PRESENCE_TTL_SECONDS without changing status, so without this refresh their
+ * key would expire and readers would report them offline while they're
+ * looking at the app. Comfortably under the TTL so a single missed pass
+ * doesn't drop anyone.
+ */
+export const PRESENCE_REFRESH_INTERVAL_MS = 10_000
+
+/**
  * How often the server sweeps for stale presence entries (ms).
  * TTL expiry (PRESENCE_TTL_SECONDS) is the primary cleanup mechanism; this
  * sweep is only a safety net for orphaned keys with no TTL, so it runs

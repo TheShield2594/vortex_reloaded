@@ -12,6 +12,7 @@ import {
   users,
 } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+import { createPresenceResolver } from "@/lib/presence"
 import { toSnakeCase } from "@/lib/utils/case"
 
 const db = createDb()
@@ -170,9 +171,14 @@ export async function GET(
       .filter((id): id is string => !!id)
     const uniqueReplyIds: string[] = [...new Set(replyIds)]
 
-    let replyMap: Record<string, Record<string, unknown>> = {}
+    let replyMessages: Array<{
+      id: string
+      content: string | null
+      senderId: string
+      sender: { id: string; username: string; displayName: string | null; avatarUrl: string | null; status: string } | null
+    }> = []
     if (uniqueReplyIds.length > 0) {
-      const replyMessages = await db
+      replyMessages = await db
         .select({
           id: directMessages.id,
           content: directMessages.content,
@@ -188,18 +194,30 @@ export async function GET(
             isNull(directMessages.deletedAt)
           )
         )
-      if (replyMessages.length) {
-        replyMap = Object.fromEntries(
-          replyMessages.map((m) => [
-            m.id,
-            {
-              ...toSnakeCase<Record<string, unknown>>({ id: m.id, content: m.content, senderId: m.senderId }),
-              sender: m.sender ? toSnakeCase(m.sender) : null,
-            },
-          ])
-        )
-      }
     }
+
+    // Everyone whose presence this response exposes: channel members plus the
+    // senders of the messages (and replies) on this page. Presence comes from
+    // the gateway, not users.status (issue #57).
+    const presence = await createPresenceResolver([
+      ...memberIds,
+      ...messages.map((m) => m.sender?.id).filter((id): id is string => !!id),
+      ...replyMessages.map((m) => m.sender?.id).filter((id): id is string => !!id),
+    ])
+
+    function withPresence<T extends { id: string; status: string }>(profile: T): T {
+      return { ...profile, status: presence(profile.id, profile.status) }
+    }
+
+    const replyMap: Record<string, Record<string, unknown>> = Object.fromEntries(
+      replyMessages.map((m) => [
+        m.id,
+        {
+          ...toSnakeCase<Record<string, unknown>>({ id: m.id, content: m.content, senderId: m.senderId }),
+          sender: m.sender ? toSnakeCase(withPresence(m.sender)) : null,
+        },
+      ])
+    )
 
     // Fetch dm_attachments and dm_reactions for these messages in parallel
     const messageIds: string[] = messages.map((m) => m.id)
@@ -237,7 +255,7 @@ export async function GET(
         createdAt: m.createdAt,
         replyToId: m.replyToId,
       }),
-      sender: m.sender ? toSnakeCase(m.sender) : null,
+      sender: m.sender ? toSnakeCase(withPresence(m.sender)) : null,
       reply_to: m.replyToId ? (replyMap[m.replyToId] ?? null) : null,
       dm_attachments: attachmentMap[m.id] ?? [],
       reactions: reactionMap[m.id] ?? [],
@@ -258,7 +276,11 @@ export async function GET(
     }
 
     return NextResponse.json({
-      channel: { ...toSnakeCase<Record<string, unknown>>(channel), members: toSnakeCase(members), partner: partner ? toSnakeCase(partner) : null },
+      channel: {
+        ...toSnakeCase<Record<string, unknown>>(channel),
+        members: toSnakeCase(members.map(withPresence)),
+        partner: partner ? toSnakeCase(withPresence(partner)) : null,
+      },
       messages: enrichedMessages.reverse(),
       has_more: messages.length === limit,
     })

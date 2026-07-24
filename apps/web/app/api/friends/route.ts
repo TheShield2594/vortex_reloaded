@@ -5,6 +5,7 @@ import { createDb, friendships, notifications, userNotificationPreferences, user
 import { sendPushToUser } from "@/lib/push"
 import { requireAuth, checkRateLimit } from "@/lib/utils/api-helpers"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
+import { createPresenceResolver } from "@/lib/presence"
 import { toSnakeCase } from "@/lib/utils/case"
 
 const db = createDb()
@@ -79,8 +80,34 @@ export async function GET(req: NextRequest) {
     const lastRow = pageRows[pageRows.length - 1]
     const nextCursor = hasMore && lastRow ? lastRow.id : null
 
+    // The friends list is the app's main presence surface. Liveness lives in
+    // the gateway, so users.status on these rows is replaced with what the
+    // gateway knows (issue #57).
+    const presence = await createPresenceResolver(
+      pageRows.flatMap((row) =>
+        [row.requester?.id, row.addressee?.id].filter((id): id is string => !!id)
+      )
+    )
+    function withPresence<T extends { id: string; status: string } | null>(profile: T): T {
+      if (!profile) return profile
+      return { ...profile, status: presence(profile.id, profile.status) }
+    }
+    const resolved = (entries: FriendEntry[]): FriendEntry[] =>
+      entries.map((entry) => ({
+        ...entry,
+        requester: withPresence(entry.requester),
+        addressee: withPresence(entry.addressee),
+        friend: withPresence(entry.friend),
+      }))
+
     return NextResponse.json(
-      toSnakeCase({ accepted, pending_received, pending_sent, blocked, next_cursor: nextCursor })
+      toSnakeCase({
+        accepted: resolved(accepted),
+        pending_received: resolved(pending_received),
+        pending_sent: resolved(pending_sent),
+        blocked: resolved(blocked),
+        next_cursor: nextCursor,
+      })
     )
   } catch (err) {
     console.error("[friends GET] error:", err)

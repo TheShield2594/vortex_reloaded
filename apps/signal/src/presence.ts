@@ -11,6 +11,13 @@
  * keyed per user only; fan-out to the user's DM channel rooms is the gateway's
  * job (see broadcastPresenceToChannels in ./gateway.ts).
  *
+ * These keys are also the *only* source of truth for whether a user is online:
+ * the web app reads them when it serves DM/friends payloads (apps/web/lib/
+ * presence.ts), so a user whose key is present is online and one whose key is
+ * gone is offline. The entry carries a short TTL so a connection that dies
+ * without a disconnect event ages out; `refresh()` re-arms it for users who
+ * are still connected (issue #57).
+ *
  * #595: WebSocket-Based Presence & Typing
  */
 
@@ -72,6 +79,24 @@ export class PresenceManager {
         .exec()
     } catch (err) {
       log.error({ err, userId }, "updateStatus failed")
+    }
+  }
+
+  /**
+   * Re-arm the TTL on the presence keys of users who still have a socket
+   * connected, so a quiet session doesn't expire out of Redis and read as
+   * offline (issue #57). EXPIRE is a no-op on a missing key, so a user who
+   * disconnected between the caller's snapshot and this call stays gone.
+   */
+  async refresh(userIds: Iterable<string>): Promise<void> {
+    const keys = [...userIds].map((id) => this.userKey(id))
+    if (keys.length === 0) return
+    try {
+      const pipeline = this.redis.pipeline()
+      for (const key of keys) pipeline.expire(key, PRESENCE_TTL_SECONDS)
+      await pipeline.exec()
+    } catch (err) {
+      log.error({ err, count: keys.length }, "presence TTL refresh failed")
     }
   }
 

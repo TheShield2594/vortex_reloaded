@@ -243,7 +243,10 @@ The `cron` service calls the web app's HTTP endpoints on a schedule:
 | Job | Description |
 |-----|-------------|
 | `attachment-decay` | Purges expired DM attachments past their retention window |
-| `presence-cleanup` | Marks stale users as offline |
+| `login-attempts-cleanup` | Purges stale login-attempt rows |
+
+Presence is not a cron job: it lives in the `signal` gateway's Redis state,
+keyed to the user's WebSocket connection, so there is nothing to sweep.
 
 No configuration needed — the cron service uses `CRON_SECRET` from `.env`.
 

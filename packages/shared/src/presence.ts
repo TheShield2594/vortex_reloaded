@@ -1,24 +1,19 @@
 /**
  * Presence constants and utilities.
  *
- * Modeled after Fluxer's presence system:
- * - Server-side heartbeat validation (client pings, server detects staleness)
- * - Status precedence for multi-session aggregation
- * - Idle detection with configurable timeout
+ * Liveness lives entirely in the gateway's Redis store (see
+ * `PRESENCE_KEY_PREFIX` in ./gateway-events): a user is online exactly as long
+ * as they hold a Socket.IO connection. The database's `users.status` is the
+ * user's *chosen* status (the one they pick in the UI), never a liveness
+ * signal — see `toVisibleStatus` for how the two combine when serving presence.
+ *
+ * Status precedence for multi-session aggregation and idle detection follow
+ * Fluxer's model.
  */
 
 import type { UserStatus } from './index'
 
-// ── Heartbeat ────────────────────────────────────────────────────────────────
-
-/** Server considers a user stale after this many ms without a heartbeat.
- *  Legacy HTTP: 90s (30s heartbeat + 60s cron). Gateway: ~10s (Socket.IO pingTimeout). */
-export const PRESENCE_STALE_THRESHOLD_MS = 90_000
-
-/** Minimum interval between DB writes for heartbeat (ms). Prevents stampede. */
-export const PRESENCE_HEARTBEAT_DEBOUNCE_MS = 10_000
-
-// ── Gateway Presence (Socket.IO–based, faster) ─────────────────────────────
+// ── Gateway Presence (Socket.IO–based) ─────────────────────────────────────
 
 /** Socket.IO pingTimeout — offline detected within this window. */
 export const GATEWAY_OFFLINE_DETECTION_MS = 20_000
@@ -70,6 +65,16 @@ export function aggregateStatus(statuses: UserStatus[]): UserStatus {
   }
 
   return best
+}
+
+/**
+ * Mask the one status that must never leave the server as-is: `invisible`
+ * users appear `offline` to everyone else. Apply this at every boundary that
+ * exposes someone's presence to another user — the gateway's presence fan-out
+ * and the HTTP payloads that seed it alike.
+ */
+export function toVisibleStatus(status: UserStatus): UserStatus {
+  return status === 'invisible' ? 'offline' : status
 }
 
 // ── BroadcastChannel ─────────────────────────────────────────────────────────

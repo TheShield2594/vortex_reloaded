@@ -8,6 +8,7 @@ import { isBlockedBetweenUsers } from "@/lib/blocking"
 import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { createLogger } from "@/lib/logger"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
+import { createPresenceResolver } from "@/lib/presence"
 import { toSnakeCase } from "@/lib/utils/case"
 
 const log = createLogger("api/dm/messages")
@@ -162,6 +163,9 @@ export async function POST(
   // Validate reply_to_id and fetch full reply data in one query (avoids redundant re-fetch after insert)
   const replyToId = body.reply_to_id ?? null
   let replyToMessage: Record<string, unknown> | null = null
+  // Held aside so the reply's sender gets the same gateway-resolved presence
+  // as the new message's sender, off one lookup below (issue #57).
+  let replyToSender: { id: string; username: string; displayName: string | null; avatarUrl: string | null; status: string } | null = null
   if (replyToId) {
     const [replyTarget] = await db
       .select({
@@ -182,10 +186,13 @@ export async function POST(
     if (replyTarget.dmChannelId !== channelId) {
       return NextResponse.json({ error: "Replied-to message must be in the same channel" }, { status: 400 })
     }
-    replyToMessage = {
-      ...toSnakeCase<Record<string, unknown>>({ id: replyTarget.id, dmChannelId: replyTarget.dmChannelId, content: replyTarget.content, senderId: replyTarget.senderId }),
-      sender: replyTarget.sender ? toSnakeCase(replyTarget.sender) : null,
-    }
+    replyToSender = replyTarget.sender
+    replyToMessage = toSnakeCase<Record<string, unknown>>({
+      id: replyTarget.id,
+      dmChannelId: replyTarget.dmChannelId,
+      content: replyTarget.content,
+      senderId: replyTarget.senderId,
+    })
   }
 
   let message: typeof directMessages.$inferSelect
@@ -228,9 +235,23 @@ export async function POST(
     data: { messageId: message.id, replyToId, content },
   }, { route: "/api/dm/channels/[channelId]/messages" }))
 
+  // Presence comes from the gateway, not users.status (issue #57).
+  const presence = await createPresenceResolver([
+    ...(senderProfile ? [senderProfile.id] : []),
+    ...(replyToSender ? [replyToSender.id] : []),
+  ])
+
+  if (replyToMessage) {
+    replyToMessage.sender = replyToSender
+      ? toSnakeCase({ ...replyToSender, status: presence(replyToSender.id, replyToSender.status) })
+      : null
+  }
+
   const responseBody = {
     ...toSnakeCase<Record<string, unknown>>(message),
-    sender: senderProfile ? toSnakeCase(senderProfile) : null,
+    sender: senderProfile
+      ? toSnakeCase({ ...senderProfile, status: presence(senderProfile.id, senderProfile.status) })
+      : null,
     reply_to_id: replyToId,
     reply_to: replyToMessage,
   }

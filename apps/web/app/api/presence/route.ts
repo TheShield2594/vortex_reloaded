@@ -7,11 +7,13 @@ import { checkRateLimit } from "@/lib/utils/api-helpers"
 const db = createDb()
 
 /**
- * Lightweight presence endpoint used by `navigator.sendBeacon()` on tab close
- * to persist the user's offline status to the database. This ensures the
- * `users.status` field is accurate for push notification eligibility checks.
+ * Persists the status the user picks in the UI (online / idle / dnd /
+ * invisible / offline).
  *
- * Also used for general presence status updates from the client.
+ * This is a *preference*, not liveness: it survives across sessions so the
+ * next connection starts out `dnd` or `invisible` again, and the client hands
+ * it to the gateway as its initial status. Whether the user is actually
+ * online is the gateway's Redis state alone — see lib/presence.ts (issue #57).
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
@@ -20,8 +22,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Presence updates (heartbeats, status changes, sendBeacon on tab close) are
-    // legitimately frequent, so this ceiling is generous — it only stops abuse.
+    // A user toggling their status a few times in a row is normal, so this
+    // ceiling is generous — it only stops abuse.
     const limited = await checkRateLimit(user.id, "presence:update", { limit: 60, windowMs: 60_000 })
     if (limited) return limited
 
@@ -66,9 +68,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         .set({
           status: status as "online" | "idle" | "dnd" | "invisible" | "offline",
           updatedAt: now,
-          // Preserve the last heartbeat on explicit offline writes so a late
-          // sendBeacon from one tab can't clobber another tab's fresh heartbeat.
-          ...(status === "offline" ? {} : { lastHeartbeatAt: nowIso }),
           // Record last_online_at when transitioning to offline (#608)
           ...(setLastOnlineAt ? { lastOnlineAt: nowIso } : {}),
         })

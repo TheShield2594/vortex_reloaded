@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/sqlite-core"
 import { createDb, directMessages, dmAttachments, dmChannelMembers, dmReactions, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { checkRateLimit } from "@/lib/utils/api-helpers"
+import { createPresenceResolver } from "@/lib/presence"
 import { toSnakeCase } from "@/lib/utils/case"
 
 const db = createDb()
@@ -116,6 +117,12 @@ export async function GET(
         .where(inArray(dmReactions.dmId, [messageId]))
     } catch {
       return NextResponse.json({ error: "Failed to fetch reactions" }, { status: 500 })
+    }
+
+    // The sender's presence comes from the gateway, not users.status (#57).
+    if (message.sender) {
+      const presence = await createPresenceResolver([message.sender.id])
+      message.sender = { ...message.sender, status: presence(message.sender.id, message.sender.status) }
     }
 
     return NextResponse.json({

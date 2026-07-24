@@ -19,8 +19,10 @@ import {
   MAX_REPLAY_EVENTS,
   TYPING_RATE_LIMIT,
   PRESENCE_RATE_LIMIT,
+  PRESENCE_REFRESH_INTERVAL_MS,
   CALL_SIGNAL_RATE_LIMIT,
   SUBSCRIBE_RATE_LIMIT,
+  toVisibleStatus,
 } from "@vortex/shared"
 import type { RedisEventBus } from "./event-bus"
 import type { PresenceManager } from "./presence"
@@ -108,7 +110,7 @@ function broadcastPresenceToChannels(
   if (rooms.length === 0) return
   socket.to(rooms).emit("gateway:presence", {
     userId: state.userId,
-    status: (state.status === "invisible" ? "offline" : state.status) as UserStatus,
+    status: toVisibleStatus(state.status),
     updatedAt: new Date().toISOString(),
   })
 }
@@ -125,7 +127,7 @@ function broadcastPresenceToChannels(
  *
  * Fails "no siblings" on error, preserving the previous unconditional-offline
  * behavior: a missed offline is worse (a ghost stays online forever) than a
- * premature one (the next gateway:presence heartbeat corrects it).
+ * premature one (the surviving socket's next status update corrects it).
  */
 async function hasOtherSocketsForUser(io: Server, userId: string): Promise<boolean> {
   try {
@@ -166,9 +168,42 @@ export interface GatewayOptions {
   checkChannelAccess: (userId: string, channelIds: string[]) => Promise<string[]>
 }
 
-/** Stop the gateway rate-limiter cleanup timer (call during graceful shutdown). */
+/** Timer that re-arms Redis TTLs for connected users (see startPresenceRefresh). */
+let presenceRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+/** Stop the gateway's background timers (call during graceful shutdown). */
 export function stopGatewayCleanup(): void {
   gatewayLimiter?.stopCleanup()
+  if (presenceRefreshTimer) {
+    clearInterval(presenceRefreshTimer)
+    presenceRefreshTimer = null
+  }
+}
+
+/**
+ * Keep the presence keys of this replica's connected users alive.
+ *
+ * A user's Redis presence entry is written on connect and on status change,
+ * with a short TTL so a lost socket ages out on its own. Nothing else touches
+ * it, so a user who connects and then just reads for a minute would expire out
+ * of Redis and read as offline to anyone asking (issue #57). This pass re-arms
+ * the TTL for every user this replica still holds a socket for; users on other
+ * replicas are refreshed by their own replica.
+ */
+function startPresenceRefresh(presence: PresenceManager): void {
+  if (presenceRefreshTimer) return
+  let inFlight = false
+  presenceRefreshTimer = setInterval(() => {
+    if (inFlight) return
+    const userIds = new Set<string>()
+    for (const state of socketStates.values()) userIds.add(state.userId)
+    if (userIds.size === 0) return
+    inFlight = true
+    presence
+      .refresh(userIds)
+      .catch((err) => log.error({ err }, "presence TTL refresh pass failed"))
+      .finally(() => { inFlight = false })
+  }, PRESENCE_REFRESH_INTERVAL_MS)
 }
 
 export function initGateway(options: GatewayOptions): void {
@@ -186,6 +221,9 @@ export function initGateway(options: GatewayOptions): void {
   // rooms); this sweep only reaps orphaned Redis keys that never got a TTL, so
   // it takes no fan-out callback.
   presence.startCleanup()
+
+  // Keep connected users' presence keys from expiring under them (issue #57).
+  startPresenceRefresh(presence)
 
   io.on("connection", (socket: Socket) => {
     // ── Gateway: Subscribe to channels ────────────────────────────────────
@@ -396,7 +434,7 @@ export function initGateway(options: GatewayOptions): void {
       }
     })
 
-    // ── Gateway: Presence heartbeat ───────────────────────────────────────
+    // ── Gateway: Presence status update ───────────────────────────────────
     socket.on("gateway:presence", async (data: unknown) => {
       try {
         if (typeof data !== "object" || data === null) return
