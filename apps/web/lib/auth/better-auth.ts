@@ -8,7 +8,7 @@ import { jwt, magicLink, twoFactor } from "better-auth/plugins"
 import { nextCookies } from "better-auth/next-js"
 import { passkey } from "@better-auth/passkey"
 import * as vortexDb from "@vortex/db"
-import { loginAttempts, loginRiskEvents, notifications, userConnections, users, verifications } from "@vortex/db"
+import { loginAttempts, loginRiskEvents, notifications, userConnections, users } from "@vortex/db"
 import { computeLoginRisk } from "@/lib/auth/risk"
 import { revokeGatewaySessions } from "@/lib/gateway-publish"
 import { sendAuthEmail } from "@/lib/auth/email"
@@ -224,56 +224,30 @@ async function enforceLoginRisk(userId: string, request: Request | undefined): P
 }
 
 /**
- * Better Auth endpoints that invalidate one or more of a user's sessions.
- * Each is wired to notify the signal server so the user's live gateway
- * socket(s) are torn down and their pre-existing handshake JWTs rejected
- * immediately, instead of lingering until the short-lived token expires
- * (issue #52). Revocation is per-user (the gateway JWT carries only the user
- * id) with an issued-at cutoff, so a device whose session survives — e.g. the
- * caller's own after a `revokeOtherSessions` password change — simply
+ * Authenticated Better Auth endpoints that invalidate one or more of the
+ * *caller's* sessions. Each is wired to notify the signal server so the user's
+ * live gateway socket(s) are torn down and their pre-existing handshake JWTs
+ * rejected immediately, instead of lingering until the short-lived token
+ * expires (issue #52). Revocation is per-user (the gateway JWT carries only the
+ * user id) with an issued-at cutoff, so a device whose session survives — e.g.
+ * the caller's own after a `revokeOtherSessions` password change — simply
  * reconnects with a fresh token.
+ *
+ * Password reset is deliberately NOT here: it's unauthenticated and resolving
+ * the target user in this pre-handler hook would fire on tokens the reset
+ * itself later rejects (e.g. expired-but-not-yet-purged rows), letting anyone
+ * holding such a token disrupt the victim's gateway (CWE-367). It's handled
+ * instead by `emailAndPassword.onPasswordReset`, which runs only after the
+ * reset actually succeeds.
  */
 const GATEWAY_REVOKE_PATHS = new Set([
   "/change-password",
-  "/reset-password",
   "/revoke-session",
   "/revoke-sessions",
   "/revoke-other-sessions",
   "/sign-out",
   "/delete-user",
 ])
-
-/**
- * Resolves the user whose sessions a GATEWAY_REVOKE_PATHS request affects.
- * Password reset is unauthenticated, so the user is identified from the reset
- * token — Better Auth stores it as a `reset-password:<token>` verification
- * whose value is the user id. Every other path is an authenticated mutation,
- * so the acting user comes from their still-valid session (read here in the
- * `before` hook, before the operation revokes it).
- */
-async function resolveGatewayRevocationUserId(
-  path: string,
-  body: Record<string, unknown> | undefined,
-  query: Record<string, unknown> | undefined,
-  headers: Headers,
-): Promise<string | null> {
-  if (path === "/reset-password") {
-    // Better Auth accepts the reset token from either the body or the query
-    // (`ctx.body.token || ctx.query?.token`), so check both.
-    const token =
-      (typeof body?.token === "string" ? body.token : null) ??
-      (typeof query?.token === "string" ? query.token : null)
-    if (!token) return null
-    const [row] = await db
-      .select({ value: verifications.value })
-      .from(verifications)
-      .where(eq(verifications.identifier, `reset-password:${token}`))
-      .limit(1)
-    return row?.value ?? null
-  }
-  const session = await auth.api.getSession({ headers })
-  return session?.user?.id ?? null
-}
 
 export const auth = betterAuth({
   baseURL: APP_ORIGIN,
@@ -344,6 +318,15 @@ export const auth = betterAuth({
         text: `Reset your password: ${url}\n\nIf you didn't request this, you can safely ignore this email.`,
       })
     },
+    // Fires only after a reset actually succeeds (valid, non-expired token +
+    // password updated), so — unlike the pre-handler hook used for the
+    // authenticated paths — an expired-but-unpurged token can't trigger a
+    // spurious gateway teardown for the victim (issue #52, CWE-367). Paired
+    // with `revokeSessionsOnPasswordReset` above so the DB sessions and the
+    // live gateway sockets are both invalidated.
+    onPasswordReset: async ({ user }) => {
+      await revokeGatewaySessions(user.id)
+    },
   },
   emailVerification: {
     sendOnSignUp: true,
@@ -401,8 +384,8 @@ export const auth = betterAuth({
   ],
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
-      // Tear down live gateway sessions whenever an endpoint invalidates a
-      // user's session(s) — password change, forced logout / session
+      // Tear down live gateway sessions whenever an endpoint invalidates the
+      // caller's session(s) — password change, forced logout / session
       // revocation, account deletion (issue #52). Runs in `before` so the
       // acting user's session is still resolvable even for endpoints (sign-out,
       // revoke-sessions, delete-user) that are about to delete it. Best-effort
@@ -412,10 +395,8 @@ export const auth = betterAuth({
       if (GATEWAY_REVOKE_PATHS.has(ctx.path)) {
         try {
           const headers = ctx.headers ?? ctx.request?.headers ?? new Headers()
-          const body = ctx.body as Record<string, unknown> | undefined
-          const query = ctx.query as Record<string, unknown> | undefined
-          const userId = await resolveGatewayRevocationUserId(ctx.path, body, query, headers)
-          if (userId) await revokeGatewaySessions(userId)
+          const session = await auth.api.getSession({ headers })
+          if (session?.user?.id) await revokeGatewaySessions(session.user.id)
         } catch (err) {
           log.error(
             { err: err instanceof Error ? err.message : String(err), path: ctx.path },
