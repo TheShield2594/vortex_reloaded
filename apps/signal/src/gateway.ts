@@ -145,6 +145,8 @@ export function initGateway(options: GatewayOptions): void {
         // Re-checked on every subscribe so a removed member can't rejoin a
         // room by re-emitting gateway:subscribe.
         const validChannels = await checkChannelAccess(userId, channelIds as string[])
+        const grantedSet = new Set(validChannels)
+        const deniedChannels = (channelIds as string[]).filter((id) => !grantedSet.has(id))
 
         // Initialize socket state
         let state = socketStates.get(socket.id)
@@ -169,7 +171,10 @@ export function initGateway(options: GatewayOptions): void {
           state.subscribedChannels.add(channelId)
         }
 
-        socket.emit("gateway:subscribed", { channelIds: validChannels })
+        socket.emit("gateway:subscribed", { channelIds: validChannels, denied: deniedChannels })
+        if (deniedChannels.length > 0) {
+          log.warn({ userId, denied: deniedChannels.length }, "gateway subscribe denied channels")
+        }
         log.info({ userId, channels: validChannels.length }, "gateway subscribed")
       } catch (err) {
         log.error({ socketId: socket.id, err }, "gateway:subscribe error")

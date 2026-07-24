@@ -33,6 +33,7 @@ export interface GatewayEventHandlers {
   onReplay?: (data: GatewayServerEvents["gateway:replay"]) => void
   onResumeComplete?: (data: GatewayServerEvents["gateway:resume-complete"]) => void
   onCallSignal?: (data: GatewayServerEvents["gateway:call-signal"]) => void
+  onSubscribed?: (data: GatewayServerEvents["gateway:subscribed"]) => void
 }
 
 interface GatewayState {
@@ -204,6 +205,21 @@ export function useGateway(handlers?: GatewayEventHandlers) {
 
         socket.on("gateway:call-signal", (data: GatewayServerEvents["gateway:call-signal"]) => {
           handlersRef.current?.onCallSignal?.(data)
+        })
+
+        socket.on("gateway:subscribed", (data: GatewayServerEvents["gateway:subscribed"]) => {
+          // Reconcile optimistic state with what the server actually
+          // authorized: subscribe() adds channels to subscribedChannels before
+          // the server confirms, so drop any the membership check refused
+          // (issue #51) instead of believing we're subscribed to a room we'll
+          // never receive events for — and so we don't re-request it on every
+          // reconnect.
+          const denied = data.denied ?? []
+          for (const id of denied) {
+            stateRef.current.subscribedChannels.delete(id)
+            stateRef.current.lastEventIds.delete(id)
+          }
+          handlersRef.current?.onSubscribed?.(data)
         })
 
         socket.on("error", (err: { message: string }) => {

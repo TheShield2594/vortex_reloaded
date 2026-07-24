@@ -89,7 +89,14 @@ export interface GatewayServerEvents {
 
   /** Acknowledgement that subscription was successful. */
   "gateway:subscribed": {
+    /** Requested channels the server authorized and joined. */
     channelIds: string[]
+    /**
+     * Requested channels the server refused because the membership check
+     * failed (issue #51). Lets the client reconcile its optimistic
+     * subscription state instead of believing it joined a room it never did.
+     */
+    denied?: string[]
   }
 
   /** Resume complete — client is caught up. */
