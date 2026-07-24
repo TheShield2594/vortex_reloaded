@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
 import { useConnectionsCallback } from "@/hooks/use-connections-callback"
 import { authClient } from "@/lib/auth/auth-client"
+import { useStepUpPrompt } from "@/components/settings/security/step-up-prompt"
 
 const SOCIAL_PROVIDERS = [
   { id: "github" as const, label: "GitHub" },
@@ -28,6 +29,7 @@ export function ConnectionsSection(): React.JSX.Element {
   const { toast } = useToast()
   const router = useRouter()
   const [connections, setConnections] = useState<ConnectionRow[]>([])
+  const { requireStepUp, stepUpDialog } = useStepUpPrompt()
 
   const loadConnections = useCallback(async (): Promise<void> => {
     try {
@@ -46,6 +48,10 @@ export function ConnectionsSection(): React.JSX.Element {
   useConnectionsCallback(loadConnections, toast, router)
 
   async function connectSocial(provider: "github" | "twitch" | "reddit"): Promise<void> {
+    // `/link-social` is step-up gated (lib/auth/better-auth.ts) — re-authenticate
+    // before calling it, or Better Auth rejects it with a bare 403. A `false`
+    // here means the user cancelled the prompt, so leave without a toast.
+    if (!(await requireStepUp())) return
     try {
       const { data, error } = await authClient.linkSocial({
         provider,
@@ -151,6 +157,8 @@ export function ConnectionsSection(): React.JSX.Element {
         ))}
         {connections.length === 0 && <p className="text-xs" style={{ color: "var(--theme-text-muted)" }}>No connections yet.</p>}
       </div>
+
+      {stepUpDialog}
     </div>
   )
 }

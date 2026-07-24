@@ -505,6 +505,45 @@
     background-color: color-mix(in srgb, var(--theme-danger) 15%, transparent);
   }
 
+  /* ── Step-up (re-authentication) prompt ───────────────────────────────── */
+
+  .step-up-dialog {
+    background: var(--theme-bg-primary);
+    border-color: var(--theme-bg-tertiary);
+  }
+
+  .step-up-notice {
+    background: var(--theme-bg-secondary);
+    border-color: var(--theme-bg-tertiary);
+    color: var(--theme-text-secondary);
+  }
+
+  .step-up-notice-icon {
+    color: var(--theme-warning);
+  }
+
+  .step-up-label {
+    color: var(--theme-text-secondary);
+  }
+
+  .step-up-field {
+    background: var(--theme-bg-tertiary);
+    border-color: var(--theme-bg-tertiary);
+    color: var(--theme-text-primary);
+  }
+
+  .step-up-error {
+    color: var(--theme-danger);
+  }
+
+  /* `--accent-foreground` rather than a literal white: it's defined per theme
+     alongside `--accent` (which tracks `--theme-accent`) precisely to stay
+     legible on top of it, including the light-accent themes where white isn't. */
+  .step-up-submit {
+    background: var(--theme-accent);
+    color: hsl(var(--accent-foreground));
+  }
+
   .channel-sidebar-surface {
     background: var(--theme-bg-secondary);
     container-type: inline-size;

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/components/ui/use-toast"
 import { authClient } from "@/lib/auth/auth-client"
+import { submitStepUp } from "@/lib/auth/step-up-client"
 
 export function TwoFactorSection(): React.JSX.Element {
   const { toast } = useToast()
@@ -99,6 +100,16 @@ export function TwoFactorSection(): React.JSX.Element {
     if (!disablePassword) return
     setDisabling(true)
     try {
+      // `/two-factor/disable` is step-up gated (lib/auth/better-auth.ts), so it
+      // needs a fresh re-auth token before Better Auth will even look at the
+      // request. Better Auth requires the password here regardless, so spend
+      // the one already typed rather than prompting for it a second time.
+      const stepUp = await submitStepUp({ password: disablePassword })
+      if (!stepUp.ok) {
+        toast({ variant: "destructive", title: "Failed to disable 2FA", description: stepUp.error })
+        return
+      }
+
       const { error } = await authClient.twoFactor.disable({ password: disablePassword })
       if (error) {
         toast({ variant: "destructive", title: "Failed to disable 2FA", description: error.message })

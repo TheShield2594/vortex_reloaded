@@ -723,11 +723,12 @@ describe("Security & Privacy", () => {
   })
 
   describe("step-up verification flow", () => {
-    it("requires current password for step-up", () => {
-      // The API requires currentPassword in POST body
-      const stepUpPayload = { currentPassword: "myoldpassword" }
-      expect(stepUpPayload).toHaveProperty("currentPassword")
-      expect(typeof stepUpPayload.currentPassword).toBe("string")
+    it("submits a factor for step-up", () => {
+      // POST /api/auth/step-up takes `password` or `totpCode` — see
+      // lib/auth/step-up-client.test.ts for the endpoint contract itself.
+      const stepUpPayload = { password: "myoldpassword" }
+      expect(stepUpPayload).toHaveProperty("password")
+      expect(typeof stepUpPayload.password).toBe("string")
     })
 
     it("password change requires both currentPassword and newPassword", () => {

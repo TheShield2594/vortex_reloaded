@@ -13,6 +13,13 @@ interface EnvVar {
   description: string
   /** Alternative env var name that satisfies the same requirement (e.g. server-side alias) */
   alternativeName?: string
+  /**
+   * Set false for vars whose *normal* state is unset — a transient
+   * secret-rotation value, say. The "features unavailable or degraded" warning
+   * below would be wrong for those, and firing it on every deploy trains
+   * operators to skim past a block that also carries real entries.
+   */
+  warnIfMissing?: boolean
 }
 
 const REQUIRED: EnvVar[] = []
@@ -35,6 +42,7 @@ const OPTIONAL: EnvVar[] = [
   { name: "NEXT_PUBLIC_KLIPY_API_KEY", required: false, description: "Klipy API key for GIF/sticker picker (primary provider)", alternativeName: "KLIPY_API_KEY" },
   { name: "NEXT_PUBLIC_GIPHY_API_KEY", required: false, description: "Giphy API key for GIF picker (fallback)", alternativeName: "GIPHY_API_KEY" },
   { name: "STEP_UP_SECRET", required: false, description: "Dedicated HMAC secret for step-up auth tokens — required in production (must not reuse NEXTAUTH_SECRET)" },
+  { name: "STEP_UP_SECRET_PREV", required: false, warnIfMissing: false, description: "Previous STEP_UP_SECRET, accepted for verification only — set during a rotation so in-flight step-up tokens stay valid, then remove it 10+ minutes after deploying (see lib/auth/step-up.ts)" },
   { name: "SIGNAL_REVOKE_SECRET", required: false, description: "Shared secret for the realtime gateway (apps/signal) — when unset, realtime fan-out and session/channel revocation are SILENTLY SKIPPED (degraded realtime with no error). Must match apps/signal's SIGNAL_REVOKE_SECRET" },
   { name: "NEXT_PUBLIC_SIGNAL_URL", required: false, description: "WebSocket URL of the realtime gateway (apps/signal) — browsers cannot connect to realtime without it" },
 ]
@@ -60,6 +68,7 @@ export function validateEnv() {
   // Warn about optional vars that enable important features
   const missingOptional: string[] = []
   for (const v of OPTIONAL) {
+    if (v.warnIfMissing === false) continue
     if (!process.env[v.name] && !(v.alternativeName && process.env[v.alternativeName])) {
       missingOptional.push(`  ${v.name} — ${v.description}`)
     }
