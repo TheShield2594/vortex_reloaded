@@ -25,6 +25,9 @@ supabase/.temp/
 # db file and its WAL/SHM companions live under ./data)
 /livekit.yaml
 /data/
+# Local SQLite DB created under the package when no DB path env is set
+# (e.g. running the test suite from a workspace) — a local artifact, never committed.
+/packages/db/data/
 
 # Supabase -> SQLite data migration (issue #7): raw NDJSON table dumps and
 # the auth-secrets staging file (password hashes, TOTP secrets) — real user
