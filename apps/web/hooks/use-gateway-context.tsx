@@ -11,17 +11,22 @@ import { createContext, useCallback, useContext, useRef, type ReactNode } from "
 import { useGateway, type GatewayEventHandlers, type GatewayStatus } from "./use-gateway"
 import type { VortexEvent, UserStatus, GatewayServerEvents } from "@vortex/shared"
 
-type EventListener = (event: VortexEvent) => void
+/**
+ * Channel event listener. `meta.replay` is true when the event is being
+ * delivered from a reconnection catch-up batch (gateway:replay) rather than
+ * live — consumers use it to suppress side effects like notification sounds
+ * for messages that arrived while the client was disconnected (issue #58 §2).
+ */
+type EventListener = (event: VortexEvent, meta?: { replay?: boolean }) => void
 type TypingListener = (data: GatewayServerEvents["gateway:typing"]) => void
 type PresenceListener = (data: GatewayServerEvents["gateway:presence"]) => void
-type ReplayListener = (data: GatewayServerEvents["gateway:replay"]) => void
 type CallSignalListener = (data: GatewayServerEvents["gateway:call-signal"]) => void
 
 interface GatewayContextValue {
   status: GatewayStatus
   subscribe: (channelIds: string[]) => void
   unsubscribe: (channelIds: string[]) => void
-  sendTyping: (channelId: string, isTyping: boolean) => void
+  sendTyping: (channelId: string, isTyping: boolean, displayName?: string) => void
   sendPresence: (status: UserStatus) => void
   sendCallSignal: (payload: {
     channelId: string
@@ -34,7 +39,6 @@ interface GatewayContextValue {
   addEventListener: (channelId: string, listener: EventListener) => () => void
   addTypingListener: (channelId: string, listener: TypingListener) => () => void
   addPresenceListener: (listener: PresenceListener) => () => void
-  addReplayListener: (channelId: string, listener: ReplayListener) => () => void
   addCallSignalListener: (channelId: string, listener: CallSignalListener) => () => void
 }
 
@@ -44,7 +48,6 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
   const eventListeners = useRef(new Map<string, Set<EventListener>>())
   const typingListeners = useRef(new Map<string, Set<TypingListener>>())
   const presenceListeners = useRef(new Set<PresenceListener>())
-  const replayListeners = useRef(new Map<string, Set<ReplayListener>>())
   const callSignalListeners = useRef(new Map<string, Set<CallSignalListener>>())
 
   const handlers: GatewayEventHandlers = {
@@ -70,11 +73,26 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
       }
     },
     onReplay(data) {
-      const listeners = replayListeners.current.get(data.channelId)
-      if (listeners) {
+      // Deliver caught-up events to the SAME per-channel listeners that handle
+      // live events, tagged replay:true so consumers can skip side effects like
+      // notification sounds. Previously replay had its own listener registry
+      // with zero consumers, so missed messages were silently dropped (§2).
+      const listeners = eventListeners.current.get(data.channelId)
+      if (!listeners) return
+      for (const event of data.events) {
         for (const fn of listeners) {
-          try { fn(data) } catch { /* ignore */ }
+          try { fn(event, { replay: true }) } catch { /* ignore */ }
         }
+      }
+    },
+    onResumeComplete(data) {
+      // When a channel's gap exceeded the replay buffer, catch-up is incomplete
+      // — signal consumers to hard-reload that channel's history so nothing is
+      // permanently missed (§2).
+      if (data.gapTooLarge.length > 0 && typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("vortex:gateway-gap", { detail: { channels: data.gapTooLarge } }),
+        )
       }
     },
     onCallSignal(data) {
@@ -121,19 +139,6 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
     return () => { presenceListeners.current.delete(listener) }
   }, [])
 
-  const addReplayListener = useCallback((channelId: string, listener: ReplayListener) => {
-    if (!replayListeners.current.has(channelId)) {
-      replayListeners.current.set(channelId, new Set())
-    }
-    replayListeners.current.get(channelId)!.add(listener)
-    return () => {
-      replayListeners.current.get(channelId)?.delete(listener)
-      if (replayListeners.current.get(channelId)?.size === 0) {
-        replayListeners.current.delete(channelId)
-      }
-    }
-  }, [])
-
   const addCallSignalListener = useCallback((channelId: string, listener: CallSignalListener) => {
     if (!callSignalListeners.current.has(channelId)) {
       callSignalListeners.current.set(channelId, new Set())
@@ -158,7 +163,6 @@ export function GatewayProvider({ children }: { children: ReactNode }) {
     addEventListener,
     addTypingListener,
     addPresenceListener,
-    addReplayListener,
     addCallSignalListener,
   }
 

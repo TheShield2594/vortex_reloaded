@@ -44,7 +44,7 @@ export class PresenceManager {
     userId: string,
     socketId: string,
     status: UserStatus,
-    serverIds: string[],
+    serverIds: string[] = [],
   ): Promise<void> {
     try {
       const key = this.userKey(userId)
@@ -118,8 +118,12 @@ export class PresenceManager {
   }
 
   /** Start periodic cleanup of stale presence entries.
-   *  Uses cursor-based SCAN instead of blocking KEYS to avoid locking Redis. */
-  startCleanup(onStaleUser: (userId: string, serverIds: string[]) => void): void {
+   *  Uses cursor-based SCAN instead of blocking KEYS to avoid locking Redis.
+   *
+   *  This is a safety-net sweep only: it reaps orphaned keys that never got a
+   *  TTL. The authoritative offline signal is the gateway's socket-disconnect
+   *  handler, so no stale-user fan-out callback is needed here. */
+  startCleanup(): void {
     if (this.cleanupTimer) return
 
     // TTL expiry is the primary cleanup mechanism; this sweep is a safety net

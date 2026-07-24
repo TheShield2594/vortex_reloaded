@@ -19,12 +19,20 @@ interface Emission {
   payload: unknown
 }
 
+interface Broadcast {
+  room: string
+  event: string
+  payload: unknown
+}
+
 /** Minimal in-memory stand-in for a connected Socket.IO socket. */
 class FakeSocket {
   readonly id: string
   data: Record<string, unknown> = {}
   readonly joined = new Set<string>()
   readonly emissions: Emission[] = []
+  /** Room-scoped broadcasts made via socket.to(room).emit(...). */
+  readonly broadcasts: Broadcast[] = []
   private readonly handlers = new Map<string, (data: unknown) => unknown>()
 
   constructor(id: string) {
@@ -39,6 +47,21 @@ class FakeSocket {
   emit(event: string, payload?: unknown): boolean {
     this.emissions.push({ event, payload })
     return true
+  }
+
+  /** socket.to(room).emit(event, payload) — record the room-scoped broadcast. */
+  to(room: string): { emit: (event: string, payload?: unknown) => boolean } {
+    return {
+      emit: (event: string, payload?: unknown): boolean => {
+        this.broadcasts.push({ room, event, payload })
+        return true
+      },
+    }
+  }
+
+  /** Broadcasts to a given room, most recent first. */
+  broadcastsTo(room: string): Broadcast[] {
+    return this.broadcasts.filter((b) => b.room === room)
   }
 
   join(room: string): void {
@@ -106,7 +129,12 @@ function makeOptions(
   const options: GatewayOptions = {
     io: io as unknown as Server,
     eventBus: { subscribe: () => ({ unsubscribe: () => {} }) } as unknown as RedisEventBus,
-    presence: { startCleanup: () => {} } as unknown as PresenceManager,
+    presence: {
+      startCleanup: () => {},
+      setOnline: async () => {},
+      updateStatus: async () => {},
+      setOffline: async () => [],
+    } as unknown as PresenceManager,
     validateSession: async () => true,
     getSessionUserId: () => "user-a",
     checkChannelAccess: async (_userId, channelIds) => {
@@ -208,6 +236,90 @@ async function run(): Promise<void> {
     // The rejected request must short-circuit before the membership check.
     if (stats.channelAccessCalls !== callsAfter30)
       throw new Error("rate-limited subscribe still hit the membership check")
+  })
+
+  // Presence fan-out (issue #58 §1): subscribing announces the user's presence
+  // to the DM channel rooms just joined, so co-members see them come online.
+  await check("subscribe fans presence out to joined DM rooms", async () => {
+    const { io, options } = makeOptions(["dm-1", "dm-2"])
+    initGateway(options)
+    const socket = new FakeSocket("sock-presence-sub")
+    io.connect(socket)
+    await socket.trigger("gateway:subscribe", { channelIds: ["dm-1", "dm-2"] })
+
+    for (const room of ["gateway:dm-1", "gateway:dm-2"]) {
+      const pres = socket.broadcastsTo(room).find((b) => b.event === "gateway:presence")
+      if (!pres) throw new Error(`no presence broadcast to ${room}`)
+      const payload = pres.payload as { userId: string; status: string }
+      if (payload.userId !== "user-a") throw new Error("presence userId wrong")
+      if (payload.status !== "online") throw new Error(`presence status ${payload.status}`)
+    }
+  })
+
+  // gateway:presence updates fan out to every subscribed DM room, and
+  // "invisible" is masked to "offline" before it leaves the server.
+  await check("presence update fans out to subscribed rooms; invisible→offline", async () => {
+    const { io, options } = makeOptions(["dm-1"])
+    initGateway(options)
+    const socket = new FakeSocket("sock-presence-upd")
+    io.connect(socket)
+    await socket.trigger("gateway:subscribe", { channelIds: ["dm-1"] })
+    socket.broadcasts.length = 0 // drop the on-join announce
+    await socket.trigger("gateway:presence", { status: "invisible" })
+
+    const pres = socket.broadcastsTo("gateway:dm-1").find((b) => b.event === "gateway:presence")
+    if (!pres) throw new Error("no presence broadcast on status change")
+    const payload = pres.payload as { status: string }
+    if (payload.status !== "offline") throw new Error(`invisible not masked, got ${payload.status}`)
+  })
+
+  // Typing indicators carry the client-supplied display name (issue #58 §3),
+  // no longer hardcoded "Unknown"; missing/blank names fall back to "Unknown".
+  await check("typing broadcast uses supplied displayName", async () => {
+    const { io, options } = makeOptions(["dm-1"])
+    initGateway(options)
+    const socket = new FakeSocket("sock-typing-name")
+    io.connect(socket)
+    await socket.trigger("gateway:subscribe", { channelIds: ["dm-1"] })
+    await socket.trigger("gateway:typing", { channelId: "dm-1", isTyping: true, displayName: "Ada Lovelace" })
+
+    const typing = socket.broadcastsTo("gateway:dm-1").find((b) => b.event === "gateway:typing")
+    if (!typing) throw new Error("no typing broadcast")
+    const payload = typing.payload as { displayName: string; isTyping: boolean }
+    if (payload.displayName !== "Ada Lovelace") throw new Error(`displayName ${payload.displayName}`)
+  })
+
+  await check("typing falls back to Unknown when displayName missing", async () => {
+    const { io, options } = makeOptions(["dm-1"])
+    initGateway(options)
+    const socket = new FakeSocket("sock-typing-noname")
+    io.connect(socket)
+    await socket.trigger("gateway:subscribe", { channelIds: ["dm-1"] })
+    await socket.trigger("gateway:typing", { channelId: "dm-1", isTyping: true })
+
+    const typing = socket.broadcastsTo("gateway:dm-1").find((b) => b.event === "gateway:typing")
+    const payload = typing?.payload as { displayName: string } | undefined
+    if (payload?.displayName !== "Unknown") throw new Error(`expected Unknown, got ${payload?.displayName}`)
+  })
+
+  // Init/subscribe race (issue #58 §4): a gateway:init arriving AFTER
+  // gateway:subscribe must not wipe the already-joined subscribedChannels, or
+  // subsequent typing/call-signal would be silently rejected by the guard.
+  await check("gateway:init after subscribe preserves subscribedChannels", async () => {
+    const { io, options } = makeOptions(["dm-1"])
+    initGateway(options)
+    const socket = new FakeSocket("sock-race")
+    io.connect(socket)
+    // subscribe wins the race first
+    await socket.trigger("gateway:subscribe", { channelIds: ["dm-1"] })
+    // init lands afterwards — must not clobber
+    await socket.trigger("gateway:init", { status: "online" })
+    socket.broadcasts.length = 0
+
+    // typing only broadcasts if the channel is still in subscribedChannels
+    await socket.trigger("gateway:typing", { channelId: "dm-1", isTyping: true, displayName: "Grace" })
+    const typing = socket.broadcastsTo("gateway:dm-1").find((b) => b.event === "gateway:typing")
+    if (!typing) throw new Error("init clobbered subscribedChannels — typing was rejected")
   })
 
   stopGatewayCleanup()

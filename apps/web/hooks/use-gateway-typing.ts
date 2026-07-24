@@ -24,7 +24,7 @@ interface TypingUser {
 export function useGatewayTyping(
   channelId: string,
   currentUserId: string,
-  _currentDisplayName: string,
+  currentDisplayName: string,
 ) {
   const gateway = useGatewayContext()
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([])
@@ -78,7 +78,7 @@ export function useGatewayTyping(
   const onKeystroke = useCallback(() => {
     if (!isTypingRef.current) {
       isTypingRef.current = true
-      gateway.sendTyping(channelId, true)
+      gateway.sendTyping(channelId, true, currentDisplayName)
     }
 
     if (stopTypingTimerRef.current) clearTimeout(stopTypingTimerRef.current)
@@ -86,7 +86,7 @@ export function useGatewayTyping(
       isTypingRef.current = false
       gateway.sendTyping(channelId, false)
     }, TYPING_TIMEOUT_MS)
-  }, [channelId, gateway])
+  }, [channelId, gateway, currentDisplayName])
 
   const onSent = useCallback(() => {
     if (stopTypingTimerRef.current) clearTimeout(stopTypingTimerRef.current)

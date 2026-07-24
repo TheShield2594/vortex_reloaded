@@ -31,6 +31,13 @@ export interface GatewayClientEvents {
   "gateway:typing": {
     channelId: string
     isTyping: boolean
+    /**
+     * The sender's display name. The signal server has no DB access to resolve
+     * names, so the client supplies it (validated + length-capped server-side).
+     * Optional because it's only meaningful on isTyping:true — stop events are
+     * matched by userId, not name.
+     */
+    displayName?: string
   }
 
   /** Presence heartbeat — replaces HTTP polling. */

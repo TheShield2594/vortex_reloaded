@@ -196,6 +196,12 @@ export function useGateway(handlers?: GatewayEventHandlers) {
         })
 
         socket.on("gateway:replay", (data: GatewayServerEvents["gateway:replay"]) => {
+          // Advance the per-channel cursor across the replayed batch so a
+          // later resume asks only for what's newer, not the same gap again.
+          // Events arrive in order, so the last one is the newest.
+          for (const event of data.events) {
+            stateRef.current.lastEventIds.set(event.channelId, event.id)
+          }
           handlersRef.current?.onReplay?.(data)
         })
 
@@ -285,7 +291,7 @@ export function useGateway(handlers?: GatewayEventHandlers) {
     typingTimersRef.current.clear()
   }, [])
 
-  const sendTyping = useCallback((channelId: string, isTyping: boolean) => {
+  const sendTyping = useCallback((channelId: string, isTyping: boolean, displayName?: string) => {
     const socket = socketRef.current
     if (!socket?.connected) return
 
@@ -293,7 +299,8 @@ export function useGateway(handlers?: GatewayEventHandlers) {
     const existing = timers.get(channelId)
 
     if (!isTyping) {
-      // Explicit stop — clear timers and send immediately
+      // Explicit stop — clear timers and send immediately. displayName is
+      // omitted: stop events are matched by userId on the receiving side.
       if (existing?.stopTimer) clearTimeout(existing.stopTimer)
       timers.delete(channelId)
       socket.volatile.emit("gateway:typing", { channelId, isTyping: false })
@@ -314,9 +321,10 @@ export function useGateway(handlers?: GatewayEventHandlers) {
       return
     }
 
-    // First keystroke (or suppress window expired) — emit immediately
+    // First keystroke (or suppress window expired) — emit immediately, carrying
+    // the sender's display name so the server can relay it (issue #58 §3).
     if (existing?.stopTimer) clearTimeout(existing.stopTimer)
-    socket.volatile.emit("gateway:typing", { channelId, isTyping: true })
+    socket.volatile.emit("gateway:typing", { channelId, isTyping: true, displayName })
     timers.set(channelId, {
       suppressUntil: now + 2000,
       stopTimer: setTimeout(() => {

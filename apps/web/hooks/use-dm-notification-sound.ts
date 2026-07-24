@@ -62,9 +62,12 @@ export function useDmNotificationSound(userId: string | null): void {
     if (!userId || channelIds.length === 0) return
 
     const removeListeners = channelIds.map((channelId) =>
-      gateway.addEventListener(channelId, (event: VortexEvent) => {
+      gateway.addEventListener(channelId, (event: VortexEvent, meta?: { replay?: boolean }) => {
         if (event.type !== "message.created") return
         if (event.actorId === userId) return
+        // Don't fire a burst of sounds/notifications for messages caught up on
+        // reconnect — replayed events are backlog, not live arrivals (#58 §2).
+        if (meta?.replay) return
 
         const data = event.data as { messageId?: string } | undefined
 
