@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils/cn"
 import { useCallMediaToggles } from "@/lib/webrtc/use-call-media-toggles"
 import { useDMCall, IncomingCallToast, CallerRingingOverlay } from "@/components/dm/dm-call"
 import { ConversationThemePicker } from "@/components/dm/conversation-theme-picker"
+import { DmPoll } from "@/components/dm/dm-poll"
+import { parsePollBlock, isPollVoteEmoji } from "@/lib/poll"
 import type { DmThemePreset } from "@/lib/dm-theme"
 import { useToast } from "@/components/ui/use-toast"
 import { useGatewayTyping } from "@/hooks/use-gateway-typing"
@@ -1461,11 +1463,16 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
           const senderInitials = senderName.slice(0, 2).toUpperCase()
           const isEditing = editingId === msg.id
 
-          // Group reactions by emoji (shared utility)
-          const reactionEntries = groupReactionsByEmoji(msg.reactions ?? [], currentUserId)
-
           const renderedContent = channel.is_encrypted ? (decryptedContent[msg.id]?.text ?? "Decrypting…") : msg.content
           const decryptFailed = channel.is_encrypted ? Boolean(decryptedContent[msg.id]?.failed) : false
+
+          // Inline [POLL] block — votes ride on the message's own reactions.
+          const poll = parsePollBlock(renderedContent)
+
+          // Group reactions by emoji (shared utility). Poll votes are rendered
+          // inside the poll itself, so they're kept out of the chip row.
+          const reactionEntries = groupReactionsByEmoji(msg.reactions ?? [], currentUserId)
+            .filter(([emoji]) => !poll || !isPollVoteEmoji(emoji, poll.options.length))
 
           // Prefer structured dm_attachments (proxy URL, never expires) over
           // markdown-embedded signed URLs (expire after 7 days).
@@ -1694,6 +1701,21 @@ export function DMChannelArea({ channelId, currentUserId }: Props) {
                       >
                         {attachmentMatch[1]}
                       </a>
+                    </div>
+                  ) : poll ? (
+                    <div>
+                      {poll.before && (
+                        <p className="dm-poll-text text-sm break-words">{poll.before}</p>
+                      )}
+                      <DmPoll
+                        poll={poll}
+                        reactions={msg.reactions ?? []}
+                        currentUserId={currentUserId}
+                        onVote={(emoji) => handleDmReaction(msg.id, emoji)}
+                      />
+                      {poll.after && (
+                        <p className="dm-poll-text text-sm break-words mt-1">{poll.after}</p>
+                      )}
                     </div>
                   ) : gifMediaUrl ? (
                     <div className="mt-1">

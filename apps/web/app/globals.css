@@ -2711,6 +2711,47 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--theme-surface-elevated);
 }
 
+/* ── Inline polls ([POLL] blocks rendered in the DM message list) ───────────── */
+
+.dm-poll-surface {
+  background: color-mix(in srgb, var(--theme-accent) 5%, var(--theme-bg-secondary));
+  border-color: color-mix(in srgb, var(--theme-accent) 18%, var(--theme-bg-tertiary));
+}
+
+.dm-poll-icon {
+  color: var(--theme-accent);
+}
+
+.dm-poll-text {
+  color: var(--theme-text-normal);
+}
+
+.dm-poll-option {
+  background: var(--theme-bg-tertiary);
+}
+
+.dm-poll-option:hover {
+  background: color-mix(in srgb, var(--theme-accent) 12%, var(--theme-bg-tertiary));
+}
+
+.dm-poll-option-voted {
+  box-shadow: inset 0 0 0 1px var(--theme-accent);
+}
+
+.dm-poll-bar {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  background: color-mix(in srgb, var(--theme-accent) 26%, transparent);
+  transition: width 240ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dm-poll-bar {
+    transition-duration: 0ms;
+  }
+}
+
 /* ── Container Queries — component-level responsiveness ─────────────────────── */
 
 .member-list-container {

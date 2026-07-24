@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useCallback } from "react"
+import { MAX_POLL_OPTIONS, formatPollBlock } from "@/lib/poll"
 
-/** Maximum number of poll options — must match the length of POLL_NUMBER_EMOJIS in message-item.tsx */
-export const MAX_POLL_OPTIONS = 8
+export { MAX_POLL_OPTIONS }
 
 interface UsePollCreatorOptions {
   content: string
@@ -46,7 +46,7 @@ export function usePollCreator({ content, onContentChange, onCursorChange, texta
     const options = pollOptions.map((option) => option.trim()).filter(Boolean).slice(0, MAX_POLL_OPTIONS)
     if (!question || options.length < 2) return
 
-    const pollBlock = ["[POLL]", question, ...options.map((option) => `- ${option}`), "[/POLL]"].join("\n")
+    const pollBlock = formatPollBlock(question, options)
     const spacer = content.trim() ? "\n\n" : ""
     const next = `${content}${spacer}${pollBlock}`
     onContentChange(next)
