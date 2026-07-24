@@ -32,7 +32,7 @@ test.describe("Direct Messages and Chat", () => {
     await page.waitForURL(/\/channels\/me/, { timeout: 15_000 })
 
     // DM sidebar should be visible (desktop)
-    await expect(page.locator("[data-testid='dm-sidebar'], .dm-sidebar, nav").first()).toBeVisible()
+    await expect(page.getByTestId("dm-sidebar")).toBeVisible()
   })
 
   test("message input is visible in a DM channel", async ({ page }) => {
@@ -45,16 +45,16 @@ test.describe("Direct Messages and Chat", () => {
 
     await page.waitForURL(/\/channels\/me/, { timeout: 15_000 })
 
-    // Navigate to the first available DM conversation link
+    // The seeded account must have at least one DM conversation — assert the
+    // first link is present (missing seed data or a broken sidebar fails here).
     const dmLink = page.locator("a[href*='/channels/me/']").first()
-    if (await dmLink.isVisible()) {
-      await dmLink.click()
-      await page.waitForURL(/\/channels\/me\//, { timeout: 10_000 })
+    await expect(dmLink).toBeVisible({ timeout: 10_000 })
+    await dmLink.click()
+    await page.waitForURL(/\/channels\/me\//, { timeout: 10_000 })
 
-      // Message input should be present
-      const messageInput = page.locator("textarea, [contenteditable='true'], input[placeholder*='message' i]").first()
-      await expect(messageInput).toBeVisible({ timeout: 10_000 })
-    }
+    // Message input should be present
+    const messageInput = page.locator("textarea, [contenteditable='true'], input[placeholder*='message' i]").first()
+    await expect(messageInput).toBeVisible({ timeout: 10_000 })
   })
 
   test("search modal opens with keyboard shortcut", async ({ page }) => {

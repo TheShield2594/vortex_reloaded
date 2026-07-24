@@ -114,20 +114,6 @@ export type Database = {
           updated_at: string
         }
       }
-      roles: {
-        Row: {
-          id: string
-          server_id: string
-          name: string
-          color: string
-          position: number
-          permissions: number
-          is_hoisted: boolean
-          mentionable: boolean
-          is_default: boolean
-          created_at: string
-        }
-      }
       messages: {
         Row: {
           id: string
@@ -207,7 +193,6 @@ export type Database = {
 export type UserRow = Database['public']['Tables']['users']['Row']
 export type UserPinnedItemRow = Database['public']['Tables']['user_pinned_items']['Row']
 export type UserActivityLogRow = Database['public']['Tables']['user_activity_log']['Row']
-export type RoleRow = Database['public']['Tables']['roles']['Row']
 export type MessageRow = Database['public']['Tables']['messages']['Row']
 export type AttachmentRow = Database['public']['Tables']['attachments']['Row']
 export type ReactionRow = Database['public']['Tables']['reactions']['Row']

@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test"
-import { hasSeededAccount } from "./utils"
 
 /**
  * E2E tests for the authentication flow (Better Auth + SQLite).
@@ -8,8 +7,8 @@ import { hasSeededAccount } from "./utils"
  *   - Next.js server running on PLAYWRIGHT_BASE_URL (default localhost:3000)
  *   - A migrated SQLite database (DATABASE_URL=file:...)
  *
- * Tests that need to actually sign in are skipped unless a seeded account is
- * supplied via E2E_TEST_EMAIL / E2E_TEST_PASSWORD.
+ * These tests use intentionally-invalid or freshly-registered credentials, so
+ * they need no pre-seeded account.
  */
 
 const TEST_EMAIL = `e2e-${Date.now()}@test.local`
@@ -33,8 +32,6 @@ test.describe("Authentication", () => {
   })
 
   test("login with invalid credentials shows error", async ({ page }) => {
-    test.skip(!hasSeededAccount, "Requires E2E_TEST_EMAIL and E2E_TEST_PASSWORD")
-
     await page.goto("/login")
     await page.locator("input[type='email']").fill("nonexistent@test.local")
     await page.locator("input[type='password']").fill("wrongpassword")
@@ -60,8 +57,6 @@ test.describe("Authentication", () => {
   })
 
   test("register and login flow", async ({ page }) => {
-    test.skip(!hasSeededAccount, "Requires E2E_TEST_EMAIL and E2E_TEST_PASSWORD")
-
     // Register
     await page.goto("/register")
     await page.locator("input[type='email']").fill(TEST_EMAIL)

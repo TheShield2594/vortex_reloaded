@@ -56,7 +56,7 @@
 - **Auth** — email/password + passkeys + MFA via [Better Auth](https://better-auth.com), with login-risk lockout and recovery codes
 - **Push notifications** — Web Push via VAPID, or self-hosted [ntfy](https://ntfy.sh)
 - **PWA** — installable progressive web app with offline support
-- **Rate limiting** — Upstash Redis-backed rate limiting on API routes
+- **Rate limiting** — Redis-backed rate limiting on API routes
 - **Error monitoring** — Sentry integration
 - **Offline / outbox** — message consistency with reconnect replay ([docs](./docs/message-consistency-model.md))
 - **Quiet hours** — configurable notification suppression

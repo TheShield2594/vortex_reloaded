@@ -10,6 +10,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   audit:
     name: Security Audit
@@ -93,7 +96,9 @@ jobs:
     # Note: E2E tests run against a freshly-built web app with a throwaway
     # SQLite database; flows that require seeded data are skipped in-suite.
     env:
-      DATABASE_URL: file:${{ runner.temp }}/e2e.db
+      # runner.temp is only available in step-level env, not job-level — use
+      # github.workspace so db:migrate, build, and next start share one path.
+      DATABASE_URL: file:${{ github.workspace }}/e2e.db
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       NEXT_PUBLIC_SENTRY_DSN: ""
       PLAYWRIGHT_BASE_URL: http://localhost:3000

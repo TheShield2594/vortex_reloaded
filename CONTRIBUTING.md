@@ -78,16 +78,20 @@ npm run db:migrate --workspace=packages/db
 
 1. Edit the relevant table in `packages/db/src/schema/` (e.g. add a column).
 2. Generate a migration from the schema diff:
+
    ```bash
    npm run db:generate --workspace=packages/db
    ```
+
    This writes a new `NNNN_<slug>.sql` under `packages/db/migrations/` and
    updates the journal + snapshot. **Never hand-edit the numeric prefix or
    reuse one** — `drizzle-kit` assigns the next index automatically.
 3. Review the generated SQL, then apply it:
+
    ```bash
    npm run db:migrate --workspace=packages/db
    ```
+
 4. If the change affects full-text search, update
    `packages/db/src/sql/fts5-and-triggers.sql` (applied after the generated
    DDL by `migrate.ts`; every statement must stay idempotent —
