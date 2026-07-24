@@ -74,13 +74,10 @@ async function callEndpoint(path, retries = 2) {
 
 // ─── Schedule definitions ───────────────────────────────────────────────────
 
+// Presence has no job here: it lives entirely in the gateway (Redis, keyed to
+// the Socket.IO connection), so there is no stale DB state to sweep — see
+// apps/signal/src/presence.ts.
 const jobs = [
-  {
-    name: "presence-cleanup",
-    path: "/api/cron/presence-cleanup",
-    schedule: "*/2 * * * *",         // Every 2 minutes (self-hosted can afford this)
-    description: "Mark stale users as offline",
-  },
   {
     name: "attachment-decay",
     path: "/api/cron/attachment-decay",

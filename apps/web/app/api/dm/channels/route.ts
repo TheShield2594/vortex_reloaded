@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 import { createDb, directMessages, dmChannelMembers, dmChannels, dmReadStates, users } from "@vortex/db"
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
+import { createPresenceResolver } from "@/lib/presence"
 import { toSnakeCase } from "@/lib/utils/case"
 import { nudgeSafetyNumberVerification, recordMembershipEvent } from "@/lib/membership-log"
 
@@ -100,7 +101,11 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to fetch user profiles" }, { status: 500 })
     }
 
-    const userMap = Object.fromEntries(userRows.map((u) => [u.id, u]))
+    // Member presence comes from the gateway, not users.status (issue #57).
+    const presence = await createPresenceResolver(allUserIds)
+    const userMap = Object.fromEntries(
+      userRows.map((u) => [u.id, { ...u, status: presence(u.id, u.status) }])
+    )
 
     // Build members-per-channel map
     const membersByChannel: Record<string, typeof userRows> = {}

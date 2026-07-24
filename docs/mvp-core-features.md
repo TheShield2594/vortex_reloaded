@@ -293,16 +293,16 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Server-side heartbeat endpoint | Done | `POST /api/presence/heartbeat` — client pings every 30s; updates `last_heartbeat_at` in users table |
-| Stale-presence cron cleanup | Done | `GET /api/cron/presence-cleanup` — marks users with stale heartbeats (>90s) as offline; runs every minute via Vercel Cron |
-| DB migration for heartbeat column | Done | Migration 00083 — `last_heartbeat_at TIMESTAMPTZ` + partial index on online/idle/dnd users |
+| Connection-based presence | Done | `apps/signal/src/presence.ts` — a Redis entry per connected user, written on Socket.IO connect, deleted when their last socket closes, TTL-refreshed while connected (issue #57) |
+| Presence reads on HTTP payloads | Done | `apps/web/lib/presence.ts` — DM/friends payloads resolve member status against the gateway's Redis state instead of `users.status` |
+| Stored status is a preference, not liveness | Done | `POST /api/presence` persists the status the user picks so the next session starts `dnd`/`invisible`; the HTTP heartbeat, its `last_heartbeat_at` column, and the stale-presence cron are gone (issue #57) |
 | Multi-tab session coordination | Done | `BroadcastChannel` API syncs status across tabs; closing one tab doesn't mark offline when others remain |
 | Status aggregation (multi-session) | Done | `@vortex/shared` `aggregateStatus()` — precedence: online > dnd > idle > offline; invisible overrides all |
 | Idle detection (10min, Fluxer-style) | Done | 10-minute timeout with 25%-interval checks; tab visibility triggers instant idle |
-| Presence constants in shared package | Done | `@vortex/shared` — heartbeat interval, stale threshold, idle timeout, activity throttle |
-| DB-level status change listener | Done | `member-list.tsx` subscribes to `postgres_changes` on users table for immediate cron-triggered offline updates |
-| sendBeacon as fast-path fallback | Done | Still used on tab close for immediate offline; heartbeat cron is the safety net |
-| Last seen time for offline users (#608) | Done | `last_online_at` column on users; set on offline transition (cron + sendBeacon); relative time ("Active Xm/h/d ago") in member list; invisible→offline doesn't update timestamp |
+| Presence constants in shared package | Done | `@vortex/shared` — presence TTL + TTL refresh interval, idle timeout, activity throttle |
+| Live status updates | Done | `gateway:presence` events fan out to the DM rooms a user shares with the viewer; `dm-list.tsx` patches the list as they arrive |
+| Tab close marks offline | Done | No sendBeacon needed — the Socket.IO disconnect fans "offline" out immediately, and the Redis TTL covers a connection that dies without one |
+| Last seen time for offline users (#608) | Partial | `last_online_at` column on users, written when a user explicitly picks "offline" (invisible→offline deliberately doesn't update it). No UI reads it today, and the gateway — which now owns disconnects — has no DB access to stamp it |
 | Role-grouped member list (#610) | Done | Online members grouped by highest-priority role (Discord-style); sections ordered by role position; role color in headers; no-role users under "Members"; offline section unchanged |
 
 ## Hardening — Bug Fixes (2026-04-01)

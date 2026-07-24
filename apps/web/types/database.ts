@@ -40,7 +40,6 @@ export type Database = {
           status_message: string | null
           status_emoji: string | null
           status_expires_at: string | null
-          last_heartbeat_at: string | null
           last_online_at: string | null
           discoverable: boolean
           appearance_settings: Json

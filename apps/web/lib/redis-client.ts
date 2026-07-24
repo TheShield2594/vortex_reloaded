@@ -14,7 +14,7 @@
  * If neither is set, returns `null` — callers fall back to in-memory stores.
  *
  * The interface is intentionally minimal: only the operations actually used
- * by `server-cache.ts` and `rate-limit.ts`.
+ * by `server-cache.ts`, `rate-limit.ts` and `presence.ts`.
  */
 
 export interface RedisClient {
@@ -25,6 +25,12 @@ export interface RedisClient {
   incr(key: string): Promise<number>
   expire(key: string, seconds: number): Promise<void>
   eval(script: string, keys: string[], args: (string | number)[]): Promise<unknown>
+  /**
+   * Read one field from each of several hashes in a single round trip.
+   * Returns a value per key, positionally, with `null` for a missing hash or
+   * a missing field. Used to read the gateway's presence hashes in bulk.
+   */
+  hgetMany(keys: string[], field: string): Promise<(string | null)[]>
   /** Clean up connections on shutdown. */
   quit(): Promise<void>
 }
@@ -122,6 +128,20 @@ async function createIoRedisClient(): Promise<RedisClient> {
       return client.eval(script, keys.length, ...keys, ...args)
     },
 
+    async hgetMany(keys: string[], field: string): Promise<(string | null)[]> {
+      if (keys.length === 0) return []
+      const pipeline = client.pipeline()
+      for (const key of keys) pipeline.hget(key, field)
+      const results = await pipeline.exec()
+      // A per-command error is reported in the tuple's first slot; treat it
+      // the same as a missing key rather than failing the whole batch.
+      return keys.map((_, i) => {
+        const entry = results?.[i]
+        if (!entry || entry[0]) return null
+        return typeof entry[1] === "string" ? entry[1] : null
+      })
+    },
+
     async quit(): Promise<void> {
       await client.quit()
     },
@@ -170,6 +190,17 @@ async function createUpstashClient(): Promise<RedisClient> {
 
     async eval(script: string, keys: string[], args: (string | number)[]): Promise<unknown> {
       return client.eval(script, keys, args)
+    },
+
+    async hgetMany(keys: string[], field: string): Promise<(string | null)[]> {
+      if (keys.length === 0) return []
+      const pipeline = client.pipeline()
+      for (const key of keys) pipeline.hget(key, field)
+      const results = await pipeline.exec<(string | null)[]>()
+      return keys.map((_, i) => {
+        const value = results[i]
+        return typeof value === "string" ? value : null
+      })
     },
 
     async quit(): Promise<void> {

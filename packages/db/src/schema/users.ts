@@ -74,7 +74,6 @@ export const users = sqliteTable(
       .notNull()
       .default("public"),
     onboardingCompletedAt: text("onboarding_completed_at"),
-    lastHeartbeatAt: text("last_heartbeat_at"),
     lastOnlineAt: text("last_online_at"),
     /** Whole-value JSON: { game_name, game_id, started_at, source: "steam" | "manual" } | null. */
     gameActivity: text("game_activity", { mode: "json" }),
@@ -90,9 +89,6 @@ export const users = sqliteTable(
       .$onUpdateFn(() => new Date()),
   },
   (table) => [
-    index("idx_users_presence_heartbeat")
-      .on(table.lastHeartbeatAt)
-      .where(sql`${table.status} in ('online', 'idle', 'dnd')`),
     index("idx_users_last_online_at")
       .on(table.lastOnlineAt)
       .where(sql`${table.lastOnlineAt} is not null`),

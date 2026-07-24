@@ -5,6 +5,7 @@ import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { isBlockedBetweenUsers } from "@/lib/blocking"
 import { createLogger } from "@/lib/logger"
+import { createPresenceResolver } from "@/lib/presence"
 import { toSnakeCase } from "@/lib/utils/case"
 
 const log = createLogger("api/dm")
@@ -52,7 +53,12 @@ export async function GET(request: Request) {
         .from(users)
         .where(inArray(users.id, Array.from(partnerIds)))
 
-      return NextResponse.json(toSnakeCase(partners))
+      // Presence comes from the gateway, not users.status (issue #57).
+      const presence = await createPresenceResolver(partners.map((p) => p.id))
+
+      return NextResponse.json(
+        toSnakeCase(partners.map((p) => ({ ...p, status: presence(p.id, p.status) })))
+      )
     }
 
     // Validate partnerId is a valid UUID to prevent PostgREST filter injection
