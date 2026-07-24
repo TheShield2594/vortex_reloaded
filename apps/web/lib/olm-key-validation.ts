@@ -51,21 +51,15 @@ export function validateOneTimeKeyEntry(entry: unknown): ValidatedOneTimeKey | n
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex")
 
 /**
- * Verifies a submitted one-time key's signature against a device's already
- * registered ed25519 identity key. Olm signs the canonical payload
- * `{userId, deviceId, keyId, publicKey}` (see olm-protocol.ts's
- * canonicalOneTimeKeyPayload) as standard Ed25519 over its UTF-8 bytes, so
- * the server can confirm — with only the public identity it already holds —
- * that top-up keys genuinely belong to that device, rather than forged
- * material that would later fail client-side verifyKeyBundleSignature and
- * break new session setup (CWE-347). Returns false on any malformed input.
+ * Verifies an Olm ed25519 signature over `payload` against a device's public
+ * identity key. Olm signatures are standard Ed25519 over the payload's UTF-8
+ * bytes, so the server can confirm published key material genuinely belongs
+ * to the identity it already holds — no private key, and no Olm WASM core
+ * (kept client-only) — rather than forged material that would later fail the
+ * claimer's client-side verifyKeyBundleSignature and break new session setup
+ * (CWE-347). Returns false on any malformed input instead of throwing.
  */
-export function verifyOneTimeKeySignature(
-  ed25519IdentityKey: string,
-  userId: string,
-  deviceId: string,
-  key: ValidatedOneTimeKey
-): boolean {
+function verifyEd25519(ed25519IdentityKey: string, payload: string, signature: string): boolean {
   try {
     const raw = Buffer.from(ed25519IdentityKey, "base64")
     if (raw.length !== 32) return false
@@ -74,9 +68,47 @@ export function verifyOneTimeKeySignature(
       format: "der",
       type: "spki",
     })
-    const payload = JSON.stringify({ userId, deviceId, keyId: key.keyId, publicKey: key.publicKey })
-    return verify(null, Buffer.from(payload, "utf8"), keyObject, Buffer.from(key.signature, "base64"))
+    return verify(null, Buffer.from(payload, "utf8"), keyObject, Buffer.from(signature, "base64"))
   } catch {
     return false
   }
+}
+
+/**
+ * Verifies a submitted one-time key's signature against a device's ed25519
+ * identity. The signed payload matches olm-protocol.ts's
+ * canonicalOneTimeKeyPayload.
+ */
+export function verifyOneTimeKeySignature(
+  ed25519IdentityKey: string,
+  userId: string,
+  deviceId: string,
+  key: ValidatedOneTimeKey
+): boolean {
+  return verifyEd25519(
+    ed25519IdentityKey,
+    JSON.stringify({ userId, deviceId, keyId: key.keyId, publicKey: key.publicKey }),
+    key.signature
+  )
+}
+
+/**
+ * Verifies a submitted fallback ("last resort") key's signature against a
+ * device's ed25519 identity. The signed payload matches olm-protocol.ts's
+ * canonicalFallbackKeyPayload (note the `kind: "fallback"` field, which is
+ * what keeps a fallback signature from being replayed as a one-time key).
+ */
+export function verifyFallbackKeySignature(
+  ed25519IdentityKey: string,
+  userId: string,
+  deviceId: string,
+  keyId: string,
+  publicKey: string,
+  signature: string
+): boolean {
+  return verifyEd25519(
+    ed25519IdentityKey,
+    JSON.stringify({ userId, deviceId, keyId, publicKey, kind: "fallback" }),
+    signature
+  )
 }

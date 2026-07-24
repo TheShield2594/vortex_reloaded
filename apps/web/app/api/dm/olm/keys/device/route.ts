@@ -10,6 +10,7 @@ import {
   isValidOlmKeyId,
   validateOneTimeKeyEntry,
   verifyOneTimeKeySignature,
+  verifyFallbackKeySignature,
 } from "@/lib/olm-key-validation"
 
 const log = createLogger("api/dm/olm/keys/device")
@@ -130,6 +131,20 @@ export async function POST(req: NextRequest) {
             throw new Error("identity_key_mismatch")
           }
 
+          // Defense in depth for the same CWE-347 hole as the top-up path:
+          // every key a device publishes (its fallback/"last resort" key and
+          // each one-time key) must be signed by the ed25519 identity being
+          // registered, so forged material can't be seeded under an identity
+          // it doesn't belong to and later break the claimer's verification.
+          if (!verifyFallbackKeySignature(ed25519IdentityKey, user.id, deviceId, fallbackKeyId, fallbackPublicKey, fallbackSignature)) {
+            throw new Error("invalid_fallback_key_signature")
+          }
+          for (const key of oneTimeKeys) {
+            if (!verifyOneTimeKeySignature(ed25519IdentityKey, user.id, deviceId, key)) {
+              throw new Error("invalid_one_time_key_signature")
+            }
+          }
+
           if (!existing) {
             const deviceCount = tx
               .select({ count: sql<number>`count(*)` })
@@ -218,6 +233,9 @@ export async function POST(req: NextRequest) {
       }
       if (message.includes("invalid_one_time_key_signature")) {
         return NextResponse.json({ error: "One-time key signature does not match the device identity" }, { status: 400 })
+      }
+      if (message.includes("invalid_fallback_key_signature")) {
+        return NextResponse.json({ error: "Fallback key signature does not match the device identity" }, { status: 400 })
       }
       log.error({ route: "/api/dm/olm/keys/device", action: "POST", userId: user.id, error: message }, "failed to register device")
       return NextResponse.json({ error: "Failed to register device key" }, { status: 500 })
