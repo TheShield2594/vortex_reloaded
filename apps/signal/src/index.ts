@@ -1,4 +1,3 @@
-import { createHash } from "crypto"
 import { createServer, type IncomingMessage, type ServerResponse } from "http"
 import { Server, type Socket } from "socket.io"
 import { createAdapter } from "@socket.io/redis-adapter"
@@ -10,6 +9,7 @@ import { RedisEventBus } from "./event-bus"
 import { PresenceManager } from "./presence"
 import { initGateway, stopGatewayCleanup, revokeChannelAccess } from "./gateway"
 import { createChannelAccessChecker } from "./channel-access"
+import { SessionRevocationStore } from "./revocation"
 
 dotenv.config()
 
@@ -59,12 +59,22 @@ if (!jwks) {
   logger.warn("AUTH_JWKS_URL not set — handshake auth verification disabled")
 }
 
+interface VerifiedClaims {
+  userId: string
+  /** JWT `iat` (issued-at, epoch seconds). 0 when the token omits it. */
+  iat: number
+}
+
 /**
  * Verifies a Better Auth-issued handshake JWT locally against the cached
- * JWKS. Returns the authenticated user id, or null if the token is missing,
- * expired, malformed, or signed by an unknown key.
+ * JWKS. Returns the authenticated user id and its issued-at, or null if the
+ * token is missing, expired, malformed, or signed by an unknown key.
+ *
+ * `iat` is surfaced so the per-user revocation cutoff (see below) can reject
+ * only tokens minted *before* a revocation while still admitting the fresh
+ * token a still-authorized device fetches on its reconnect.
  */
-async function verifyAuthToken(token: string): Promise<string | null> {
+async function verifyAuthToken(token: string): Promise<VerifiedClaims | null> {
   if (!jwks) return null
   // Deliberately doesn't catch here — jose throws for both "token is
   // invalid/expired" and "JWKS endpoint unreachable" alike, and
@@ -75,7 +85,8 @@ async function verifyAuthToken(token: string): Promise<string | null> {
     issuer: AUTH_JWT_ISSUER || undefined,
     audience: AUTH_JWT_AUDIENCE,
   })
-  return typeof payload.sub === "string" ? payload.sub : null
+  if (typeof payload.sub !== "string") return null
+  return { userId: payload.sub, iat: typeof payload.iat === "number" ? payload.iat : 0 }
 }
 
 // ─── HTTP server + Socket.IO ──────────────────────────────────────────────────
@@ -113,14 +124,20 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
     return
   }
 
-  // ─── Token revocation endpoint ───────────────────────────────────────────
-  // Called by the web app when a session is revoked (password change, logout,
-  // admin action). Accepts { token } in the JSON body. Protected by a shared
-  // secret so only the web backend can call it.
-  if (req.url === "/revoke-token" && req.method === "POST") {
+  // ─── Session revocation endpoint ─────────────────────────────────────────
+  // Called by the web app when a user's sessions are invalidated — password
+  // change, forced logout / session revocation, or account deletion (see
+  // apps/web/lib/auth/better-auth.ts hooks). Accepts { userId } in the JSON
+  // body and revokes every gateway token that user holds *now*: their live
+  // sockets are force-disconnected and any handshake JWT minted before this
+  // moment is rejected until it expires. A device whose Better Auth session
+  // is still valid simply reconnects with a freshly-minted token and carries
+  // on; a device whose session was revoked can no longer mint one and stays
+  // out. Protected by a shared secret so only the web backend can call it.
+  if (req.url === "/revoke-sessions" && req.method === "POST") {
     try {
       if (!REVOKE_TOKEN_SECRET) {
-        logger.warn("POST /revoke-token called but SIGNAL_REVOKE_SECRET is not configured")
+        logger.warn("POST /revoke-sessions called but SIGNAL_REVOKE_SECRET is not configured")
         res.writeHead(503, { "Content-Type": "application/json" })
         res.end(JSON.stringify({ error: "Revocation endpoint not configured" }))
         return
@@ -154,27 +171,29 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
         res.end(JSON.stringify({ error: "Invalid JSON body" }))
         return
       }
-      const { token } = parsed as { token?: unknown }
-      if (typeof token !== "string" || !token) {
+      const { userId } = parsed as { userId?: unknown }
+      if (typeof userId !== "string" || !userId) {
         res.writeHead(400, { "Content-Type": "application/json" })
-        res.end(JSON.stringify({ error: "Missing or invalid 'token' field" }))
+        res.end(JSON.stringify({ error: "Missing or invalid 'userId' field" }))
         return
       }
 
-      const persisted = await revokeToken(token)
+      const persisted = await revokeUserSessions(userId)
       if (!persisted) {
         res.writeHead(503, { "Content-Type": "application/json" })
         res.end(JSON.stringify({ error: "Failed to persist revocation" }))
         return
       }
 
-      // Force-disconnect any sockets currently using this token.
-      // io.fetchSockets() is cluster-safe — it enumerates sockets across all
-      // replicas when the Redis adapter is attached.
+      // Force-disconnect any of the user's live sockets. io.fetchSockets() is
+      // cluster-safe — it enumerates sockets across all replicas when the
+      // Redis adapter is attached, and socket.data.userId (set in
+      // gateway:init / gateway:subscribe) identifies ownership on sockets this
+      // replica doesn't otherwise know about.
       let disconnected = 0
       const sockets = await io.fetchSockets()
       for (const s of sockets) {
-        if (s.handshake.auth?.token === token) {
+        if (s.data?.userId === userId) {
           sessionValidationCache.delete(s.id)
           s.emit("error", { message: "Session revoked" })
           s.disconnect(true)
@@ -182,7 +201,7 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
         }
       }
 
-      logger.info({ disconnected }, "token revoked — active sockets disconnected")
+      logger.info({ userId, disconnected }, "user sessions revoked — active sockets disconnected")
       res.writeHead(200, { "Content-Type": "application/json" })
       res.end(JSON.stringify({ ok: true, disconnected }))
     } catch (err) {
@@ -191,7 +210,7 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
         res.writeHead(413, { "Content-Type": "application/json" })
         res.end(JSON.stringify({ error: "Payload too large" }))
       } else {
-        logger.error({ err }, "POST /revoke-token error")
+        logger.error({ err }, "POST /revoke-sessions error")
         res.writeHead(500, { "Content-Type": "application/json" })
         res.end(JSON.stringify({ error: "Internal server error" }))
       }
@@ -203,7 +222,7 @@ const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse
   // Called by the web app when a user is removed from a DM/group channel, so
   // their already-connected socket(s) stop receiving message/reaction events
   // for it immediately rather than waiting for a reconnect. Protected by the
-  // same shared secret as /revoke-token.
+  // same shared secret as /revoke-sessions.
   if (req.url === "/revoke-channel-access" && req.method === "POST") {
     try {
       if (!REVOKE_TOKEN_SECRET) {
@@ -396,78 +415,61 @@ const SESSION_REVALIDATION_TTL_MS = 10_000
 // service errors. Kept short to limit the window in which a revoked token
 // remains usable when the auth service is unreachable.
 const SESSION_FALLBACK_MAX_AGE_MS = 15_000
-const sessionValidationCache = new Map<string, { validatedAt: number; userId: string }>()
+const sessionValidationCache = new Map<string, { validatedAt: number; userId: string; iat: number }>()
 
-// ─── Token revocation list (Redis-backed when available) ─────────────────────
-// When sessions are revoked (password change, admin action, logout) the web app
-// POSTs to /revoke-token so the signal server can immediately reject the token
-// without waiting for the next Supabase revalidation cycle.
-//
-// Tokens are stored as SHA-256 digests — never store raw bearer tokens in Redis
-// or process memory to limit blast radius of a key scan or memory dump.
-const REVOCATION_PREFIX = "vortex:revoked-token"
-const REVOCATION_TTL_SECONDS = 3600 // keep entries for 1 hour then auto-expire
-
-function hashToken(token: string): string {
-  return createHash("sha256").update(token).digest("hex")
-}
-
+// ─── Per-user session revocation (Redis-backed when available) ───────────────
+// When a user's sessions are invalidated (password change, forced logout /
+// session revocation, account deletion) the web app POSTs their userId to
+// /revoke-sessions. The store records a per-user "revoked before" cutoff so
+// any handshake JWT for that user minted before it is rejected on the spot.
+// See ./revocation.ts for why this is keyed by user + issued-at rather than by
+// token string.
 let revocationRedis: Redis | null = null
 if (REDIS_URL) {
   revocationRedis = new Redis(REDIS_URL, { maxRetriesPerRequest: 3 })
-  logger.info("token revocation list backed by Redis")
+  logger.info("session revocation list backed by Redis")
 }
-// In-memory fallback for single-instance deployments without Redis
-const inMemoryRevocations = new Map<string, number>()
+const revocationStore = new SessionRevocationStore(revocationRedis)
 
-async function isTokenRevoked(token: string): Promise<boolean> {
-  const digest = hashToken(token)
+/**
+ * True when the token predates a revocation of the user's sessions. Fails
+ * closed (treats as revoked) if the backing store can't be reached, matching
+ * the pre-existing posture.
+ */
+async function isSessionRevoked(userId: string, tokenIatSeconds: number): Promise<boolean> {
   try {
-    if (revocationRedis) {
-      const exists = await revocationRedis.exists(`${REVOCATION_PREFIX}:${digest}`)
-      return exists === 1
-    }
-    const expiresAt = inMemoryRevocations.get(digest)
-    if (expiresAt === undefined) return false
-    if (Date.now() > expiresAt) {
-      inMemoryRevocations.delete(digest)
-      return false
-    }
-    return true
+    return await revocationStore.isRevoked(userId, tokenIatSeconds)
   } catch (err) {
     logger.error({ err }, "revocation check failed — failing closed (denying)")
     return true // fail closed: if we can't check, assume revoked
   }
 }
 
-async function revokeToken(token: string): Promise<boolean> {
-  const digest = hashToken(token)
-  try {
-    if (revocationRedis) {
-      await revocationRedis.set(
-        `${REVOCATION_PREFIX}:${digest}`,
-        "1",
-        "EX",
-        REVOCATION_TTL_SECONDS,
-      )
-    } else {
-      inMemoryRevocations.set(digest, Date.now() + REVOCATION_TTL_SECONDS * 1000)
-    }
-    return true
-  } catch (err) {
-    logger.error({ err }, "failed to persist token revocation")
-    return false
-  }
+async function revokeUserSessions(userId: string): Promise<boolean> {
+  const persisted = await revocationStore.revoke(userId)
+  if (!persisted) logger.error({ userId }, "failed to persist session revocation")
+  return persisted
 }
 
 // Periodic cleanup of expired in-memory revocations
-setInterval(() => {
-  const now = Date.now()
-  for (const [digest, expiresAt] of inMemoryRevocations) {
-    if (now > expiresAt) inMemoryRevocations.delete(digest)
-  }
-}, 60_000)
+setInterval(() => revocationStore.pruneExpired(), 60_000)
 
+
+/**
+ * Disconnects a socket whose session has been revoked and clears its cache
+ * entry. A Better Auth handshake JWT verifies as valid locally right up until
+ * its (short, 15-minute) expiry, with no way to invalidate it early on its
+ * own — this per-user revocation check is what makes password changes /
+ * forced logout / account deletion actually take effect before that expiry
+ * (see docs/better-auth-verification-spike.md §3 and the /revoke-sessions
+ * endpoint above).
+ */
+function rejectRevokedSession(socket: Socket): false {
+  logger.warn({ socketId: socket.id }, "session rejected — user sessions revoked")
+  sessionValidationCache.delete(socket.id)
+  socket.disconnect(true)
+  return false
+}
 
 async function validateSession(socket: Socket): Promise<boolean> {
   if (!jwks) return true // skip if no JWKS configured
@@ -475,37 +477,34 @@ async function validateSession(socket: Socket): Promise<boolean> {
   const authToken = socket.handshake.auth?.token
   if (!authToken) return false
 
-  // Always check revocation list first — an explicitly revoked token must
-  // never be accepted, regardless of cache state. Necessary here in a way it
-  // wasn't for Supabase's opaque token: a Better Auth handshake JWT verifies
-  // as valid locally right up until its (short, 15-minute) expiry, with no
-  // way to invalidate it early on its own — this revocation check is what
-  // makes password changes / forced logout / admin actions actually take
-  // effect before that expiry (see docs/better-auth-verification-spike.md §3).
-  if (await isTokenRevoked(authToken)) {
-    logger.warn({ socketId: socket.id }, "session rejected — token is on revocation list")
-    sessionValidationCache.delete(socket.id)
-    socket.disconnect(true)
-    return false
-  }
-
   const cached = sessionValidationCache.get(socket.id)
+
+  // Fast path: recently validated. Still re-check the per-user revocation
+  // cutoff on every call (a single cheap store read) so a revocation that
+  // lands mid-cache-window takes effect immediately rather than after the
+  // 10s revalidation TTL. The cutoff is keyed by user and compared against
+  // the token's issued-at, so this must run against the token's own claims —
+  // hence caching userId + iat alongside the validation timestamp.
   if (cached && Date.now() - cached.validatedAt < SESSION_REVALIDATION_TTL_MS) {
+    if (await isSessionRevoked(cached.userId, cached.iat)) return rejectRevokedSession(socket)
     return true
   }
 
   try {
-    const userId = await verifyAuthToken(authToken)
-    if (!userId) {
+    const claims = await verifyAuthToken(authToken)
+    if (!claims) {
       sessionValidationCache.delete(socket.id)
       return false
     }
-    sessionValidationCache.set(socket.id, { validatedAt: Date.now(), userId })
+    if (await isSessionRevoked(claims.userId, claims.iat)) return rejectRevokedSession(socket)
+    sessionValidationCache.set(socket.id, { validatedAt: Date.now(), userId: claims.userId, iat: claims.iat })
     return true
   } catch (err) {
     // On transient errors (e.g. JWKS endpoint temporarily unreachable),
-    // allow only if we have a recent cached validation
+    // allow only if we have a recent cached validation — but never admit a
+    // token whose user has since been revoked.
     if (cached && Date.now() - cached.validatedAt < SESSION_FALLBACK_MAX_AGE_MS) {
+      if (await isSessionRevoked(cached.userId, cached.iat)) return rejectRevokedSession(socket)
       logger.warn(
         { socketId: socket.id, userId: cached.userId, cachedAgeMs: Date.now() - cached.validatedAt, err },
         "session revalidation failed — using cached validation (session_fallback_used)"

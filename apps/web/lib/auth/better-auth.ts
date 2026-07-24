@@ -8,8 +8,9 @@ import { jwt, magicLink, twoFactor } from "better-auth/plugins"
 import { nextCookies } from "better-auth/next-js"
 import { passkey } from "@better-auth/passkey"
 import * as vortexDb from "@vortex/db"
-import { loginAttempts, loginRiskEvents, notifications, userConnections, users } from "@vortex/db"
+import { loginAttempts, loginRiskEvents, notifications, userConnections, users, verifications } from "@vortex/db"
 import { computeLoginRisk } from "@/lib/auth/risk"
+import { revokeGatewaySessions } from "@/lib/gateway-publish"
 import { sendAuthEmail } from "@/lib/auth/email"
 import { hasValidStepUpToken } from "@/lib/auth/step-up"
 import { consumeInviteCode } from "@/lib/auth/invites"
@@ -222,6 +223,58 @@ async function enforceLoginRisk(userId: string, request: Request | undefined): P
   }
 }
 
+/**
+ * Better Auth endpoints that invalidate one or more of a user's sessions.
+ * Each is wired to notify the signal server so the user's live gateway
+ * socket(s) are torn down and their pre-existing handshake JWTs rejected
+ * immediately, instead of lingering until the short-lived token expires
+ * (issue #52). Revocation is per-user (the gateway JWT carries only the user
+ * id) with an issued-at cutoff, so a device whose session survives — e.g. the
+ * caller's own after a `revokeOtherSessions` password change — simply
+ * reconnects with a fresh token.
+ */
+const GATEWAY_REVOKE_PATHS = new Set([
+  "/change-password",
+  "/reset-password",
+  "/revoke-session",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+  "/sign-out",
+  "/delete-user",
+])
+
+/**
+ * Resolves the user whose sessions a GATEWAY_REVOKE_PATHS request affects.
+ * Password reset is unauthenticated, so the user is identified from the reset
+ * token — Better Auth stores it as a `reset-password:<token>` verification
+ * whose value is the user id. Every other path is an authenticated mutation,
+ * so the acting user comes from their still-valid session (read here in the
+ * `before` hook, before the operation revokes it).
+ */
+async function resolveGatewayRevocationUserId(
+  path: string,
+  body: Record<string, unknown> | undefined,
+  query: Record<string, unknown> | undefined,
+  headers: Headers,
+): Promise<string | null> {
+  if (path === "/reset-password") {
+    // Better Auth accepts the reset token from either the body or the query
+    // (`ctx.body.token || ctx.query?.token`), so check both.
+    const token =
+      (typeof body?.token === "string" ? body.token : null) ??
+      (typeof query?.token === "string" ? query.token : null)
+    if (!token) return null
+    const [row] = await db
+      .select({ value: verifications.value })
+      .from(verifications)
+      .where(eq(verifications.identifier, `reset-password:${token}`))
+      .limit(1)
+    return row?.value ?? null
+  }
+  const session = await auth.api.getSession({ headers })
+  return session?.user?.id ?? null
+}
+
 export const auth = betterAuth({
   baseURL: APP_ORIGIN,
   secret: betterAuthSecret(),
@@ -348,6 +401,29 @@ export const auth = betterAuth({
   ],
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      // Tear down live gateway sessions whenever an endpoint invalidates a
+      // user's session(s) — password change, forced logout / session
+      // revocation, account deletion (issue #52). Runs in `before` so the
+      // acting user's session is still resolvable even for endpoints (sign-out,
+      // revoke-sessions, delete-user) that are about to delete it. Best-effort
+      // and never throws, so it can't block the auth operation; if the
+      // operation ultimately fails, the caller's still-valid device just
+      // reconnects with a fresh token. Falls through to the checks below.
+      if (GATEWAY_REVOKE_PATHS.has(ctx.path)) {
+        try {
+          const headers = ctx.headers ?? ctx.request?.headers ?? new Headers()
+          const body = ctx.body as Record<string, unknown> | undefined
+          const query = ctx.query as Record<string, unknown> | undefined
+          const userId = await resolveGatewayRevocationUserId(ctx.path, body, query, headers)
+          if (userId) await revokeGatewaySessions(userId)
+        } catch (err) {
+          log.error(
+            { err: err instanceof Error ? err.message : String(err), path: ctx.path },
+            "Failed to revoke gateway sessions",
+          )
+        }
+      }
+
       // Defense-in-depth: the app's own HMAC step-up cookie (lib/auth/step-up.ts)
       // gates sensitive account-mutation endpoints the same way it gated
       // OAuth-identity linking and MFA disable under Supabase Auth — these two
