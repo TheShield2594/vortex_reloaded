@@ -20,7 +20,6 @@ const PUBLISH_TIMEOUT_MS = 2000
 interface GatewayEvent {
   type: VortexEventType
   channelId: string
-  serverId?: string | null
   actorId: string
   data?: Record<string, unknown> | null
 }

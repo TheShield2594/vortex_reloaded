@@ -1971,7 +1971,7 @@ function DMCallView({ channelId, currentUserId, participants, displayName, withV
   const spatialAudioEnabled = useVoiceAudioStore(
     (state) => state.getEffectiveSettings(currentUserId).spatialAudioEnabled
   )
-  const participantMixes = useVoiceAudioStore((state) => state.participantMixByServer[channelId] ?? {})
+  const participantMixes = useVoiceAudioStore((state) => state.participantMixByChannel[channelId] ?? {})
   const getParticipantMix = useVoiceAudioStore((state) => state.getParticipantMix)
 
   const statusMeta: Record<typeof status, { label: string; detail: string; tone: string; bg: string }> = {

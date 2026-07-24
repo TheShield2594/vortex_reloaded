@@ -18,9 +18,7 @@ function isTabActive(href: string, pathname: string): boolean {
     return pathname.startsWith("/channels/me") || pathname.startsWith("/channels/friends")
   }
   if (href === "/channels/notifications") return pathname.startsWith("/channels/notifications")
-  if (href === "/channels/you") {
-    return pathname.startsWith("/channels/you") || pathname.startsWith("/channels/profile")
-  }
+  if (href === "/channels/you") return pathname.startsWith("/channels/you")
   return pathname === href
 }
 

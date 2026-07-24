@@ -48,11 +48,7 @@ export function EmojiSuggestions({ matches, selectedIndex, onSelect }: Props) {
               onSelect(match)
             }}
           >
-            {match.isCustom && match.imageUrl ? (
-              <img src={match.imageUrl} alt={match.shortcode} className="w-5 h-5 object-contain" />
-            ) : (
-              <span className="text-lg w-5 text-center leading-none">{match.emoji}</span>
-            )}
+            <span className="text-lg w-5 text-center leading-none">{match.emoji}</span>
             <span className="text-sm" style={{ color: "var(--theme-text-muted)" }}>
               :{match.shortcode}:
             </span>

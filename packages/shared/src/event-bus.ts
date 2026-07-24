@@ -1,13 +1,10 @@
 /**
  * Event Bus Abstraction Layer
  *
- * Provides a backend-agnostic interface for real-time event delivery.
- * Replaces direct Supabase Realtime subscriptions with a pluggable
- * event system that supports fan-out, delivery guarantees, and replay.
- *
- * Phase 1: Interface + Supabase adapter (current)
- * Phase 2: Redis Streams backend (future)
- * Phase 3: Delivery receipts + per-user ack tracking (future)
+ * Provides a backend-agnostic interface for real-time event delivery: a
+ * pluggable pub/sub system that supports fan-out and replay. The signal
+ * gateway backs it with a Redis Streams adapter (`RedisEventBus` in
+ * apps/signal/src/event-bus.ts).
  */
 
 /** Well-known event types for the VortexChat real-time system. */
@@ -76,8 +73,7 @@ export interface SubscribeOptions {
 /**
  * Core event bus interface.
  *
- * Implementations can be backed by Supabase Realtime (current),
- * Redis Streams (Phase 2), or any other pub/sub system.
+ * Backed by Redis Streams (`RedisEventBus`), or any other pub/sub system.
  */
 export interface IEventBus {
   /**
@@ -104,12 +100,6 @@ export interface IEventBus {
     afterEventId: string
     limit?: number
   }): Promise<VortexEvent[]>
-
-  /**
-   * Acknowledge receipt of an event for a given user.
-   * Used for delivery receipts (Phase 3).
-   */
-  acknowledge?(userId: string, eventId: string): Promise<void>
 
   /** Clean up connections and resources. */
   destroy(): Promise<void>
