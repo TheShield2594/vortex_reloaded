@@ -1,15 +1,15 @@
 import { test, expect } from "@playwright/test"
-import { hasSupabase } from "./utils"
+import { hasSeededAccount } from "./utils"
 
 /**
- * E2E tests for the authentication flow.
+ * E2E tests for the authentication flow (Better Auth + SQLite).
  *
  * Prerequisites:
- *   - Next.js dev server running on PLAYWRIGHT_BASE_URL (default localhost:3000)
- *   - Local Supabase instance running (supabase start)
+ *   - Next.js server running on PLAYWRIGHT_BASE_URL (default localhost:3000)
+ *   - A migrated SQLite database (DATABASE_URL=file:...)
  *
- * Tests that require a real Supabase backend are skipped when
- * NEXT_PUBLIC_SUPABASE_URL is missing or set to a placeholder value.
+ * Tests that need to actually sign in are skipped unless a seeded account is
+ * supplied via E2E_TEST_EMAIL / E2E_TEST_PASSWORD.
  */
 
 const TEST_EMAIL = `e2e-${Date.now()}@test.local`
@@ -33,7 +33,7 @@ test.describe("Authentication", () => {
   })
 
   test("login with invalid credentials shows error", async ({ page }) => {
-    test.skip(!hasSupabase, "Requires a real Supabase backend")
+    test.skip(!hasSeededAccount, "Requires E2E_TEST_EMAIL and E2E_TEST_PASSWORD")
 
     await page.goto("/login")
     await page.locator("input[type='email']").fill("nonexistent@test.local")
@@ -60,7 +60,7 @@ test.describe("Authentication", () => {
   })
 
   test("register and login flow", async ({ page }) => {
-    test.skip(!hasSupabase, "Requires a real Supabase backend")
+    test.skip(!hasSeededAccount, "Requires E2E_TEST_EMAIL and E2E_TEST_PASSWORD")
 
     // Register
     await page.goto("/register")
@@ -71,18 +71,18 @@ test.describe("Authentication", () => {
     await page.getByRole("button", { name: REGISTER_SUBMIT_NAME }).click()
 
     // Should redirect to login or auto-login
-    await page.waitForURL(/\/(login|servers|$)/, { timeout: 15_000 })
+    await page.waitForURL(/\/(login|channels)|\/$/, { timeout: 15_000 })
 
     // If redirected to login, log in
     if (page.url().includes("/login")) {
       await page.locator("input[type='email']").fill(TEST_EMAIL)
       await page.locator("input[type='password']").fill(TEST_PASSWORD)
       await page.getByRole("button", { name: /log in|sign in/i }).click()
-      await page.waitForURL(/\/servers/, { timeout: 15_000 })
+      await page.waitForURL(/\/channels\/me/, { timeout: 15_000 })
     }
 
     // Should be on the app now
-    await expect(page).toHaveURL(/\/servers/)
+    await expect(page).toHaveURL(/\/channels\/me/)
   })
 
   test("login form has correct autocomplete attributes", async ({ page }) => {
