@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Bell, Check, CheckCheck, Hash, AtSign, UserPlus, Trash2, X } from "lucide-react"
+import { Bell, Check, CheckCheck, Hash, AtSign, UserPlus, Trash2, X, ShieldCheck } from "lucide-react"
 import { useAppStore } from "@/lib/stores/app-store"
 import { useNotificationSound } from "@/hooks/use-notification-sound"
 import { useNotificationPreferences } from "@/hooks/use-notification-preferences"
@@ -13,7 +13,7 @@ import { format } from "date-fns"
 
 interface Notification {
   id: string
-  type: "mention" | "reply" | "friend_request" | "server_invite" | "system"
+  type: "mention" | "reply" | "friend_request" | "server_invite" | "system" | "verify_prompt"
   title: string
   body: string | null
   icon_url: string | null
@@ -41,6 +41,7 @@ const TYPE_ICONS: Record<Notification["type"], React.ReactNode> = {
   friend_request: <UserPlus className="w-3.5 h-3.5" />,
   server_invite: <Hash className="w-3.5 h-3.5" />,
   system: <Bell className="w-3.5 h-3.5" />,
+  verify_prompt: <ShieldCheck className="w-3.5 h-3.5" />,
 }
 
 interface Props {
@@ -147,9 +148,11 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
       }
 
       if (shouldShowBrowserNotification && n.title) {
-        const url = n.server_id && n.channel_id
-          ? `/channels/${n.server_id}/${n.channel_id}${n.message_id ? `?message=${n.message_id}` : ""}`
-          : undefined
+        const url = n.type === "verify_prompt" && n.channel_id
+          ? `/channels/me/${n.channel_id}${n.message_id ? `?verify=${n.message_id}` : ""}`
+          : n.server_id && n.channel_id
+            ? `/channels/${n.server_id}/${n.channel_id}${n.message_id ? `?message=${n.message_id}` : ""}`
+            : undefined
         showBrowserNotification({
           title: n.title,
           body: n.body || "",
@@ -327,6 +330,18 @@ export function NotificationBell({ userId, variant = "icon" }: Props) {
   async function handleClick(n: Notification): Promise<void> {
     try {
       if (!n.read) await markRead(n.id)
+
+      // Issue #40: `verify_prompt` repurposes channel_id/message_id for the
+      // group DM and the other party's user id (see
+      // packages/db/src/schema/notifications.ts) — opens that DM with a
+      // `verify` query param the channel view picks up to launch the safety
+      // number modal directly, instead of leaving the nudge as a dead end.
+      if (n.type === "verify_prompt" && n.channel_id) {
+        router.push(`/channels/me/${n.channel_id}${n.message_id ? `?verify=${n.message_id}` : ""}`)
+        setOpen(false)
+        return
+      }
+
       if (n.server_id && n.channel_id) {
         const params = new URLSearchParams()
 

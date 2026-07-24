@@ -213,6 +213,62 @@ export async function generateOneTimeKeyBatch(
   }
 }
 
+/**
+ * Issue #40 ("Group trust model") — canonical payload a device signs to
+ * attest to a group-membership change. Includes `eventId`/`timestamp` (both
+ * bound into the row that gets stored, see membership-log.ts) so the same
+ * (channelId, action, actorId, targetId) tuple recurring later — e.g.
+ * removing and re-adding the same person — can't reuse an earlier
+ * signature: without a per-event identifier, one genuinely signed entry
+ * could otherwise be copied into any number of fabricated log rows (with
+ * fake timestamps) that would each still verify. Deliberately independent
+ * of the one-time/fallback-key payload builders above even though the shape
+ * is similar — those are keyed material an X3DH initiator checks against a
+ * specific device's identity key, this is an arbitrary application-level
+ * claim, and conflating the two payload spaces would let a signature meant
+ * for one be replayed as if it were the other.
+ */
+export function canonicalMembershipEventPayload(
+  eventId: string,
+  timestamp: string,
+  channelId: string,
+  action: "member_added" | "member_removed" | "member_left",
+  actorId: string,
+  targetId: string
+): string {
+  return JSON.stringify({ eventId, timestamp, channelId, action, actorId, targetId })
+}
+
+/** Signs an arbitrary payload string with this device's own Olm account (ed25519). */
+export async function signPayload(account: SerializedAccount, payload: string): Promise<string> {
+  const Olm = await loadOlm()
+  const acc = new Olm.Account()
+  try {
+    acc.unpickle(OLM_PICKLE_KEY, account.pickle)
+    return acc.sign(payload)
+  } finally {
+    acc.free()
+  }
+}
+
+/** Verifies an arbitrary payload's signature against a claimed ed25519 public key. */
+export async function verifyEd25519Signature(
+  ed25519Key: string,
+  payload: string,
+  signature: string
+): Promise<boolean> {
+  const Olm = await loadOlm()
+  const utility = new Olm.Utility()
+  try {
+    utility.ed25519_verify(ed25519Key, payload, signature)
+    return true
+  } catch {
+    return false
+  } finally {
+    utility.free()
+  }
+}
+
 /** Verifies a fetched key bundle's signature against the device's own ed25519 identity key (TOFU on that key itself). */
 export async function verifyKeyBundleSignature(
   remoteUserId: string,

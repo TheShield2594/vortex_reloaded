@@ -19,6 +19,7 @@ import {
   encryptMessage,
   generateOneTimeKeyBatch,
   getIdentityKeys,
+  signPayload,
   targetKey,
   verifyKeyBundleSignature,
   type SerializedAccount,
@@ -308,6 +309,26 @@ async function ensureOlmIdentityInner(
     identity: { deviceId, curve25519IdentityKey: publish.curve25519IdentityKey, ed25519IdentityKey: publish.ed25519IdentityKey },
     publish,
   }
+}
+
+/**
+ * Issue #40 — signs an arbitrary payload (e.g. a membership-log entry, see
+ * apps/web/lib/olm-protocol.ts's canonicalMembershipEventPayload) with this
+ * device's own Olm identity, without exposing the pickle itself to callers.
+ * Returns null when there's no local identity yet — callers should treat
+ * that as "post the action unsigned" rather than blocking on Olm setup.
+ */
+export async function signWithOwnAccount(
+  payload: string
+): Promise<{ deviceId: string; ed25519IdentityKey: string; signature: string } | null> {
+  const wrapKey = await getOrCreateWrapKey()
+  const account = await loadAccount(wrapKey)
+  if (!account) return null
+  const [signature, identity] = await Promise.all([
+    signPayload(account, payload),
+    getIdentityKeys(account),
+  ])
+  return { deviceId: getOrCreateOlmDeviceId(), ed25519IdentityKey: identity.ed25519IdentityKey, signature }
 }
 
 /** Generates and persists a fresh one-time-key batch to top up the published supply; returns it for the caller to POST. */
