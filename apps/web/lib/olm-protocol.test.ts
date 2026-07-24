@@ -281,7 +281,7 @@ describe("olm-protocol: envelope helpers", () => {
 describe("olm-protocol: arbitrary payload signing (issue #40, group trust model)", () => {
   it("signs a membership-event payload verifiable against the signer's own identity key", async () => {
     const alice = await makeDevice("alice", "device-1")
-    const payload = canonicalMembershipEventPayload("channel-1", "member_added", "alice", "bob")
+    const payload = canonicalMembershipEventPayload("event-1", "2024-01-01T00:00:00.000Z", "channel-1", "member_added", "alice", "bob")
     const signature = await signPayload(alice.account, payload)
     expect(await verifyEd25519Signature(alice.publish.ed25519IdentityKey, payload, signature)).toBe(true)
   })
@@ -289,17 +289,28 @@ describe("olm-protocol: arbitrary payload signing (issue #40, group trust model)
   it("rejects a signature verified against a different identity key", async () => {
     const alice = await makeDevice("alice", "device-1")
     const mallory = await makeDevice("mallory", "device-1")
-    const payload = canonicalMembershipEventPayload("channel-1", "member_added", "alice", "bob")
+    const payload = canonicalMembershipEventPayload("event-1", "2024-01-01T00:00:00.000Z", "channel-1", "member_added", "alice", "bob")
     const signature = await signPayload(alice.account, payload)
     expect(await verifyEd25519Signature(mallory.publish.ed25519IdentityKey, payload, signature)).toBe(false)
   })
 
   it("rejects a signature whose payload was tampered with after signing", async () => {
     const alice = await makeDevice("alice", "device-1")
-    const payload = canonicalMembershipEventPayload("channel-1", "member_added", "alice", "bob")
+    const payload = canonicalMembershipEventPayload("event-1", "2024-01-01T00:00:00.000Z", "channel-1", "member_added", "alice", "bob")
     const signature = await signPayload(alice.account, payload)
-    const tampered = canonicalMembershipEventPayload("channel-1", "member_removed", "alice", "bob")
+    const tampered = canonicalMembershipEventPayload("event-1", "2024-01-01T00:00:00.000Z", "channel-1", "member_removed", "alice", "bob")
     expect(await verifyEd25519Signature(alice.publish.ed25519IdentityKey, tampered, signature)).toBe(false)
+  })
+
+  it("rejects a signature replayed under a different eventId/timestamp (issue #40 fix)", async () => {
+    const alice = await makeDevice("alice", "device-1")
+    const original = canonicalMembershipEventPayload("event-1", "2024-01-01T00:00:00.000Z", "channel-1", "member_added", "alice", "bob")
+    const signature = await signPayload(alice.account, original)
+    // Same action/actor/target, but a different (fabricated) event id/time —
+    // this is exactly the replay a compromised server could otherwise pull
+    // off before eventId/timestamp were bound into the signed payload.
+    const replayed = canonicalMembershipEventPayload("event-2", "2024-06-01T00:00:00.000Z", "channel-1", "member_added", "alice", "bob")
+    expect(await verifyEd25519Signature(alice.publish.ed25519IdentityKey, replayed, signature)).toBe(false)
   })
 })
 

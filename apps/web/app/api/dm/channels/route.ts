@@ -4,7 +4,7 @@ import { createDb, directMessages, dmChannelMembers, dmChannels, dmReadStates, u
 import { requireAuth, parseJsonBody, checkRateLimit } from "@/lib/utils/api-helpers"
 import { publishGatewayEvent } from "@/lib/gateway-publish"
 import { toSnakeCase } from "@/lib/utils/case"
-import { recordMembershipEvent } from "@/lib/membership-log"
+import { nudgeSafetyNumberVerification, recordMembershipEvent } from "@/lib/membership-log"
 
 const db = createDb()
 
@@ -268,7 +268,11 @@ export async function POST(req: NextRequest) {
     // cover later additions via the [channelId]/members route, missing how
     // most groups actually get their initial roster. Unsigned (this route
     // doesn't collect an Olm signature from the creator per founding
-    // member), same as any client-less write to the log.
+    // member), same as any client-less write to the log. Each founding
+    // member also gets the same safety-number verification nudge a later
+    // addition via the members route would trigger — creating a group with
+    // friends already added shouldn't skip the nudge just because they
+    // joined at creation instead of afterward.
     if (isGroup) {
       after(() =>
         Promise.all(
@@ -284,6 +288,15 @@ export async function POST(req: NextRequest) {
               })
             )
         ).catch((err) => console.error("[dm/channels POST] membership log failed:", err))
+      )
+      after(() =>
+        Promise.all(
+          allMembers
+            .filter((memberId) => memberId !== user.id)
+            .map((memberId) =>
+              nudgeSafetyNumberVerification({ dmChannelId: channel.id, actorId: user.id, targetId: memberId })
+            )
+        ).catch((err) => console.error("[dm/channels POST] verify nudge failed:", err))
       )
     }
 

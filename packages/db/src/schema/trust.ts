@@ -12,23 +12,25 @@ import { users } from "./users"
  *
  * Signing happens client-side with the actor's Olm device identity
  * (ed25519, see apps/web/lib/olm-protocol.ts) over a canonical payload of
- * `{channelId, action, actorId, targetId}` — the server never holds any
- * private key material and cannot forge entries, only append what a client
- * hands it. `actorEd25519Key` snapshots the signing device's public key at
- * write time (rather than joining `olm_device_identities` live) so a
- * verifier can still check old entries after that device is removed or its
- * keys rotate. `signature`/`actorDeviceId`/`actorEd25519Key` are nullable
- * because a caller with no local Olm identity yet (or a legacy/never-set-up
- * device) can still perform the action — such rows simply render as
- * "unsigned" in the log instead of being rejected, matching this app's
- * broader stance of degrading gracefully rather than blocking on E2EE setup.
+ * `{eventId, timestamp, channelId, action, actorId, targetId}` — the server
+ * never holds any private key material and cannot forge entries, only
+ * append what a client hands it. `actorEd25519Key` snapshots the signing
+ * device's public key at write time (rather than joining
+ * `olm_device_identities` live) so a verifier can still check old entries
+ * after that device is removed or its keys rotate. `signature`/
+ * `actorDeviceId`/`actorEd25519Key` are nullable because a caller with no
+ * local Olm identity yet (or a legacy/never-set-up device) can still
+ * perform the action — such rows simply render as "unsigned" in the log
+ * instead of being rejected, matching this app's broader stance of
+ * degrading gracefully rather than blocking on E2EE setup.
  *
- * `created_at` is server-assigned insert time, not part of the signed
- * payload — binding a signature to a client-claimed timestamp would require
- * the server to trust that clock or the client to match the server's insert
- * time exactly, neither of which this table needs: the signature's job is
- * only to prove *who* attested to the action, ordering/"when" comes from
- * the log's own append order.
+ * `id`/`created_at` are ordinarily server-assigned, but for a signed row
+ * they're instead the client's own `eventId`/`timestamp` (bounds-checked
+ * against server time, see membership-log.ts) — bound into what got
+ * signed, so `id` doubles as a replay guard (the same signed claim can't be
+ * inserted as two different rows: `id` is the primary key) and `created_at`
+ * can't be silently altered after the fact without invalidating the
+ * signature a verifier checks it against.
  */
 export const dmMembershipEvents = sqliteTable(
   "dm_membership_events",

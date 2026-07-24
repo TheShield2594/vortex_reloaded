@@ -5,6 +5,7 @@
  * Shared by the add/remove-member route so both write paths log through the
  * same place instead of duplicating the insert/lookup logic.
  */
+import { randomUUID } from "node:crypto"
 import { and, eq, inArray } from "drizzle-orm"
 import { createDb, dmMembershipEvents, notifications, olmDeviceIdentities, users } from "@vortex/db"
 import { canonicalMembershipEventPayload } from "@/lib/olm-protocol"
@@ -15,15 +16,25 @@ const db = createDb()
 
 export type MembershipAction = "member_added" | "member_removed" | "member_left"
 
-export type MembershipClientSignature = { deviceId: string; signature: string } | null
+export type MembershipClientSignature = { deviceId: string; signature: string; eventId: string; timestamp: string } | null
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+// Generous enough to absorb ordinary clock drift between a client and this
+// server without letting a signed row's displayed time be backdated/
+// postdated by anything meaningful.
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
 
 /**
- * Appends a log entry — signed if the caller's device produced a
- * signature over a device the server actually has a published identity
- * for, unsigned otherwise. The canonical payload is always rebuilt from
- * the actorId/targetId/action this call was given, never trusted from the
- * client, so a stored signature can only ever attest to the action that was
- * actually persisted.
+ * Appends a log entry — signed if the caller's device produced a signature
+ * over a device the server actually has a published identity for (and a
+ * plausible eventId/timestamp), unsigned otherwise. The canonical payload
+ * is always rebuilt from the actorId/targetId/action this call was given,
+ * never trusted from the client, so a stored signature can only ever attest
+ * to the action that was actually persisted. For a signed row, `id`/
+ * `created_at` are the client-supplied `eventId`/`timestamp` rather than
+ * server-generated ones — see trust.ts's doc comment for why: it binds the
+ * signature to this specific row (a unique-constraint replay guard) and to
+ * the timestamp actually displayed for it.
  */
 export async function recordMembershipEvent(params: {
   dmChannelId: string
@@ -33,11 +44,12 @@ export async function recordMembershipEvent(params: {
   clientSignature: MembershipClientSignature
 }): Promise<void> {
   const { dmChannelId, action, actorId, targetId, clientSignature } = params
-  const payload = canonicalMembershipEventPayload(dmChannelId, action, actorId, targetId)
 
   let actorDeviceId: string | null = null
   let actorEd25519Key: string | null = null
   let signature: string | null = null
+  let eventId: string = randomUUID()
+  let timestamp: string = new Date().toISOString()
 
   if (clientSignature) {
     const [device] = await db
@@ -51,18 +63,29 @@ export async function recordMembershipEvent(params: {
       )
       .limit(1)
 
-    // Only persist the signature alongside a device identity the server
-    // actually has on file — a signature over a deviceId with no published
-    // bundle can't be verified by anyone later, so it's dropped rather than
-    // stored as if it were checkable.
-    if (device) {
+    const claimedMs = Date.parse(clientSignature.timestamp)
+    const withinClockSkew = Number.isFinite(claimedMs) && Math.abs(claimedMs - Date.now()) <= MAX_CLOCK_SKEW_MS
+    const validEventId = UUID_RE.test(clientSignature.eventId)
+
+    // Only persist the signature (and adopt the client's eventId/timestamp
+    // as this row's id/created_at) alongside a device identity the server
+    // actually has on file, a well-formed event id, and a timestamp close
+    // to "now" — a signature over a deviceId with no published bundle can't
+    // be verified by anyone later, and an implausible id/timestamp is
+    // dropped rather than stored as if it were checkable.
+    if (device && validEventId && withinClockSkew) {
       actorDeviceId = clientSignature.deviceId
       actorEd25519Key = device.ed25519IdentityKey
       signature = clientSignature.signature
+      eventId = clientSignature.eventId
+      timestamp = clientSignature.timestamp
     }
   }
 
+  const payload = canonicalMembershipEventPayload(eventId, timestamp, dmChannelId, action, actorId, targetId)
+
   await db.insert(dmMembershipEvents).values({
+    id: eventId,
     dmChannelId,
     action,
     actorId,
@@ -71,6 +94,7 @@ export async function recordMembershipEvent(params: {
     actorEd25519Key,
     payload,
     signature,
+    createdAt: timestamp,
   })
 }
 

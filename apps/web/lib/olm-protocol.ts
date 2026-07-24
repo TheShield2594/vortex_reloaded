@@ -215,22 +215,28 @@ export async function generateOneTimeKeyBatch(
 
 /**
  * Issue #40 ("Group trust model") — canonical payload a device signs to
- * attest to a group-membership change (`{channelId, action, actorId,
- * targetId}`, no timestamp: see dm_membership_events' doc comment in
- * packages/db/src/schema/trust.ts for why). Deliberately independent of the
- * one-time/fallback-key payload builders above even though the shape is
- * similar — those are keyed material an X3DH initiator checks against a
+ * attest to a group-membership change. Includes `eventId`/`timestamp` (both
+ * bound into the row that gets stored, see membership-log.ts) so the same
+ * (channelId, action, actorId, targetId) tuple recurring later — e.g.
+ * removing and re-adding the same person — can't reuse an earlier
+ * signature: without a per-event identifier, one genuinely signed entry
+ * could otherwise be copied into any number of fabricated log rows (with
+ * fake timestamps) that would each still verify. Deliberately independent
+ * of the one-time/fallback-key payload builders above even though the shape
+ * is similar — those are keyed material an X3DH initiator checks against a
  * specific device's identity key, this is an arbitrary application-level
  * claim, and conflating the two payload spaces would let a signature meant
  * for one be replayed as if it were the other.
  */
 export function canonicalMembershipEventPayload(
+  eventId: string,
+  timestamp: string,
   channelId: string,
   action: "member_added" | "member_removed" | "member_left",
   actorId: string,
   targetId: string
 ): string {
-  return JSON.stringify({ channelId, action, actorId, targetId })
+  return JSON.stringify({ eventId, timestamp, channelId, action, actorId, targetId })
 }
 
 /** Signs an arbitrary payload string with this device's own Olm account (ed25519). */

@@ -85,6 +85,43 @@ function ActionIcon({ action }: { action: LogEntry["action"] }) {
   return <LogOut className={className} />
 }
 
+interface ParsedMembershipPayload {
+  eventId?: unknown
+  timestamp?: unknown
+  channelId?: unknown
+  action?: unknown
+  actorId?: unknown
+  targetId?: unknown
+}
+
+/**
+ * Issue #40 fix: a signature only proves the *payload* is authentic — it
+ * says nothing about whether the row's displayed id/created_at/actor/target
+ * actually match what was signed unless we check. Without this, a
+ * compromised server could take one genuinely signed payload and stamp it
+ * onto multiple fabricated rows (different ids, different timestamps) that
+ * would each still show a green "Signed" badge. actor_id/target_id are
+ * compared loosely (null current value is skipped) because those columns
+ * go null after the referenced user is deleted (ON DELETE SET NULL) — that
+ * shouldn't itself invalidate an otherwise-genuine signature.
+ */
+function payloadMatchesEntry(entry: LogEntry, channelId: string): boolean {
+  let parsed: ParsedMembershipPayload
+  try {
+    parsed = JSON.parse(entry.payload)
+  } catch {
+    return false
+  }
+  return (
+    parsed.eventId === entry.id &&
+    parsed.timestamp === entry.created_at &&
+    parsed.channelId === channelId &&
+    parsed.action === entry.action &&
+    (entry.actor_id === null || parsed.actorId === entry.actor_id) &&
+    (entry.target_id === null || parsed.targetId === entry.target_id)
+  )
+}
+
 function MembershipLogTab({ channelId }: { channelId: string }) {
   const [entries, setEntries] = useState<LogEntry[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -113,6 +150,10 @@ function MembershipLogTab({ channelId }: { channelId: string }) {
       const results: Record<string, boolean> = {}
       await Promise.all((entries ?? []).map(async (entry) => {
         if (!entry.signature || !entry.actor_ed25519_key) return
+        if (!payloadMatchesEntry(entry, channelId)) {
+          results[entry.id] = false
+          return
+        }
         try {
           results[entry.id] = await verifyEd25519Signature(entry.actor_ed25519_key, entry.payload, entry.signature)
         } catch {
@@ -123,7 +164,7 @@ function MembershipLogTab({ channelId }: { channelId: string }) {
     }
     verifyAll()
     return () => { cancelled = true }
-  }, [entries])
+  }, [entries, channelId])
 
   if (error) {
     return <p className="text-sm px-1 py-4" style={{ color: "var(--theme-danger)" }}>{error}</p>

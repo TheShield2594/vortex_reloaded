@@ -19,6 +19,19 @@
 const ITERATIONS = 5200
 const VERSION = "vortex-safety-number:v1"
 
+// Issue #40: 5200 SHA-256 iterations per identity is deliberately slow (it's
+// what makes brute-forcing a colliding identity key expensive) but that
+// means it's also slow to *serve* — the safety-number GET route computes
+// this twice per request, and the UI fires one request per other group
+// member on tab open. Memoized by (userId, ed25519Key) — the key itself is
+// part of the cache key, so a rotated/compromised key just misses the cache
+// under its new value rather than needing explicit invalidation. Caches the
+// in-flight Promise (not just the resolved value) so concurrent requests
+// for the same identity dedupe onto one computation. Bounded FIFO eviction
+// keeps this from growing unboundedly across a long process lifetime.
+const FINGERPRINT_CACHE_MAX = 2000
+const fingerprintCache = new Map<string, Promise<string>>()
+
 async function sha256(data: Uint8Array): Promise<Uint8Array> {
   const digest = await crypto.subtle.digest("SHA-256", data as BufferSource)
   return new Uint8Array(digest)
@@ -43,22 +56,37 @@ function concatBytes(...parts: Uint8Array[]): Uint8Array {
  * big-endian integer mod 100000 (matches the digit count Signal's own
  * fingerprint uses per identity).
  */
-async function fingerprintFor(userId: string, ed25519Key: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const keyBytes = encoder.encode(ed25519Key)
-  let digest = await sha256(concatBytes(encoder.encode(`${VERSION}:${userId}:`), keyBytes))
-  for (let i = 0; i < ITERATIONS; i++) {
-    digest = await sha256(concatBytes(digest, keyBytes))
-  }
+function fingerprintFor(userId: string, ed25519Key: string): Promise<string> {
+  const cacheKey = `${userId}:${ed25519Key}`
+  const cached = fingerprintCache.get(cacheKey)
+  if (cached) return cached
 
-  let digits = ""
-  for (let chunk = 0; chunk < 6; chunk++) {
-    const start = chunk * 5
-    let value = 0
-    for (let b = 0; b < 5; b++) value = value * 256 + digest[start + b]
-    digits += String(value % 100000).padStart(5, "0")
+  const computed = (async () => {
+    const encoder = new TextEncoder()
+    const keyBytes = encoder.encode(ed25519Key)
+    let digest = await sha256(concatBytes(encoder.encode(`${VERSION}:${userId}:`), keyBytes))
+    for (let i = 0; i < ITERATIONS; i++) {
+      digest = await sha256(concatBytes(digest, keyBytes))
+    }
+
+    let digits = ""
+    for (let chunk = 0; chunk < 6; chunk++) {
+      const start = chunk * 5
+      let value = 0
+      for (let b = 0; b < 5; b++) value = value * 256 + digest[start + b]
+      digits += String(value % 100000).padStart(5, "0")
+    }
+    return digits
+  })()
+
+  fingerprintCache.set(cacheKey, computed)
+  // A failed computation shouldn't poison the cache for retries.
+  computed.catch(() => fingerprintCache.delete(cacheKey))
+  if (fingerprintCache.size > FINGERPRINT_CACHE_MAX) {
+    const oldestKey = fingerprintCache.keys().next().value
+    if (oldestKey !== undefined) fingerprintCache.delete(oldestKey)
   }
-  return digits
+  return computed
 }
 
 export type SafetyNumberIdentity = { userId: string; ed25519Key: string }

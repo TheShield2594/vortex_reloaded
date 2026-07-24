@@ -5,11 +5,20 @@ import { getBetterAuthUser } from "@/lib/auth/better-auth"
 import { publishGatewayEvent, revokeGatewayChannelAccess } from "@/lib/gateway-publish"
 import { nudgeSafetyNumberVerification, recordMembershipEvent, type MembershipClientSignature } from "@/lib/membership-log"
 
-/** Trims to Olm ed25519 signature/device-id-shaped strings; anything else is treated as "no signature supplied". */
-function parseClientSignature(deviceId: unknown, signature: unknown): MembershipClientSignature {
-  if (typeof deviceId !== "string" || typeof signature !== "string") return null
-  if (!deviceId || !signature || deviceId.length > 128 || signature.length > 256) return null
-  return { deviceId, signature }
+/** Trims to Olm ed25519 signature/device-id/event-id/timestamp-shaped strings; anything else is treated as "no signature supplied". */
+function parseClientSignature(
+  deviceId: unknown,
+  signature: unknown,
+  eventId: unknown,
+  timestamp: unknown
+): MembershipClientSignature {
+  if (
+    typeof deviceId !== "string" || typeof signature !== "string" ||
+    typeof eventId !== "string" || typeof timestamp !== "string"
+  ) return null
+  if (!deviceId || !signature || !eventId || !timestamp) return null
+  if (deviceId.length > 128 || signature.length > 256 || eventId.length > 64 || timestamp.length > 40) return null
+  return { deviceId, signature, eventId, timestamp }
 }
 
 const db = createDb()
@@ -42,9 +51,9 @@ export async function POST(
       return NextResponse.json({ error: "Cannot add members to a 1:1 DM" }, { status: 400 })
     }
 
-    const { userId, deviceId, signature } = await req.json()
+    const { userId, deviceId, signature, eventId, timestamp } = await req.json()
     if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 })
-    const clientSignature = parseClientSignature(deviceId, signature)
+    const clientSignature = parseClientSignature(deviceId, signature, eventId, timestamp)
 
     try {
       await db.insert(dmChannelMembers).values({ dmChannelId: channelId, userId, addedBy: user.id })
@@ -110,7 +119,12 @@ export async function DELETE(
 
     const { searchParams } = new URL(req.url)
     const targetUserId = searchParams.get("userId") ?? user.id
-    const clientSignature = parseClientSignature(searchParams.get("deviceId"), searchParams.get("signature"))
+    const clientSignature = parseClientSignature(
+      searchParams.get("deviceId"),
+      searchParams.get("signature"),
+      searchParams.get("eventId"),
+      searchParams.get("timestamp")
+    )
 
     // Only owners can remove others; anyone can remove themselves
     if (targetUserId !== user.id) {
