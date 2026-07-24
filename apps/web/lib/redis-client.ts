@@ -29,6 +29,9 @@ export interface RedisClient {
    * Read one field from each of several hashes in a single round trip.
    * Returns a value per key, positionally, with `null` for a missing hash or
    * a missing field. Used to read the gateway's presence hashes in bulk.
+   *
+   * Rejects if any command in the batch failed: `null` means the key or field
+   * genuinely isn't there, so a failed read must never be reported as one.
    */
   hgetMany(keys: string[], field: string): Promise<(string | null)[]>
   /** Clean up connections on shutdown. */
@@ -133,12 +136,17 @@ async function createIoRedisClient(): Promise<RedisClient> {
       const pipeline = client.pipeline()
       for (const key of keys) pipeline.hget(key, field)
       const results = await pipeline.exec()
-      // A per-command error is reported in the tuple's first slot; treat it
-      // the same as a missing key rather than failing the whole batch.
-      return keys.map((_, i) => {
-        const entry = results?.[i]
-        if (!entry || entry[0]) return null
-        return typeof entry[1] === "string" ? entry[1] : null
+      // ioredis reports a per-command failure in the tuple's first slot and a
+      // discarded pipeline as a null result. Both mean "we don't know what is
+      // in Redis", which is not the same answer as "the key isn't there" —
+      // swallowing them as null would make a Redis fault look like a
+      // definitive empty read to callers. Reject so they can fall back.
+      if (!results || results.length !== keys.length) {
+        throw new Error(`hgetMany: expected ${keys.length} pipeline results, got ${results?.length ?? "none"}`)
+      }
+      return results.map(([err, value]) => {
+        if (err) throw err
+        return typeof value === "string" ? value : null
       })
     },
 
@@ -196,11 +204,14 @@ async function createUpstashClient(): Promise<RedisClient> {
       if (keys.length === 0) return []
       const pipeline = client.pipeline()
       for (const key of keys) pipeline.hget(key, field)
+      // Upstash's exec() already rejects if any command in the batch failed,
+      // so reaching here means every result is a real read (see hgetMany's
+      // contract on RedisClient).
       const results = await pipeline.exec<(string | null)[]>()
-      return keys.map((_, i) => {
-        const value = results[i]
-        return typeof value === "string" ? value : null
-      })
+      if (!results || results.length !== keys.length) {
+        throw new Error(`hgetMany: expected ${keys.length} pipeline results, got ${results?.length ?? "none"}`)
+      }
+      return results.map((value) => (typeof value === "string" ? value : null))
     },
 
     async quit(): Promise<void> {

@@ -301,7 +301,7 @@
 | Idle detection (10min, Fluxer-style) | Done | 10-minute timeout with 25%-interval checks; tab visibility triggers instant idle |
 | Presence constants in shared package | Done | `@vortex/shared` — presence TTL + TTL refresh interval, idle timeout, activity throttle |
 | Live status updates | Done | `gateway:presence` events fan out to the DM rooms a user shares with the viewer; `dm-list.tsx` patches the list as they arrive |
-| Tab close marks offline | Done | No sendBeacon needed — the Socket.IO disconnect fans "offline" out immediately, and the Redis TTL covers a connection that dies without one |
+| Final tab close marks offline | Done | No sendBeacon needed — a socket disconnect fans "offline" out only when it was the user's *last* connected socket, so closing one of several tabs leaves them online; the Redis TTL still covers a connection that dies without a disconnect event |
 | Last seen time for offline users (#608) | Partial | `last_online_at` column on users, written when a user explicitly picks "offline" (invisible→offline deliberately doesn't update it). No UI reads it today, and the gateway — which now owns disconnects — has no DB access to stamp it |
 | Role-grouped member list (#610) | Done | Online members grouped by highest-priority role (Discord-style); sections ordered by role position; role color in headers; no-role users under "Members"; offline section unchanged |
 
