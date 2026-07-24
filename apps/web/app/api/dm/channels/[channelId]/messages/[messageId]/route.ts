@@ -3,6 +3,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm"
 import { alias } from "drizzle-orm/sqlite-core"
 import { createDb, directMessages, dmAttachments, dmChannelMembers, dmReactions, users } from "@vortex/db"
 import { getBetterAuthUser } from "@/lib/auth/better-auth"
+import { checkRateLimit } from "@/lib/utils/api-helpers"
 import { toSnakeCase } from "@/lib/utils/case"
 
 const db = createDb()
@@ -138,6 +139,9 @@ export async function PATCH(
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    const limited = await checkRateLimit(user.id, "dm:edit", { limit: 30, windowMs: 60_000 })
+    if (limited) return limited
+
     const body = await req.json()
     const content = body?.content
     if (typeof content !== "string" || !content.trim()) {
@@ -179,6 +183,9 @@ export async function DELETE(
     const { channelId, messageId } = await params
     const { data: { user } } = await getBetterAuthUser()
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const limited = await checkRateLimit(user.id, "dm:delete", { limit: 30, windowMs: 60_000 })
+    if (limited) return limited
 
     let data: { id: string } | undefined
     try {
