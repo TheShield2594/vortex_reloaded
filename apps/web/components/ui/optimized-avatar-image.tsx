@@ -30,7 +30,7 @@ const OptimizedAvatarImage = React.forwardRef<HTMLImageElement, OptimizedAvatarI
         height={size}
         sizes={`${size}px`}
         className={cn("aspect-square h-full w-full rounded-full object-cover", className)}
-        unoptimized={!src.includes("supabase") && !src.startsWith("/api/avatars/")}
+        unoptimized={!src.startsWith("/api/avatars/")}
       />
     )
   }

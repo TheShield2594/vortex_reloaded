@@ -3,10 +3,10 @@ import { defineConfig, devices } from "@playwright/test"
 /**
  * Playwright configuration for VortexChat E2E tests.
  *
- * Requires a running Next.js dev server and a local Supabase instance.
- * Set NEXT_PUBLIC_SUPABASE_URL to your local Supabase URL (default: http://localhost:54321).
+ * Requires a running Next.js server backed by a migrated SQLite database.
  *
- * Start local Supabase: supabase start
+ * Prepare the database: npm run db:migrate --workspace=packages/db
+ *   (set DATABASE_URL=file:... to point at a throwaway file)
  * Start Next.js:        npm run dev --workspace=apps/web
  */
 
@@ -18,7 +18,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   workers: 1,
-  // Allow 2 minutes per test — the full journey (register → login → server →
+  // Allow 2 minutes per test — the full journey (register → login → DM →
   // message → realtime → reload) involves many network round-trips in CI.
   timeout: 120_000,
   reporter: process.env.CI

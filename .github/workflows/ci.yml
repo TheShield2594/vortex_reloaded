@@ -10,6 +10,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   audit:
     name: Security Audit
@@ -41,6 +44,7 @@ jobs:
         working-directory: apps/web
       - run: npm run type-check --workspace=apps/web
       - run: npm run type-check --workspace=apps/signal
+      - run: npm run type-check --workspace=packages/db
 
   test:
     name: Tests
@@ -53,6 +57,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test --workspace=packages/shared
+      - run: npm test --workspace=packages/db
       - run: npm test --workspace=apps/web
       - run: npm run test:a11y:focus --workspace=apps/web
       - run: npm test --workspace=apps/signal
@@ -71,23 +76,29 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # This project uses cloud-hosted Supabase (no local Docker instance).
-      # The smoke test validates migration file structure: ordering, no
-      # duplicate version prefixes, and no unguarded duplicate policies.
+      # Static validation of the live Drizzle migration tree
+      # (packages/db/migrations): filename format, no duplicate version
+      # prefixes, and journal/snapshot consistency.
       - name: Run migration smoke test
         run: npm run test:migration-smoke
+
+      # Runtime counterpart: apply the generated migrations + FTS5 triggers
+      # to a throwaway SQLite file and confirm they apply cleanly end-to-end.
+      - name: Apply Drizzle migrations to a fresh database
+        run: npm run db:migrate --workspace=packages/db
+        env:
+          DATABASE_URL: file:${{ runner.temp }}/smoke.db
 
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [build]
-    # Note: E2E tests use placeholder Supabase credentials and will fail for
-    # flows that require a real backend. Once dedicated CI Supabase
-    # infrastructure is provisioned, failures here will block merges.
+    # Note: E2E tests run against a freshly-built web app with a throwaway
+    # SQLite database; flows that require seeded data are skipped in-suite.
     env:
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
-      SUPABASE_SERVICE_ROLE_KEY: placeholder
+      # runner.temp is only available in step-level env, not job-level — use
+      # github.workspace so db:migrate, build, and next start share one path.
+      DATABASE_URL: file:${{ github.workspace }}/e2e.db
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       NEXT_PUBLIC_SENTRY_DSN: ""
       PLAYWRIGHT_BASE_URL: http://localhost:3000
@@ -97,10 +108,6 @@ jobs:
       # apps/web/lib/auth/better-auth.ts) — CI-only placeholder, never used
       # to sign anything real.
       BETTER_AUTH_SECRET: ci-placeholder-better-auth-secret-not-for-production-use
-      # Needed for any E2E flow that reaches an authenticated
-      # createServerSupabaseClient() call — see lib/auth/supabase-jwt.ts —
-      # or it throws instead of returning a graceful auth failure.
-      SUPABASE_JWT_SECRET: ci-placeholder-supabase-jwt-secret-not-for-production-use
       CI: "true"
     steps:
       - uses: actions/checkout@v4
@@ -111,6 +118,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
+      - name: Prepare SQLite database
+        run: npm run db:migrate --workspace=packages/db
       - name: Build web app
         run: npm run build
         working-directory: apps/web
@@ -139,8 +148,6 @@ jobs:
     needs: [checks, test]
     env:
       # Dummy values so Next.js build doesn't fail on missing env vars
-      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
       NEXT_PUBLIC_APP_URL: https://placeholder.example.com
       NEXT_PUBLIC_SENTRY_DSN: ""
       # next build runs with NODE_ENV=production, and Better Auth refuses to

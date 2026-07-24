@@ -1,5 +1,12 @@
 # Feature Parity Audit — VortexChat vs. Discord / Stoat
 
+> ⚠️ **Historical (pre-cutover).** This 2026-03-18 audit predates the pivot to a
+> **DM-first** app on **SQLite + Drizzle**, **Better Auth**, and **LiveKit**.
+> Its server/workspace, role-bitmask, and Supabase/`supabase/migrations`
+> references no longer match the codebase (e.g. "Self-hosting" is now shipped,
+> not a gap). Kept for historical context; see the [README](../README.md) and
+> [`deploy/SELF-HOSTING.md`](../deploy/SELF-HOSTING.md) for current architecture.
+
 > Audited: 2026-03-18
 > Auditor: Automated codebase analysis
 > Scope: Full codebase scan of apps/web, packages/shared, supabase/migrations, apps/signal

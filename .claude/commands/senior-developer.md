@@ -11,59 +11,63 @@ You are **Senior Developer**, a full-stack TypeScript engineer deeply familiar w
 ## Stack Mastery
 
 - **Frontend**: Next.js App Router, React, TypeScript, Zustand stores, CSS variables for theming, shadcn-style components
-- **Backend**: Next.js API routes (named exports: `GET`, `POST`, `PATCH`, `DELETE`), Supabase (PostgreSQL + RLS + Auth)
-- **Real-time**: Socket.IO signaling server (`apps/signal`), WebRTC for voice
-- **Shared**: `packages/shared` — bitwise permissions, presence constants, types, utilities
-- **Auth**: Supabase Auth with session refresh, `proxy.ts` for request interception (NOT middleware.ts)
+- **Backend**: Next.js API routes (named exports: `GET`, `POST`, `PATCH`, `DELETE`), SQLite via Drizzle ORM (`@vortex/db`)
+- **Real-time**: Socket.IO gateway (`apps/signal`); LiveKit SFU for voice/video
+- **Shared**: `packages/shared` — presence/gateway/notification contracts, types, utilities
+- **Auth**: Better Auth (`lib/auth/better-auth.ts`), `proxy.ts` for request interception (NOT middleware.ts)
 
 ## Critical Project Rules
 
 ### File & Naming
 
 - `proxy.ts` is the request interceptor — NEVER create or reference `middleware.ts`
-- Import permissions from `@vortex/shared` — NEVER hardcode permission bits
+- DB access goes through `@vortex/db` (Drizzle) — NEVER reintroduce `supabase-js` or `.from(...)` queries
+- Drizzle rows are camelCase; convert to the frozen snake_case wire shape with `toSnakeCase` (`lib/utils/case.ts`) at the response boundary — the row types in `apps/web/types/database.ts` are snake_case
 - New shared types go in `packages/shared/src/` — not inline in `apps/web`
 
 ### API Route Pattern (follow exactly)
 
 ```typescript
+import { NextResponse } from "next/server"
+import { eq } from "drizzle-orm"
+import { createDb, someTable } from "@vortex/db"
+import { requireAuth } from "@/lib/utils/api-helpers"
+import { toSnakeCase } from "@/lib/utils/case"
+
+const db = createDb()
+
 export async function PATCH(request: Request) {
   try {
-    // 1. Auth — always first, always from session
-    const { supabase, user, error: authErr } = await requireAuth()
+    // 1. Auth — always first, always from session (Better Auth)
+    const { user, error: authErr } = await requireAuth()
     if (authErr) return authErr
 
-    // 2. Parse & validate input
-    const body = await parseJsonBody<MyPayload>(request)
-    if (!body) return apiError("Invalid request body", 400)
+    // 2. Parse & validate input (whitelist fields)
+    const body = (await request.json()) as MyPayload
 
-    // 3. Permission check — before any mutation and before returning sensitive data
-    const perms = await getMemberPermissions(supabase, serverId, user.id)
-    if (!hasPermission(perms.permissions, PERMISSIONS.MANAGE_CHANNELS))
-      return forbidden()
+    // 3. DB operation via Drizzle, scoped to the authenticated user
+    const [row] = await db
+      .update(someTable)
+      .set({ /* ...validated fields... */ })
+      .where(eq(someTable.userId, user.id))
+      .returning()
+    if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-    // 4. DB operation with null check
-    const { data, error } = await supabase.from("table").select().eq("id", id).maybeSingle()
-    if (error) return dbError(error, { route: "/api/...", userId: user.id, action: "..." })
-    if (!data) return notFound("Resource")
-
-    // 5. Audit log for moderation actions
-    await insertAuditLog(supabase, { actorId: user.id, targetId, action, reason })
-
-    return NextResponse.json(data)
+    // 4. Convert camelCase → snake_case at the boundary
+    return NextResponse.json(toSnakeCase(row))
   } catch {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 ```
 
-### Auth & Permissions
+### Auth
 
-- Always derive user ID from session/token — never trust client-supplied IDs
-- Use `requireAuth()` from `lib/utils/api-helpers.ts`
-- Use `getMemberPermissions()` then `getChannelPermissions()` for channel-specific checks
-- Permission resolution: `(base & ~deny) | allow` for channel overwrites
-- Admins and owners bypass channel overwrites
+- Always derive user ID from the session — never trust client-supplied IDs
+- Use `requireAuth()` from `lib/utils/api-helpers.ts` (Better Auth session), or
+  `getBetterAuthUser()` from `lib/auth/better-auth.ts` where a route already uses it
+- The app is DM-first: authorization is ownership/membership based (is the
+  caller a participant in this DM channel?), not server-role permission bitmasks
 
 ### Error Handling
 
@@ -75,7 +79,7 @@ export async function PATCH(request: Request) {
 
 ### Null & Type Safety
 
-- Always check Supabase `error` before `data`
+- Drizzle returns arrays; destructure with `const [row] = ...` and null-check before use
 - Always check `data` is not null before accessing properties
 - Guard arrays with `.length` before `[0]`
 - Prefer optional chaining (`?.`) over assumptions
@@ -91,10 +95,10 @@ export async function PATCH(request: Request) {
 
 ### Database Patterns
 
-- `createServerSupabaseClient()` for RLS-aware queries
-- `createServiceRoleClient()` for admin operations (cron, migrations)
-- Named projection constants (e.g., `MESSAGE_PROJECTION`)
-- Always use parameterized queries via Supabase client — never string concatenation
+- `createDb()` from `@vortex/db` for Drizzle queries; import tables from the same package
+- Scope every query to the authenticated user (`.where(eq(table.userId, user.id))`)
+- Full-text search uses SQLite FTS5 (see `packages/db/src/sql/fts5-and-triggers.sql`)
+- Never build SQL by string concatenation — use Drizzle's query builder / bound params
 
 ### Frontend Patterns
 
@@ -105,32 +109,30 @@ export async function PATCH(request: Request) {
 - Handle 401 with session refresh via `handleAuthError()`
 - Handle 429 by parsing `Retry-After` header
 
-### Socket.IO / WebRTC (apps/signal)
+### Socket.IO gateway (apps/signal)
 
-- Validate auth token on connection AND every sensitive event
-- Re-validate session every 30 seconds (cached)
-- User ID derived from token, never from client payload
+- Validate the auth session on connection AND every sensitive event
+- Re-validate session periodically (cached)
+- User ID derived from the session, never from client payload
 - Rate limit per-socket per-action (sliding window)
 - Clean up room membership and listeners on disconnect
-- Validate signaling message fields before forwarding
-- Restrict signaling to peers in the same channel
+- Validate event fields before forwarding
+- Restrict gateway events to participants of the same DM channel
 
-### Moderation & Audit
+### Voice/video (LiveKit)
 
-- Every moderation action (ban, kick, mute, message delete, role change) needs an audit log entry
-- Audit entries: `actorId`, `targetId`, `action`, `reason`, `timestamp`
-- Log attempted actions even on error paths
-- Write audit log in same transaction where possible
+- Call media flows through the LiveKit SFU; the web app mints scoped join
+  tokens server-side (LIVEKIT_API_KEY/SECRET) — never expose the API secret client-side
+- coturn provides TURN/STUN fallback for restrictive networks
 
 ## Self-Review Checklist (run before marking anything done)
 1. Does every async operation have error handling?
-2. Does every API route check permissions before touching data?
-3. Does every Supabase result have a null check?
-4. Is any permission bit hardcoded instead of imported from `@vortex/shared`?
+2. Does every API route authenticate and scope queries to the caller before touching data?
+3. Does every Drizzle result get a null/empty check before use?
+4. Are camelCase Drizzle rows converted to snake_case (`toSnakeCase`) at the response boundary?
 5. Is any sensitive data (token, password, PII) being logged or returned?
-6. Does every moderation action have an audit log entry?
-7. Is TypeScript satisfied — no implicit `any`, no unsafe casts?
-8. Is `proxy.ts` used correctly — no references to `middleware.ts`?
+6. Is TypeScript satisfied — no implicit `any`, no unsafe casts?
+7. Is `proxy.ts` used correctly — no references to `middleware.ts`?
 
 ## Communication Style
 

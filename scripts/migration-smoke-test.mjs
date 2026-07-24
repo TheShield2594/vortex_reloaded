@@ -2,15 +2,24 @@
 /**
  * Migration smoke test (static analysis — no database required)
  *
- * This project uses cloud-hosted Supabase; there is no local Docker stack.
- * Instead of running `supabase db reset`, this script analyses the migration
- * files in supabase/migrations/ and asserts:
+ * The app runs on SQLite via Drizzle (`@vortex/db`); the generated
+ * migrations live in packages/db/migrations/ and are tracked by
+ * drizzle-kit's journal (meta/_journal.json). This script validates that
+ * migration tree's internal consistency so a malformed or half-committed
+ * migration is caught in CI before it reaches the `db:migrate` apply step:
  *
- *   1. Every migration filename matches the expected NNNNn_name.sql pattern
+ *   1. Every migration filename matches the drizzle-kit NNNN_name.sql pattern
  *   2. No two migration files share the same numeric prefix (version conflict)
- *   3. Every expected table has an ENABLE ROW LEVEL SECURITY statement
- *   4. No CREATE POLICY appears for a policy name that was already created in
- *      an earlier migration without a preceding DROP POLICY IF EXISTS guard
+ *   3. The journal is consistent with the files on disk:
+ *        - every journal entry has a matching .sql file and meta snapshot
+ *        - every .sql file is referenced by exactly one journal entry
+ *        - entry idx values are 0..N-1 and match the filename prefixes in order
+ *        - `when` timestamps are non-decreasing
+ *   4. The hand-written FTS5 + triggers SQL (applied after the generated DDL
+ *      by migrate.ts) is present and non-empty
+ *
+ * The CI job additionally applies these migrations to a throwaway SQLite
+ * file (`db:migrate`), which is the runtime counterpart to this static pass.
  *
  * Usage (from repo root):
  *   node scripts/migration-smoke-test.mjs
@@ -20,174 +29,106 @@
  *   1 – one or more assertions failed (details printed to stderr)
  */
 
-import { readdirSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 
-const MIGRATIONS_DIR = new URL("../supabase/migrations/", import.meta.url).pathname
-
-// ── Expected tables ───────────────────────────────────────────────────────────
-// Every table listed here MUST have an ALTER TABLE … ENABLE ROW LEVEL SECURITY
-// statement somewhere in the migration files.
-const EXPECTED_TABLES_WITH_RLS = [
-  "users",
-  "servers",
-  "server_members",
-  "roles",
-  "member_roles",
-  "channels",
-  "channel_permissions",
-  "messages",
-  "attachments",
-  "reactions",
-  "direct_messages",
-  "dm_attachments",
-  "voice_states",
-  "notifications",
-  "server_emojis",
-  "webhooks",
-  "threads",
-  "thread_members",
-  "thread_read_states",
-  "friendships",
-  "invites",
-  "read_states",
-  "dm_channels",
-  "dm_channel_members",
-  "dm_read_states",
-  "events",
-  "event_rsvps",
-  "event_hosts",
-  "event_reminders",
-  "server_bans",
-  "member_timeouts",
-  "audit_logs",
-  "moderation_appeals",
-  "moderation_appeal_status_events",
-  "moderation_appeal_internal_notes",
-  "moderation_decision_templates",
-  "member_screening",
-  "screening_configs",
-  "automod_rules",
-  "automod_rule_analytics",
-  "push_subscriptions",
-  "notification_settings",
-  "auth_sessions",
-  "auth_challenges",
-  "auth_security_policies",
-  "auth_trusted_devices",
-  "passkey_credentials",
-  "recovery_codes",
-  "login_attempts",
-  "login_risk_events",
-  "reports",
-  "app_catalog",
-  "app_catalog_credentials",
-  "app_commands",
-  "app_event_subscriptions",
-  "app_rate_limits",
-  "app_reviews",
-  "app_usage_metrics",
-  "server_app_installs",
-  "server_app_install_credentials",
-  "channel_tasks",
-  "channel_docs",
-  "workspace_updates",
-  "attachment_scan_metrics",
-  "voice_call_sessions",
-  "voice_call_participants",
-  "voice_call_summaries",
-  "voice_intelligence_policies",
-  "voice_intelligence_audit_log",
-  "voice_transcript_segments",
-  "voice_transcript_translations",
-  "dm_channel_keys",
-  "user_device_keys",
-  "user_connections",
-]
+const DB_PKG = new URL("../packages/db/", import.meta.url).pathname
+const MIGRATIONS_DIR = join(DB_PKG, "migrations")
+const META_DIR = join(MIGRATIONS_DIR, "meta")
+const JOURNAL_PATH = join(META_DIR, "_journal.json")
+const FTS5_SQL_PATH = join(DB_PKG, "src", "sql", "fts5-and-triggers.sql")
 
 let failures = 0
+const fail = (msg) => {
+  console.error(`✗  ${msg}`)
+  failures++
+}
 
 // ── Load migration files ──────────────────────────────────────────────────────
 const files = readdirSync(MIGRATIONS_DIR)
   .filter((f) => f.endsWith(".sql"))
   .sort()
 
+if (files.length === 0) {
+  fail(`No .sql migrations found in ${MIGRATIONS_DIR}`)
+}
+
 // ── Check 1: filename format ──────────────────────────────────────────────────
-// Accepts: NNNNN_name.sql  or  NNNNNx_name.sql  (x = single lowercase letter
-// used for sub-migrations within the same logical group, e.g. 00014b_moderation.sql)
-const FILE_RE = /^\d{5}[a-z]?_\w+\.sql$/
+// drizzle-kit names migrations NNNN_slug.sql (four-digit zero-padded index).
+const FILE_RE = /^\d{4}_\w+\.sql$/
 for (const f of files) {
   if (!FILE_RE.test(f)) {
-    console.error(`✗  Unexpected migration filename: ${f}`)
-    failures++
+    fail(`Unexpected migration filename: ${f}`)
   }
 }
 
 // ── Check 2: no duplicate version prefixes ────────────────────────────────────
 const versionsSeen = new Map()
 for (const f of files) {
-  // Include the optional letter suffix so 00014b !== 00014
-  const version = f.match(/^\d{5}[a-z]?/)[0]
+  const version = f.slice(0, 4)
   if (versionsSeen.has(version)) {
-    console.error(`✗  Duplicate migration version ${version}: ${versionsSeen.get(version)} and ${f}`)
-    failures++
+    fail(`Duplicate migration version ${version}: ${versionsSeen.get(version)} and ${f}`)
   } else {
     versionsSeen.set(version, f)
   }
 }
 
-// ── Parse all migration SQL ───────────────────────────────────────────────────
-// Collect: tables with RLS, and policy creation order.
-const rlsTables = new Set()
-// Map of policy name → filename where it was first created
-const policyFirstSeen = new Map()
+// ── Check 3: journal consistency ──────────────────────────────────────────────
+if (!existsSync(JOURNAL_PATH)) {
+  fail(`Missing drizzle journal: ${JOURNAL_PATH}`)
+} else {
+  const journal = JSON.parse(readFileSync(JOURNAL_PATH, "utf8"))
+  const entries = Array.isArray(journal.entries) ? journal.entries : []
 
-for (const filename of files) {
-  const sql = readFileSync(join(MIGRATIONS_DIR, filename), "utf8")
-  const lines = sql.split("\n")
-
-  // ENABLE ROW LEVEL SECURITY
-  for (const line of lines) {
-    const m = line.match(/ALTER\s+TABLE\s+(?:public\.)?(\w+)\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/i)
-    if (m) rlsTables.add(m[1])
+  if (entries.length !== files.length) {
+    fail(`Journal has ${entries.length} entries but ${files.length} .sql files exist`)
   }
 
-  // Policy duplicate detection
-  // Track which policies this file drops before creating
-  const droppedInThisFile = new Set()
-  for (let i = 0; i < lines.length; i++) {
-    const dropM = lines[i].match(/DROP\s+POLICY\s+IF\s+EXISTS\s+"([^"]+)"/i)
-    if (dropM) droppedInThisFile.add(dropM[1])
+  const filesByPrefix = new Map([...versionsSeen].map(([prefix, f]) => [prefix, f]))
+  const referencedFiles = new Set()
+  let prevWhen = -Infinity
 
-    const createM = lines[i].match(/CREATE\s+POLICY\s+"([^"]+)"/i)
-    if (createM) {
-      const name = createM[1]
-      if (policyFirstSeen.has(name) && !droppedInThisFile.has(name)) {
-        // Check whether this line is inside a DO $$ … IF NOT EXISTS … END $$ block
-        // (safe guard via pg_policies check — not a duplicate)
-        const blockStart = Math.max(0, i - 40)
-        const context = lines.slice(blockStart, i).join("\n")
-        if (!context.includes("NOT EXISTS") || !context.includes(name)) {
-          console.error(
-            `✗  Duplicate policy without DROP IF EXISTS guard: "${name}"\n` +
-            `     First created in: ${policyFirstSeen.get(name)}\n` +
-            `     Created again in: ${filename}:${i + 1}`
-          )
-          failures++
-        }
-      } else if (!policyFirstSeen.has(name)) {
-        policyFirstSeen.set(name, filename)
+  entries.forEach((entry, position) => {
+    if (entry.idx !== position) {
+      fail(`Journal entry ${entry.tag ?? position} has idx ${entry.idx}, expected ${position}`)
+    }
+
+    const expectedPrefix = String(position).padStart(4, "0")
+    const sqlFile = `${entry.tag}.sql`
+    if (!files.includes(sqlFile)) {
+      fail(`Journal entry "${entry.tag}" has no matching migration file ${sqlFile}`)
+    } else {
+      referencedFiles.add(sqlFile)
+      if (!sqlFile.startsWith(expectedPrefix)) {
+        fail(`Journal entry idx ${position} points at ${sqlFile}, expected prefix ${expectedPrefix}`)
       }
+    }
+
+    const snapshot = join(META_DIR, `${expectedPrefix}_snapshot.json`)
+    if (!existsSync(snapshot)) {
+      fail(`Missing snapshot for "${entry.tag}": ${snapshot}`)
+    }
+
+    if (typeof entry.when === "number") {
+      if (entry.when < prevWhen) {
+        fail(`Journal entry "${entry.tag}" has non-increasing "when" timestamp`)
+      }
+      prevWhen = entry.when
+    }
+  })
+
+  for (const f of files) {
+    if (!referencedFiles.has(f)) {
+      fail(`Migration file ${f} is not referenced by any journal entry`)
     }
   }
 }
 
-// ── Check 3: expected tables have RLS ────────────────────────────────────────
-for (const table of EXPECTED_TABLES_WITH_RLS) {
-  if (!rlsTables.has(table)) {
-    console.error(`✗  No ENABLE ROW LEVEL SECURITY found for table: ${table}`)
-    failures++
-  }
+// ── Check 4: FTS5 + triggers SQL present ──────────────────────────────────────
+if (!existsSync(FTS5_SQL_PATH)) {
+  fail(`Missing FTS5/triggers SQL: ${FTS5_SQL_PATH}`)
+} else if (readFileSync(FTS5_SQL_PATH, "utf8").trim().length === 0) {
+  fail(`FTS5/triggers SQL is empty: ${FTS5_SQL_PATH}`)
 }
 
 // ── Result ────────────────────────────────────────────────────────────────────
@@ -196,6 +137,6 @@ if (failures > 0) {
   process.exit(1)
 }
 
-console.log(`✓  ${files.length} migration files checked`)
-console.log(`✓  ${EXPECTED_TABLES_WITH_RLS.length} expected tables have RLS enabled`)
-console.log(`✓  ${policyFirstSeen.size} unique policies — no unguarded duplicates`)
+console.log(`✓  ${files.length} Drizzle migration files checked`)
+console.log(`✓  journal consistent with files and snapshots`)
+console.log(`✓  FTS5 + triggers SQL present`)

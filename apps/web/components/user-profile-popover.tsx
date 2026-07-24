@@ -15,7 +15,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import type { RoleRow } from "@/types/database"
 import { getStatusColor, getStatusLabel } from "@/lib/presence-status"
 import { useFriendshipActions } from "@/hooks/use-friendship-actions"
 
@@ -36,21 +35,19 @@ interface UserProfilePopoverProps {
   currentUserId?: string
   displayName: string
   status?: string
-  roles?: RoleRow[]
   side?: "left" | "right" | "top" | "bottom"
   align?: "start" | "center" | "end"
   children: React.ReactNode
 }
 
 
-/** Popover card showing a user's profile (avatar, name, status, bio, roles) with optional Message and Add Friend actions. */
+/** Popover card showing a user's profile (avatar, name, status, bio) with optional Message and Add Friend actions. */
 export function UserProfilePopover({
   user,
   userId,
   currentUserId,
   displayName,
   status,
-  roles = [],
   side = "left",
   align = "start",
   children,
@@ -173,29 +170,6 @@ export function UserProfilePopover({
           )}
 
           {/* Roles */}
-          {roles.length > 0 && (
-            <>
-              <div className="text-xs font-semibold uppercase tracking-wider mt-2 mb-1" style={{ color: "var(--theme-text-secondary)" }}>
-                Roles
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {roles.map((role) => (
-                  <span
-                    key={role.id}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs"
-                    style={{ background: "var(--theme-bg-tertiary)", color: role.color || "var(--theme-text-normal)" }}
-                  >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                      style={{ background: role.color || "var(--theme-text-normal)" }}
-                    />
-                    {role.name}
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-
           {/* Action buttons */}
           {showActions && (
             <>

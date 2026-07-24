@@ -3,6 +3,15 @@
 > Single source of truth for Tier 1 / Tier 2 feature gaps.
 > Updated as features are completed during the hardening sprint.
 
+> ⚠️ **Historical (pre-cutover).** This tracker was written against the earlier
+> Discord-style server/guild model on Supabase (servers, channels, roles,
+> permission bitmasks, RLS). The product has since pivoted to a **DM-first**
+> app on **SQLite + Drizzle**, **Better Auth**, and **LiveKit** — the
+> server/permission features and Supabase/`supabase/migrations` references
+> below no longer reflect the codebase. Kept for historical context; see the
+> [README](../README.md) and [`deploy/SELF-HOSTING.md`](../deploy/SELF-HOSTING.md)
+> for current architecture.
+
 ## Emoji System
 
 | Feature | Status | Notes |

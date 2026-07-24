@@ -67,7 +67,7 @@ scenarios:
     weight: 15
     flow:
       - post:
-          url: "/api/auth/login"
+          url: "/api/auth/sign-in/email"
           json:
             email: "loadtest@example.com"
             password: "wrongpassword"

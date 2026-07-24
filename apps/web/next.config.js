@@ -85,16 +85,10 @@ const nextConfig = {
     ]
   },
   images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '*.supabase.co',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.supabase.in',
-      },
-    ],
+    // Avatars and attachments are served same-origin from /api/avatars and
+    // /api/dm/attachments (local disk, see resolveUploadsDir in @vortex/db),
+    // so no external image hosts need to be allow-listed here.
+    remotePatterns: [],
   },
   eslint: {
     // ESLint linting is run separately via `eslint .` — skip during `next build`
@@ -138,12 +132,6 @@ const nextConfig = {
             name: "livekit",
             chunks: "all",
             priority: 30,
-          },
-          supabase: {
-            test: /[\\/]node_modules[\\/]@supabase[\\/]/,
-            name: "supabase",
-            chunks: "all",
-            priority: 25,
           },
           sentry: {
             test: /[\\/]node_modules[\\/]@sentry[\\/]/,

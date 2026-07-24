@@ -289,7 +289,7 @@ export function DMList({ onNavigate }: { onNavigate?: () => void } = {}) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" data-testid="dm-sidebar">
       <NewDmDialog
         open={newDmOpen}
         onOpenChange={setNewDmOpen}
